@@ -1,0 +1,33 @@
+name: Sync NSE Bhavcopy to Firebase
+
+on:
+  # Runs every weekday (Mon-Fri) at 7:30 PM IST = 14:00 UTC
+  schedule:
+    - cron: '0 14 * * 1-5'
+
+  # Also allows manual trigger from GitHub Actions UI anytime
+  workflow_dispatch:
+
+jobs:
+  sync-prices:
+    name: Download NSE Bhavcopy → Firebase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scripts/requirements.txt
+
+      - name: Install Python dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run Bhavcopy sync
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python scripts/sync_bhavcopy.py

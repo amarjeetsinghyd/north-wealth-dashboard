@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  /* ── Brand Gold ─────────────────────────────────────── */
+  --gold:           #C9A84C;
+  --gold-light:     #DFC06A;
+  --gold-dark:      #A07C2D;
+  --gold-muted:     #8A6A28;
+  --gold-glow:      rgba(201,168,76,0.25);
+  --gold-subtle:    rgba(201,168,76,0.10);
+  --gold-border:    rgba(201,168,76,0.30);
+
+  /* ── Primary → Gold (all existing references) ────────── */
+  --color-primary-50:  #fdf8ec;
+  --color-primary-100: #f7e9c0;
+  --color-primary-200: #f0d48a;
+  --color-primary-400: var(--gold-light);
+  --color-primary-500: var(--gold);
+  --color-primary-600: var(--gold-dark);
+  --color-primary-700: var(--gold-muted);
+  --color-primary-900: #4A3510;
+
+  /* ── Pure Black / White surfaces ─────────────────────── */
+  --bg-base:        #000000;
+  --bg-surface:     #0a0a0a;
+  --bg-elevated:    #111111;
+  --bg-card:        #161616;
+  --bg-white-card:  #ffffff;
+
+  /* ── Text ─────────────────────────────────────────────── */
+  --text-primary:   #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted:     #666666;
+  --text-inverse:   #000000;
+
+  /* ── Borders ───────────────────────────────────────────── */
+  --border-subtle:  rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.12);
+  --border-strong:  rgba(255,255,255,0.24);
+  --border-gold:    var(--gold-border);
+
+  /* ── Semantic (unchanged) ──────────────────────────────── */
+  --color-success-500: #22c55e;
+  --color-error-500:   #ef4444;
+  --color-error-400:   #f87171;
+  --color-error-600:   #dc2626;
+  --color-accent-400:  #fb923c;
+  --color-accent-500:  #f97316;
+  --color-warning-500: #f59e0b;
+
+  /* ── Shadows ────────────────────────────────────────────── */
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.6);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.7);
+  --shadow-lg:   0 10px 30px rgba(0,0,0,0.8);
+  --shadow-xl:   0 20px 50px rgba(0,0,0,0.9);
+  --shadow-gold: 0 0 24px rgba(201,168,76,0.30);
+
+  /* ── Spacing ────────────────────────────────────────────── */
+  --space-1:  4px;  --space-2:  8px;  --space-3:  12px;
+  --space-4:  16px; --space-5:  20px; --space-6:  24px;
+  --space-8:  32px; --space-10: 40px; --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --text-xs:   11px; --text-sm:  13px; --text-base: 14px;
+  --text-md:   15px; --text-lg:  17px; --text-xl:   20px;
+  --text-2xl:  24px; --text-3xl: 30px; --text-4xl:  36px;
+
+  /* ── Radius ─────────────────────────────────────────────── */
+  --radius-sm:   4px; --radius-md:  8px;  --radius-lg: 12px;
+  --radius-xl:  16px; --radius-2xl: 24px; --radius-full: 9999px;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────── */
+html, body {
+  margin: 0; padding: 0; min-height: 100vh;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+
+* { margin: 0; padding: 0; }
+
+a { color: inherit; text-decoration: none; }
+
+button { font-family: var(--font-sans); cursor: pointer; border: none; background: none; }
+
+input, select, textarea { font-family: var(--font-sans); }
+
+/* ─── Scrollbar ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #0a0a0a; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-dark); }
+
+/* ─── Button utilities ──────────────────────────────────────────── */
+.btn-gold {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 28px;
+  background: var(--gold);
+  color: #000000;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+  letter-spacing: 0.2px;
+}
+.btn-gold:hover {
+  background: var(--gold-light);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(201,168,76,0.35);
+}
+
+.btn-outline {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 27px;
+  background: transparent;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1.5px solid rgba(255,255,255,0.8);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s;
+}
+.btn-outline:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ─── White card (light section) ───────────────────────────────── */
+.card-white {
+  background: #ffffff;
+  border-radius: 16px;
+  color: #000000;
+}
+
+/* ─── Animations ────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes goldGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(201,168,76,0.3), 0 0 24px rgba(201,168,76,0.1); }
+  50%       { box-shadow: 0 0 22px rgba(201,168,76,0.55), 0 0 44px rgba(201,168,76,0.2); }
+}
+@keyframes sparkle {
+  0%, 100% { opacity:1; transform: scale(1) rotate(0deg); }
+  25%  { opacity:.7; transform: scale(1.2) rotate(15deg); }
+  75%  { opacity:.8; transform: scale(.9) rotate(-10deg); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes bounceIn {
+  0%   { transform: scale(0.85); opacity: 0; }
+  60%  { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* ─── Utility classes ───────────────────────────────────────────── */
+.animate-fade-in    { animation: fadeIn 0.35s ease forwards; }
+.animate-pulse      { animation: pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+.animate-spin       { animation: spin 1s linear infinite; }
+.animate-gold-glow  { animation: goldGlow 2.5s ease-in-out infinite; }
+.animate-bounce-in  { animation: bounceIn 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }

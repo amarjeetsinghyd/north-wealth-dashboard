@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Misc
+.DS_Store
+*.log
+seed_cache.js
+test_*.js
+test_*.cjs
+test_*.py
+scratch/
+
+# Firebase
+.firebase/
+firebase-debug.log
+.runtimeconfig.json
+service-account.json
