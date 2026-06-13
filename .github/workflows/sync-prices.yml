@@ -1,0 +1,30 @@
+name: NSE Price Sync
+
+on:
+  schedule:
+    # Runs at 2:00 PM UTC = 7:30 PM IST, Monday to Friday
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch:
+    # Allow manual trigger from GitHub.com Actions tab
+
+jobs:
+  sync-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install nsepython requests pandas
+
+      - name: Run NSE Bhavcopy Sync
+        run: python scripts/sync_bhavcopy.py
+        env:
+          PYTHONIOENCODING: utf-8

@@ -3,6 +3,9 @@ node_modules/
 dist/
 .env
 
+# Sync script credentials (never commit!)
+scripts/.auth
+
 # Python
 __pycache__/
 *.pyc

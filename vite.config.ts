@@ -16,6 +16,12 @@ export default defineConfig({
         target: 'https://invesmateapis.cmots.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/cmots/, '')
+      },
+      '/api/nse': {
+        target: 'https://archives.nseindia.com',
+        changeOrigin: true,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        rewrite: (path) => path.replace(/^\/api\/nse/, '')
       }
     }
   },

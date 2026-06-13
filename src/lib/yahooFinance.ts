@@ -595,3 +595,108 @@ export async function fetchStockMarketData(nseSymbols: string[]): Promise<StockM
 
   return results;
 }
+
+// ─── NSE Bhavcopy Sync ────────────────────────────────────────────────────────
+// Downloads the full NSE EOD Bhavcopy CSV (all listed securities at once).
+// Uses the same proxy chain as Yahoo Finance (local Vite proxy or CORS proxies).
+// Covers equities, ETFs, SGBs, and all other NSE-listed instruments.
+
+const ALLOWED_SERIES = new Set(['EQ', 'BE', 'BZ', 'SM', 'ST', 'GS']);
+
+/** Returns a date string in DDMMYYYY format for IST, offset by `daysBack`. */
+function getBhavcopyDateStr(daysBack: number): string {
+  const utcNow = Date.now();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(utcNow + istOffset - daysBack * 86400000);
+  const dd = String(istDate.getUTCDate()).padStart(2, '0');
+  const mm = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = istDate.getUTCFullYear();
+  return `${dd}${mm}${yyyy}`;
+}
+
+/** Attempts a fetch through the local Vite proxy (dev) or CORS proxies (prod). */
+async function fetchNSECsv(dateStr: string): Promise<string | null> {
+  const nsePath = `/products/content/sec_bhavdata_full_${dateStr}.csv`;
+
+  if (isLocalEnv()) {
+    try {
+      const res = await fetch(`/api/nse${nsePath}`, { signal: AbortSignal.timeout(10000) });
+      if (res.ok) return await res.text();
+    } catch { /* fall through */ }
+    return null;
+  }
+
+  // Production: try corsproxy.io first, then allorigins.win
+  const targetUrl = `https://archives.nseindia.com${nsePath}`;
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+  ];
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
+      if (res.ok) {
+        const text = await res.text();
+        // Sanity check: a valid bhavcopy starts with "SYMBOL"
+        if (text.trimStart().startsWith('SYMBOL')) return text;
+      }
+    } catch { /* try next proxy */ }
+  }
+  return null;
+}
+
+/** Parse CSV text → Map<SYMBOL, closePrice> */
+function parseBhavcopyCSV(csvText: string): Map<string, number> {
+  const priceMap = new Map<string, number>();
+  const lines = csvText.trim().split('\n');
+  if (lines.length < 2) return priceMap;
+
+  // Header: SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, ...
+  const header = lines[0].split(',').map(h => h.trim());
+  const symbolIdx = header.indexOf('SYMBOL');
+  const seriesIdx = header.indexOf('SERIES');
+  const closeIdx  = header.indexOf('CLOSE_PRICE');
+
+  if (symbolIdx < 0 || closeIdx < 0) return priceMap;
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.trim());
+    const symbol = cols[symbolIdx]?.toUpperCase();
+    const series = cols[seriesIdx]?.trim().toUpperCase() || '';
+    const close  = parseFloat(cols[closeIdx]);
+
+    if (symbol && !isNaN(close) && close > 0 && ALLOWED_SERIES.has(series)) {
+      priceMap.set(symbol, close);
+    }
+  }
+  return priceMap;
+}
+
+export interface BhavcopyResult {
+  priceMap: Map<string, number>;
+  dateStr: string;   // DDMMYYYY of the data used
+  recordCount: number;
+}
+
+/**
+ * Downloads the most recent NSE Bhavcopy and returns a Map of SYMBOL → close price.
+ * Tries today first, then walks back up to 10 days to handle weekends/holidays.
+ */
+export async function fetchNSEBhavcopy(): Promise<BhavcopyResult | null> {
+  // Start from yesterday (bhavcopy for today is only available after ~7 PM IST)
+  for (let daysBack = 1; daysBack <= 10; daysBack++) {
+    const dateStr = getBhavcopyDateStr(daysBack);
+    console.log(`[Bhavcopy] Trying date: ${dateStr} (offset -${daysBack}d)`);
+    const csvText = await fetchNSECsv(dateStr);
+    if (csvText) {
+      const priceMap = parseBhavcopyCSV(csvText);
+      if (priceMap.size > 100) { // must have meaningful data
+        console.log(`[Bhavcopy] ✓ Got ${priceMap.size} prices for ${dateStr}`);
+        return { priceMap, dateStr, recordCount: priceMap.size };
+      }
+    }
+  }
+  console.error('[Bhavcopy] Could not find valid bhavcopy in last 10 days');
+  return null;
+}

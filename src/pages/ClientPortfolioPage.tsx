@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, PlusCircle, Wallet, Landmark, Download, RefreshCw } from 'lucide-react';
@@ -28,6 +28,7 @@ export function ClientPortfolioPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [priceAsOf, setPriceAsOf] = useState<string>('');
   
   // Rebalance & Inline Actions
   const [isRebalanceMode, setIsRebalanceMode] = useState(false);
@@ -56,23 +57,25 @@ export function ClientPortfolioPage() {
   const uniqueMCaps = Array.from(new Set(holdings.map(h => getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '').marketCap))).filter(Boolean).sort();
   const [savingBuyPrice, setSavingBuyPrice] = useState(false);
 
-  const autoRefreshedRef = useRef(false);
 
-  // ── Refresh prices from NSE Bhavcopy (written nightly by GitHub Actions) ────
-  // GitHub Actions runs sync_bhavcopy.py every weekday at 7:30 PM IST and
-  // populates price_cache in Firestore. This function simply reads from there.
+  // ── Refresh prices from NSE Bhavcopy price cache ───────────────────────────
+  // The NSE Bhavcopy is downloaded by the Python script (scripts/sync_bhavcopy.py)
+  // and stored in Firebase price_cache. This function reads from there — fast,
+  // no NSE server involved, no CORS issues.
   const refreshPrices = async (customHoldings?: Holding[]) => {
     const activeHoldings = customHoldings || holdings;
     if (!id || activeHoldings.length === 0) return;
 
     setRefreshing(true);
     try {
-      // 1. Read all holding symbols from price_cache in parallel
+      // 1. Fetch prices for all holdings from price_cache in parallel
       const syms = activeHoldings
         .map(h => (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase())
         .filter(Boolean);
 
-      console.log(`Fetching ${syms.length} prices from NSE price_cache...`);
+      console.log(`[RefreshPrices] Reading ${syms.length} prices from Firebase price_cache...`);
+
+      // Read each symbol's doc from price_cache
       const snapshots = await Promise.all(
         syms.map(sym => getDoc(doc(db, 'price_cache', sym)))
       );
@@ -84,9 +87,22 @@ export function ClientPortfolioPage() {
           if (data.close > 0) priceMap.set(syms[i], data.close);
         }
       });
-      console.log(`price_cache: ${priceMap.size}/${syms.length} symbols matched`);
+      console.log(`[RefreshPrices] price_cache: ${priceMap.size}/${syms.length} symbols matched`);
 
-      // 2. Update each holding with the latest EOD close price
+      // Also fetch sync metadata to show "Prices as of" date
+      const metaSnap = await getDoc(doc(db, 'price_cache', '__sync_meta__'));
+      if (metaSnap.exists()) {
+        const metaData = metaSnap.data();
+        if (metaData.bhavcopyDate) setPriceAsOf(metaData.bhavcopyDate);
+      }
+
+      // If price_cache is completely empty, show a friendly message
+      if (priceMap.size === 0) {
+        alert('No price data found yet. Prices are synced automatically every weekday at 7:30 PM IST via GitHub Actions.');
+        return;
+      }
+
+      // 2. Update holdings with prices from cache
       let updatedCount = 0;
       for (const holding of activeHoldings) {
         try {
@@ -110,22 +126,22 @@ export function ClientPortfolioPage() {
             updatedCount++;
             console.log(`✓ ${sym}: ₹${price}`);
           } else {
-            console.warn(`✗ ${sym}: no price in cache (keeping existing)`);
+            console.warn(`✗ ${sym}: not in price_cache (keeping existing price)`);
           }
         } catch (e) {
           console.warn(`Error updating ${holding.stock_symbol}:`, e);
         }
       }
 
-      console.log(`Updated ${updatedCount}/${activeHoldings.length} holdings`);
+      console.log(`[RefreshPrices] Updated ${updatedCount}/${activeHoldings.length} holdings`);
 
-      // 3. Reload holdings into UI
+      // 3. Reload UI
       const fresh = await fetchHoldings(id);
       setHoldings(fresh);
 
     } catch (err: any) {
       console.error('Refresh error:', err);
-      alert('Price refresh failed: ' + (err.message || 'Try again later.'));
+      alert('Price refresh failed: ' + (err.message || 'Please try again.'));
     } finally {
       setRefreshing(false);
     }
@@ -143,6 +159,13 @@ export function ClientPortfolioPage() {
       setClient(c);
       setHoldings(h);
       setTransactions(tx);
+      // Load last sync date from price_cache metadata
+      try {
+        const metaSnap = await getDoc(doc(db, 'price_cache', '__sync_meta__'));
+        if (metaSnap.exists() && metaSnap.data().bhavcopyDate) {
+          setPriceAsOf(metaSnap.data().bhavcopyDate);
+        }
+      } catch (_) { /* ignore */ }
     } catch (err) {
       console.error('Error loading portfolio data:', err);
     } finally {
@@ -152,13 +175,6 @@ export function ClientPortfolioPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh prices once after initial load
-  useEffect(() => {
-    if (holdings.length > 0 && !autoRefreshedRef.current) {
-      autoRefreshedRef.current = true;
-      refreshPrices(holdings);
-    }
-  }, [holdings]);
 
   const handleDownloadExcel = () => {
     import('xlsx').then((XLSX) => {
@@ -603,20 +619,27 @@ export function ClientPortfolioPage() {
               </h3>
             </div>
 
-            <button
-              onClick={() => refreshPrices()}
-              disabled={refreshing}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 14px', borderRadius: 8,
-                background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold-border)',
-                color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                transition: 'all 0.2s', opacity: refreshing ? 0.6 : 1
-              }}
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Refreshing...' : 'Refresh Prices'}
-            </button>
+<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+              <button
+                onClick={() => refreshPrices()}
+                disabled={refreshing}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 8,
+                  background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold-border)',
+                  color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  transition: 'all 0.2s', opacity: refreshing ? 0.6 : 1
+                }}
+              >
+                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                {refreshing ? 'Refreshing...' : 'Refresh Prices'}
+              </button>
+              {priceAsOf && (
+                <span style={{ fontSize: 10, color: '#888', letterSpacing: '0.3px' }}>
+                  Prices as of: {priceAsOf}
+                </span>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>

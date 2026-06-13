@@ -1,140 +1,146 @@
+# -*- coding: utf-8 -*-
 """
-sync_bhavcopy.py  –  NSE EOD Price Sync via nsepython → Firebase Firestore
------------------------------------------------------------------------------
-Runs as a GitHub Actions job every weekday at 4:30 PM IST (11:00 UTC).
-Also runs on manual trigger from the GitHub Actions UI.
+sync_bhavcopy.py  -  NSE Bhavcopy -> Firebase Firestore via REST API
+----------------------------------------------------------------------
+Run: python scripts/sync_bhavcopy.py
 
-Logic:
-  1. Try today's date. If the file isn't published yet, fall back up to 10 days.
-  2. Parse the CSV, keep EQ / BE / BZ / SM / ST series (covers equity + ETFs).
-  3. Overwrite the price_cache collection in Firestore (set, not merge).
-  4. Write a metadata doc price_cache/__sync_meta__ so the UI knows when it last synced.
+Uses:
+  - nsepython.get_bhavcopy(date)  -> pandas DataFrame
+  - Firebase Firestore REST API   -> no firebase-admin / service account needed
+
+Requirements:
+  pip install nsepython requests pandas
 """
 
-import os
 import sys
 import datetime
-import json
-import math
-import firebase_admin
-from firebase_admin import credentials, firestore
+import requests
 import nsepython
 
-# ── 1. Authenticate with Firebase ────────────────────────────────────────────
-# The service-account JSON is injected via a GitHub Actions secret called
-# FIREBASE_SERVICE_ACCOUNT.  It is stored as the full JSON string.
-svc_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
-if not svc_json:
-    print("ERROR: FIREBASE_SERVICE_ACCOUNT env variable not set.")
-    sys.exit(1)
+# Config
+API_KEY    = "AIzaSyBoxq1i_hEFJBgaIMsAWnrFabAjmDgLaF4"
+PROJECT    = "north-wealth"
+# Firestore REST base (full URL for the API endpoint)
+FS_API     = f"https://firestore.googleapis.com/v1/projects/{PROJECT}/databases/(default)/documents"
+# Firestore document name prefix (relative, used inside request body)
+FS_DOC_PFX = f"projects/{PROJECT}/databases/(default)/documents"
 
-svc_dict = json.loads(svc_json)
-cred = credentials.Certificate(svc_dict)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+ALLOWED_SERIES = {"EQ", "BE", "BZ", "SM", "ST", "GS"}
 
-# ── 2. Date fallback – try today, walk back up to 10 trading days ─────────────
-def get_ist_date(delta_days=0):
-    """Return a date string in DD-MM-YYYY for IST (UTC+5:30), with optional offset."""
-    utcnow = datetime.datetime.utcnow()
-    ist = utcnow + datetime.timedelta(hours=5, minutes=30)
-    target = ist - datetime.timedelta(days=delta_days)
+# Date helper: returns DD-MM-YYYY in IST
+def get_ist_date(days_back=0):
+    now    = datetime.datetime.now(datetime.timezone.utc)
+    ist    = now + datetime.timedelta(hours=5, minutes=30)
+    target = ist - datetime.timedelta(days=days_back)
     return target.strftime("%d-%m-%Y")
 
-def today_ist_str():
-    """DDMMYYYY for comparing with the sync-meta document."""
-    utcnow = datetime.datetime.utcnow()
-    ist = utcnow + datetime.timedelta(hours=5, minutes=30)
-    return ist.strftime("%d%m%Y")
+# Download Bhavcopy with fallback for holidays
+def download_bhavcopy():
+    print("\n[SEARCH] Finding latest NSE Bhavcopy...")
+    for offset in range(1, 11):
+        date_str = get_ist_date(offset)
+        print(f"  Trying {date_str} ...", end=" ", flush=True)
+        try:
+            df = nsepython.get_bhavcopy(date_str)
+            if df is not None and len(df) > 10:
+                # Strip whitespace from all column names
+                df.columns = [c.strip() for c in df.columns]
+                print(f"OK  {len(df)} rows | columns: {list(df.columns[:5])}")
+                return df, date_str
+            else:
+                print("empty")
+        except Exception as e:
+            print(f"not found ({e})")
+    return None, None
 
-df = None
-target_date_str = ""
+# Firestore individual document write via REST PATCH
+def write_doc(symbol, close, session):
+    url = f"{FS_API}/price_cache/{symbol}?key={API_KEY}"
+    body = {
+        "fields": {
+            "symbol":      {"stringValue":  symbol},
+            "close":       {"doubleValue":  float(close)},
+            "lastUpdated": {"stringValue":  datetime.datetime.now(datetime.timezone.utc).isoformat()},
+        }
+    }
+    resp = session.patch(url, json=body, timeout=15)
+    if resp.status_code not in (200, 204):
+        raise RuntimeError(f"{symbol}: {resp.status_code} {resp.text[:200]}")
+    return symbol
 
-print("Looking for latest NSE Bhavcopy...")
-for offset in range(10):
-    date_str = get_ist_date(offset)
-    print(f"  Trying {date_str} ...", end=" ")
-    try:
-        result = nsepython.get_bhavcopy(date_str)
-        if result is not None and len(result) > 0:
-            df = result
-            target_date_str = date_str
-            print(f"✓  {len(df)} rows")
-            break
-        else:
-            print("empty")
-    except Exception as e:
-        print(f"not found ({e})")
+def write_meta(date_str, count, session):
+    url = f"{FS_API}/price_cache/__sync_meta__?key={API_KEY}"
+    body = {
+        "fields": {
+            "bhavcopyDate": {"stringValue":  date_str},
+            "recordCount":  {"integerValue": str(count)},
+            "updatedAt":    {"stringValue":  datetime.datetime.now(datetime.timezone.utc).isoformat()},
+        }
+    }
+    session.patch(url, json=body, timeout=15)
 
-if df is None:
-    print("ERROR: Could not find bhavcopy in last 10 days. Exiting without changes.")
-    sys.exit(1)
+def main():
+    df, date_str = download_bhavcopy()
+    if df is None:
+        print("\n[ERROR] No bhavcopy found in last 10 days. Exiting.")
+        sys.exit(1)
 
-# ── 3. Parse and write to Firestore ───────────────────────────────────────────
-# Allowed series – covers all equity and ETF trading categories on NSE
-ALLOWED_SERIES = {"EQ", "BE", "BZ", "SM", "ST"}
+    print("\n[DATA] Filtering symbols...")
 
-print(f"\nProcessing {len(df)} rows from {target_date_str}...")
+    # Show actual column names for debugging
+    print(f"  Columns: {list(df.columns)}")
 
-# Batch writes – Firestore allows max 500 ops per batch
-BATCH_SIZE = 400
-batch = db.batch()
-count = 0
-batch_count = 0
+    docs    = []
+    skipped = 0
+    for _, row in df.iterrows():
+        try:
+            symbol = str(row["SYMBOL"]).strip().upper()
+            series = str(row["SERIES"]).strip().upper()
+            close  = float(row["CLOSE_PRICE"])
+            if not symbol or series not in ALLOWED_SERIES or close <= 0:
+                skipped += 1
+                continue
+            docs.append((symbol, close))
+        except Exception as e:
+            skipped += 1
 
-price_ref = db.collection("price_cache")
+    print(f"  Valid  : {len(docs)}")
+    print(f"  Skipped: {skipped}\n")
 
-for _, row in df.iterrows():
-    try:
-        symbol = str(row.get("SYMBOL", "") or "").strip().upper()
-        series = str(row.get("SERIES", "") or "").strip().upper()
-        close  = float(row.get("CLOSE_PRICE", 0) or 0)
-        high   = float(row.get("HIGH_PRICE",  0) or 0)
-        low    = float(row.get("LOW_PRICE",   0) or 0)
+    if len(docs) == 0:
+        print("[ERROR] No valid symbols found. Check column names above.")
+        sys.exit(1)
 
-        if not symbol or close <= 0:
-            continue
-        # Strip leading spaces from series (NSE CSV has space prefix on columns)
-        if series not in ALLOWED_SERIES:
-            continue
+    # Write to Firestore in parallel (20 threads for speed)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    print(f"[WRITE] Writing {len(docs)} prices to Firebase (20 parallel threads)...")
 
-        # Replace NaN/inf with 0 so Firestore won't reject
-        if math.isnan(close) or math.isinf(close):
-            continue
+    session  = requests.Session()
+    errors   = []
+    done     = 0
 
-        doc_ref = price_ref.document(symbol)
-        batch.set(doc_ref, {
-            "symbol":      symbol,
-            "close":       close,
-            "high":        high,
-            "low":         low,
-            "series":      series,
-            "lastUpdated": datetime.datetime.utcnow().isoformat() + "Z",
-        })
-        count += 1
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = {
+            executor.submit(write_doc, sym, price, session): sym
+            for sym, price in docs
+        }
+        for future in as_completed(futures):
+            try:
+                future.result()
+                done += 1
+                if done % 500 == 0 or done == len(docs):
+                    print(f"  Written {done}/{len(docs)}")
+            except Exception as e:
+                errors.append(str(e))
 
-        if count % BATCH_SIZE == 0:
-            batch.commit()
-            batch_count += 1
-            print(f"  Committed batch {batch_count}  ({count} symbols so far)")
-            batch = db.batch()
-    except Exception as e:
-        print(f"  Warning: skipping row {row.get('SYMBOL', '?')}: {e}")
+    if errors:
+        print(f"  Errors ({len(errors)}): {errors[:3]}")
 
-# Commit remaining
-if count % BATCH_SIZE != 0:
-    batch.commit()
-    batch_count += 1
+    write_meta(date_str, done, session)
+    session.close()
 
-# ── 4. Write sync metadata ────────────────────────────────────────────────────
-meta_ref = price_ref.document("__sync_meta__")
-meta_ref.set({
-    "lastSyncDate":  today_ist_str(),
-    "bhavcopyDate":  target_date_str,
-    "recordCount":   count,
-    "updatedAt":     datetime.datetime.utcnow().isoformat() + "Z",
-})
+    print(f"\n[DONE] {done} prices written for {date_str}")
+    print("Now click 'Refresh Prices' on the website!\n")
 
-print(f"\n✅ Done! Synced {count} symbols across {batch_count} Firestore batches.")
-print(f"   Bhavcopy date : {target_date_str}")
-print(f"   Metadata doc  : price_cache/__sync_meta__")
+if __name__ == "__main__":
+    main()
