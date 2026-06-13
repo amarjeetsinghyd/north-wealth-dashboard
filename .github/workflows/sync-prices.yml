@@ -1,11 +1,9 @@
-name: NSE Price Sync
+﻿name: NSE Price Sync
 
 on:
   schedule:
-    # Runs at 2:00 PM UTC = 7:30 PM IST, Monday to Friday
     - cron: '0 14 * * 1-5'
   workflow_dispatch:
-    # Allow manual trigger from GitHub.com Actions tab
 
 jobs:
   sync-prices:
