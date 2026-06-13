@@ -565,7 +565,7 @@ export function ClientPortfolioPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#16a34a', fontWeight: 600, marginTop: 4 }}>
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', marginRight: 2, boxShadow: '0 0 8px #16a34a' }}></span>
-              Prices automatically updated daily after 4:00 PM IST
+              Prices automatically updated daily after 7:30 PM IST
             </div>
           </div>
         </div>
@@ -803,22 +803,29 @@ export function ClientPortfolioPage() {
               <option value="">All M Cap</option>
               {uniqueMCaps.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <button
-              onClick={() => refreshPrices()}
-              disabled={refreshing}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
-                background: 'var(--bg-elevated)', border: '1px solid var(--gold-border)',
-                color: 'var(--gold)', fontSize: 13, fontWeight: 600,
-                cursor: refreshing ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                opacity: refreshing ? 0.7 : 1,
-              }}
-              onMouseEnter={e => { if (!refreshing) (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.1)'; }}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
-            >
-              <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-              {refreshing ? 'Refreshing...' : 'Refresh Prices'}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <button
+                onClick={() => refreshPrices()}
+                disabled={refreshing}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
+                  background: 'var(--bg-elevated)', border: '1px solid var(--gold-border)',
+                  color: 'var(--gold)', fontSize: 13, fontWeight: 600,
+                  cursor: refreshing ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                  opacity: refreshing ? 0.7 : 1,
+                }}
+                onMouseEnter={e => { if (!refreshing) (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.1)'; }}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
+              >
+                <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                {refreshing ? 'Refreshing...' : 'Refresh Prices'}
+              </button>
+              {priceAsOf && (
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px' }}>
+                  As of: {priceAsOf}
+                </span>
+              )}
+            </div>
             <button
               onClick={handleDownloadExcel}
               style={{
