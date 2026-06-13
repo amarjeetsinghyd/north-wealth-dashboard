@@ -90,7 +90,7 @@ export function ClientPortfolioPage() {
       console.log(`[RefreshPrices] price_cache: ${priceMap.size}/${syms.length} symbols matched`);
 
       // Also fetch sync metadata to show "Prices as of" date
-      const metaSnap = await getDoc(doc(db, 'price_cache', '__sync_meta__'));
+      const metaSnap = await getDoc(doc(db, 'price_cache', 'sync_meta'));
       if (metaSnap.exists()) {
         const metaData = metaSnap.data();
         if (metaData.bhavcopyDate) setPriceAsOf(metaData.bhavcopyDate);
@@ -147,7 +147,6 @@ export function ClientPortfolioPage() {
     }
   };
 
-
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -161,7 +160,7 @@ export function ClientPortfolioPage() {
       setTransactions(tx);
       // Load last sync date from price_cache metadata
       try {
-        const metaSnap = await getDoc(doc(db, 'price_cache', '__sync_meta__'));
+        const metaSnap = await getDoc(doc(db, 'price_cache', 'sync_meta'));
         if (metaSnap.exists() && metaSnap.data().bhavcopyDate) {
           setPriceAsOf(metaSnap.data().bhavcopyDate);
         }

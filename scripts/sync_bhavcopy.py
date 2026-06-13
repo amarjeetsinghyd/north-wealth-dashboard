@@ -69,7 +69,7 @@ def write_doc(symbol, close, session):
     return symbol
 
 def write_meta(date_str, count, session):
-    url = f"{FS_API}/price_cache/__sync_meta__?key={API_KEY}"
+    url = f"{FS_API}/price_cache/sync_meta?key={API_KEY}"
     body = {
         "fields": {
             "bhavcopyDate": {"stringValue":  date_str},
