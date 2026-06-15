@@ -37,7 +37,7 @@ def get_ist_date(days_back=0):
 # Download Bhavcopy with fallback for holidays
 def download_bhavcopy():
     print("\n[SEARCH] Finding latest NSE Bhavcopy...")
-    for offset in range(1, 11):
+    for offset in range(0, 11):
         date_str = get_ist_date(offset)
         print(f"  Trying {date_str} ...", end=" ", flush=True)
         try:
