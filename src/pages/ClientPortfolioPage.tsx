@@ -565,7 +565,7 @@ export function ClientPortfolioPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#16a34a', fontWeight: 600, marginTop: 4 }}>
               <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', marginRight: 2, boxShadow: '0 0 8px #16a34a' }}></span>
-              Prices automatically updated daily after 7:45 PM IST
+              Prices automatically updated daily between 7:45 PM and 10:45 PM IST
             </div>
           </div>
         </div>

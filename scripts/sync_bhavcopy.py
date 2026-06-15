@@ -85,6 +85,20 @@ def main():
         print("\n[ERROR] No bhavcopy found in last 10 days. Exiting.")
         sys.exit(1)
 
+    # Check if this date's data is already synced to Firebase
+    url = f"{FS_API}/price_cache/sync_meta?key={API_KEY}"
+    try:
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            if "fields" in data and "bhavcopyDate" in data["fields"]:
+                bhav_date = data["fields"]["bhavcopyDate"]["stringValue"]
+                if bhav_date == date_str:
+                    print(f"\n[SKIP] Data for {date_str} is already in Firebase. Exiting early.")
+                    sys.exit(0)
+    except Exception as e:
+        print(f"\n[WARN] Failed to check sync_meta: {e}")
+
     print("\n[DATA] Filtering symbols...")
 
     # Show actual column names for debugging
