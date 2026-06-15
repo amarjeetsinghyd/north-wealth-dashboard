@@ -803,7 +803,12 @@ export function ClientPortfolioPage() {
               <option value="">All M Cap</option>
               {uniqueMCaps.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              {priceAsOf && (
+                <span style={{ position: 'absolute', top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                  As of: {priceAsOf}
+                </span>
+              )}
               <button
                 onClick={() => refreshPrices()}
                 disabled={refreshing}
@@ -820,11 +825,6 @@ export function ClientPortfolioPage() {
                 <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
                 {refreshing ? 'Refreshing...' : 'Refresh Prices'}
               </button>
-              {priceAsOf && (
-                <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px' }}>
-                  As of: {priceAsOf}
-                </span>
-              )}
             </div>
             <button
               onClick={handleDownloadExcel}
