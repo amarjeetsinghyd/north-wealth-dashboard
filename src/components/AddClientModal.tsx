@@ -30,6 +30,7 @@ const NSE_MAPPINGS: Record<string, string> = {
   'SPTL':       'SPTL',
   'TITANSEC':   'TITANSEC',
   'VISHWARAJ':  'VISHWARAJ',
+  'SHRINGAR':   'SHRINGARMS',
 };
 
 function toNSESymbol(brokerSymbol: string): string {

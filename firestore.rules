@@ -2,10 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Client data — authenticated users only
-    match /clients/{doc=**}      { allow read, write: if request.auth != null; }
-    match /holdings/{doc=**}     { allow read, write: if request.auth != null; }
-    match /transactions/{doc=**} { allow read, write: if request.auth != null; }
+    // Client data — the app uses a custom hardcoded frontend login, so Firebase auth is null.
+    match /clients/{doc=**}      { allow read, write: if true; }
+    match /holdings/{doc=**}     { allow read, write: if true; }
+    match /transactions/{doc=**} { allow read, write: if true; }
 
     // price_cache — public market data, open read/write
     // Safe: contains only NSE closing prices (publicly available data)

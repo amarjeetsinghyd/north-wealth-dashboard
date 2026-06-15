@@ -1,8 +1,8 @@
-﻿name: NSE Price Sync
+name: NSE Price Sync
 
 on:
   schedule:
-    - cron: '0 14 * * 1-5'
+    - cron: '15 14 * * 1-5'
   workflow_dispatch:
 
 jobs:
