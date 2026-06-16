@@ -33,6 +33,11 @@ const NSE_MAPPINGS: Record<string, string> = {
   'SHRINGAR':   'SHRINGARMS',
 };
 
+// Robust synonym sets for document parsing
+const SYMBOL_SYNONYMS = ['symbol', 'stock name', 'stock', 'scrip', 'company', 'company name', 'instrument', 'asset', 'ticker', 'script', 'security'];
+const QTY_SYNONYMS = ['quantity', 'qty', 'quantity available', 'holdings', 'shares', 'units', 'volume', 'balance', 'available qty', 'net qty', 'total qty'];
+const PRICE_SYNONYMS = ['average price', 'avg buy price', 'avg price', 'buy price', 'average cost', 'rate', 'cost price', 'purchase price', 'avg. price', 'avg. cost', 'buy avg', 'cost', 'average'];
+
 function toNSESymbol(brokerSymbol: string): string {
   const cleaned = brokerSymbol
     .trim()
@@ -146,18 +151,20 @@ function parseZerodhaExcel(file: File): Promise<Holding[]> {
         const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
         
         // Robust case-insensitive header finder supporting synonyms
-        const headerIndex = rows.findIndex(row => 
-          row.some(cell => {
-            const val = String(cell ?? '').trim().toLowerCase();
-            return val === 'symbol' || val === 'stock name' || val === 'stock' || val === 'scrip';
-          })
-        );
+        const headerIndex = rows.findIndex(row => {
+          const rowStrings = row.map(cell => String(cell ?? '').trim().toLowerCase());
+          const hasSymbol = rowStrings.some(val => SYMBOL_SYNONYMS.includes(val));
+          const hasQty = rowStrings.some(val => QTY_SYNONYMS.some(q => val.includes(q)));
+          // Require both Symbol and Quantity to prevent falsely matching generic client detail rows
+          return hasSymbol && hasQty;
+        });
+        
         if (headerIndex === -1) { resolve([]); return; }
         
         const headers = rows[headerIndex].map(c => String(c ?? '').trim().toLowerCase());
-        const si = headers.findIndex(h => h === 'symbol' || h === 'stock name' || h === 'stock' || h === 'scrip');
-        const qi = headers.findIndex(h => h.includes('quantity available') || h.includes('quantity') || h.includes('qty'));
-        const ai = headers.findIndex(h => h.includes('average price') || h.includes('avg buy price') || h.includes('avg price') || h.includes('buy price') || h.includes('average cost') || h === 'rate');
+        const si = headers.findIndex(h => SYMBOL_SYNONYMS.includes(h));
+        const qi = headers.findIndex(h => QTY_SYNONYMS.some(q => h.includes(q)));
+        const ai = headers.findIndex(h => PRICE_SYNONYMS.some(p => h.includes(p)));
         
         const holdings: Holding[] = [];
         for (let i = headerIndex + 1; i < rows.length; i++) {
@@ -190,12 +197,18 @@ function parseZerodhaExcel(file: File): Promise<Holding[]> {
 function parseCSVBrowser(text: string): Holding[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
-  const headerIndex = lines.findIndex(line => line.toLowerCase().includes('symbol'));
+  const headerIndex = lines.findIndex(line => {
+    const cols = line.split(',').map(c => c.trim().toLowerCase().replace(/['"]/g, ''));
+    const hasSymbol = cols.some(val => SYMBOL_SYNONYMS.includes(val));
+    const hasQty = cols.some(val => QTY_SYNONYMS.some(q => val.includes(q)));
+    return hasSymbol && hasQty;
+  });
+  
   if (headerIndex === -1) return [];
   const headers = lines[headerIndex].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
-  const si = headers.findIndex(h => h === 'symbol');
-  const qi = headers.findIndex(h => h.includes('quantity available') || h === 'quantity' || h === 'qty');
-  const ai = headers.findIndex(h => h.includes('average price') || h.includes('buy avg') || h === 'rate');
+  const si = headers.findIndex(h => SYMBOL_SYNONYMS.includes(h));
+  const qi = headers.findIndex(h => QTY_SYNONYMS.some(q => h.includes(q)));
+  const ai = headers.findIndex(h => PRICE_SYNONYMS.some(p => h.includes(p)));
   const holdings: Holding[] = [];
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
