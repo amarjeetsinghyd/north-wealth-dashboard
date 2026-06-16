@@ -69,9 +69,9 @@ export function ClientPortfolioPage() {
     setRefreshing(true);
     try {
       // 1. Fetch prices for all holdings from price_cache in parallel
-      const syms = activeHoldings
-        .map(h => (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase())
-        .filter(Boolean);
+      const syms = Array.from(new Set(activeHoldings
+        .map(h => cleanSymbol(h))
+        .filter(Boolean)));
 
       console.log(`[RefreshPrices] Reading ${syms.length} prices from Firebase price_cache...`);
 
@@ -106,7 +106,7 @@ export function ClientPortfolioPage() {
       let updatedCount = 0;
       for (const holding of activeHoldings) {
         try {
-          const sym = (holding.nse_symbol || holding.stock_symbol || '').trim().toUpperCase();
+          const sym = cleanSymbol(holding);
           const price = priceMap.get(sym) || 0;
 
           if (price > 0) {
