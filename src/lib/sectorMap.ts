@@ -17,13 +17,15 @@ export interface StockMeta {
 }
 
 const DEFAULT_META: StockMeta = {
-  sector: 'Others',
+  sector: 'Inactive',
   marketCap: 'Mid',
   assetClass: 'Equity',
   pe: 20.0,
   pb: 2.5,
   divYield: 1.0,
 };
+
+
 
 // ─── Comprehensive NSE symbol → metadata map ──────────────────────────────────
 const SECTOR_MAP: Record<string, StockMeta> = {
@@ -53,6 +55,7 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   MANAPPURAM:  { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
   LICHSGFIN:   { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
   POONAWALLA:  { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
+  HDBFSL:      { sector: 'Inactive', marketCap: 'Small',  assetClass: 'Equity' },
 
   // ── Large Cap — IT ────────────────────────────────────────────────────────
   TCS:         { sector: 'Information Technology', marketCap: 'Large', assetClass: 'Equity' },
@@ -104,6 +107,8 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   // ── Automobile ───────────────────────────────────────────────────────────
   MARUTI:      { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   TATAMOTORS:  { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
+  TMPV:        { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
+  TMCV:        { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   M_M:         { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   'M&M':       { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   MM:          { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
@@ -251,7 +256,7 @@ const SECTOR_MAP: Record<string, StockMeta> = {
 };
 
 function standardizeSector(rawSector: string): string {
-  if (!rawSector) return 'Others';
+  if (!rawSector) return 'Active';
   const sector = rawSector.toLowerCase().trim();
   
   if (sector.includes('bank')) return 'Banking';
@@ -289,7 +294,7 @@ function standardizeSector(rawSector: string): string {
   if (sector.includes('infrastructure')) return 'Infrastructure';
   if (sector.includes('diversified')) return 'Conglomerate';
   
-  return 'Others';
+  return 'Active';
 }
 
 function standardizeEtfCategory(category: string, etfName: string): { sector: string, assetClass: AssetClass } {
@@ -363,8 +368,15 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
         const mcapType = company[2] as MarketCap;
         const mcapVal = company[3] as number;
         const industryname = company[4] as string;
+        
+        const nseStatus = (company[8] as string || '').trim().toLowerCase();
+        const bseStatus = (company[9] as string || '').trim().toLowerCase();
+        const isInactive = nseStatus === 'delisted' || bseStatus === 'delisted' ||
+                           nseStatus === 'suspended' || bseStatus === 'suspended' ||
+                           nseStatus === 'not listed' || bseStatus === 'not listed';
+                           
         meta = {
-          sector: standardizeSector(rawSector),
+          sector: isInactive ? 'Inactive' : standardizeSector(rawSector),
           marketCap: mcapType,
           assetClass: 'Equity',
           industry: industryname,
@@ -372,8 +384,11 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
           companyName: company[0] as string
         };
       } else {
-        // 4. Fallback to default
-        meta = DEFAULT_META;
+        // 4. Fallback to default (treated as Inactive since it's not in the master database)
+        meta = {
+          ...DEFAULT_META,
+          sector: 'Inactive'
+        };
       }
     }
   }
@@ -411,6 +426,8 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
     'Silver ETF': { pe: 0, pb: 0, divYield: 0 },
     'Index ETF': { pe: 22.0, pb: 3.5, divYield: 1.2 },
     'Liquid ETF': { pe: 0, pb: 0, divYield: 6.2 },
+    'Active': { pe: 20.0, pb: 2.5, divYield: 1.0 },
+    'Inactive': { pe: 0, pb: 0, divYield: 0 },
     'Others': { pe: 20.0, pb: 2.5, divYield: 1.0 },
   };
 
@@ -509,6 +526,71 @@ export function resolvePriceTicker(
 
   // Ensure unique candidates
   return Array.from(new Set(candidates));
+}
+
+// ─── Reverse Lookup for NSE Symbols ─────────────────────────────────────────
+let reverseNseMap: Record<number, string> | null = null;
+
+function getReverseNseMap() {
+  if (!reverseNseMap) {
+    reverseNseMap = {};
+    const nseDict = companyMaster.nse as Record<string, number>;
+    for (const [sym, idx] of Object.entries(nseDict)) {
+      reverseNseMap[idx] = sym;
+    }
+  }
+  return reverseNseMap;
+}
+
+function normalizeCompanyName(name: string): string {
+  return name.toUpperCase()
+    .replace(/LIMITED/g, '')
+    .replace(/LTD\.?/g, '')
+    .replace(/ ENTER\.? L/g, '')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+/**
+ * Checks if a given string is a perfectly valid exact NSE symbol.
+ */
+export function isExactNSESymbol(symbol: string): boolean {
+  if (!symbol) return false;
+  const nseDict = companyMaster.nse as Record<string, number>;
+  return nseDict[symbol.trim().toUpperCase()] !== undefined;
+}
+
+/**
+ * Resolves an ISIN directly to an NSE symbol using companyMaster.json
+ */
+export function resolveISINToNSE(isin: string): string | null {
+  if (!isin) return null;
+  const isinDict = companyMaster.isin as Record<string, number>;
+  const idx = isinDict[isin.trim().toUpperCase()];
+  if (idx !== undefined) {
+    const nseMap = getReverseNseMap();
+    return nseMap[idx] || null;
+  }
+  return null;
+}
+
+/**
+ * Attempts to find the exact NSE symbol by fuzzy matching a full company name
+ * against the companyMaster.json database.
+ */
+export function resolveCompanyNameToNSE(companyName: string): string | null {
+  if (!companyName) return null;
+  const target = normalizeCompanyName(companyName);
+  if (!target) return null;
+
+  for (let i = 0; i < companyMaster.companies.length; i++) {
+    const comp = companyMaster.companies[i];
+    const name = comp[0] as string;
+    if (name && normalizeCompanyName(name) === target) {
+      const nseMap = getReverseNseMap();
+      return nseMap[i] || null;
+    }
+  }
+  return null;
 }
 
 /**

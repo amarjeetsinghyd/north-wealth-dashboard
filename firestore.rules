@@ -7,9 +7,10 @@ service cloud.firestore {
     match /holdings/{doc=**}     { allow read, write: if true; }
     match /transactions/{doc=**} { allow read, write: if true; }
 
-    // price_cache — public market data, open read/write
+    // price_cache and market_data — public market data, open read/write
     // Safe: contains only NSE closing prices (publicly available data)
     // Written by sync script, read by dashboard
     match /price_cache/{doc=**}  { allow read, write: if true; }
+    match /market_data/{doc=**}  { allow read, write: if true; }
   }
 }

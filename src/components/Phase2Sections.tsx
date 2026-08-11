@@ -41,7 +41,7 @@ export function BenchmarkComparison({ benchmarkData, stockMarketData, holdings, 
     
     holdings.forEach(h => {
       const symbol = h.nse_symbol || h.stock_symbol;
-      const smd = stockMarketData?.find(s => s.symbol === symbol || s.symbol === `${symbol}.NS`);
+      const smd = stockMarketData?.find(s => s.symbol === symbol);
       
       if (smd) {
         const holdingValue = h.current_value || (h.buy_price * h.quantity);
@@ -137,7 +137,7 @@ export function StockLevelAnalysis({ stockMarketData, holdings, totalValue }: Ph
 
   holdings.forEach(h => {
     const symbol = h.nse_symbol || h.stock_symbol;
-    const smd = stockMarketData.find(s => s.symbol === symbol || s.symbol === `${symbol}.NS`);
+    const smd = stockMarketData.find(s => s.symbol === symbol);
     const meta = getStockMeta(symbol, symbol);
     
     if (smd) {
@@ -214,7 +214,7 @@ export function RiskAndVolatilityTable({ stockMarketData, holdings, totalValue }
 
   const data = holdings.map(h => {
     const symbol = h.nse_symbol || h.stock_symbol;
-    const smd = stockMarketData.find(s => s.symbol === symbol || s.symbol === `${symbol}.NS`);
+    const smd = stockMarketData.find(s => s.symbol === symbol);
     const weight = totalValue > 0 ? ((h.current_value || h.buy_price * h.quantity) / totalValue) * 100 : 0;
     return {
       symbol: cleanSymbol(symbol),

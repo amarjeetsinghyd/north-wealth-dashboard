@@ -280,7 +280,7 @@ export function PortfolioDashboardPage() {
           const symbols = h.map(x => x.nse_symbol || x.stock_symbol);
           symbols.forEach(symbol => {
             const symTrim = symbol.trim();
-            const querySymbol = symTrim.includes('.') || symTrim.startsWith('^') || symTrim.includes('=') ? symTrim : `${symTrim}.NS`;
+            const querySymbol = symTrim;
             const cachedEntry = dbCache.find(d => d.symbol === symbol || d.symbol === querySymbol || d.id === symbol || d.id === querySymbol);
             if (cachedEntry && cachedEntry.currentPrice >= 0) {
               resolvedStock.push({
@@ -404,7 +404,7 @@ export function PortfolioDashboardPage() {
     let volVal = 15; // default 15% assumption if no data
 
     if (stockMarketData) {
-       const smd = stockMarketData.find(s => s.symbol === (h.nse_symbol || h.stock_symbol) || s.symbol === `${h.nse_symbol || h.stock_symbol}.NS`);
+       const smd = stockMarketData.find(s => s.symbol === (h.nse_symbol || h.stock_symbol));
        if (smd) {
          betaVal = smd.trueBeta;
          volVal = smd.volatility;

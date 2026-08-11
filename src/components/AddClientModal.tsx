@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import * as XLSX from 'xlsx';
-
+import { resolveCompanyNameToNSE, resolveISINToNSE, isExactNSESymbol } from '../lib/sectorMap';
 interface AddClientModalProps {
   onClose: () => void;
   onSuccess: () => void;
@@ -31,20 +31,83 @@ const NSE_MAPPINGS: Record<string, string> = {
   'TITANSEC':   'TITANSEC',
   'VISHWARAJ':  'VISHWARAJ',
   'SHRINGAR':   'SHRINGARMS',
+  // Specific mappings for full company names seen in some broker formats
+  'AAVAS FINANCIERS LIMITED': 'AAVAS',
+  'APL APOLLO TUBES LTD': 'APLAPOLLO',
+  'APOLLO HOSPITALS ENTER. L': 'APOLLOHOSP',
+  'BAJAJ FINANCE LIMITED': 'BAJFINANCE',
+  'BHARAT ELECTRONICS LTD': 'BEL',
+  'BHARTI AIRTEL LIMITED': 'BHARTIARTL',
+  'CEAT LIMITED': 'CEATLTD',
+  'CENTRAL DEPO SER (I) LTD': 'CDSL',
+  'HDB FINANCIAL SERVICES L': 'HDBFSL',
+  'SUZLON ENERGY LIMITED': 'SUZLON',
+  'TATA MOTORS PASS VEH LTD': 'TMPV',
+  'TATAMOTORS': 'TMPV'
 };
 
 // Robust synonym sets for document parsing
-const SYMBOL_SYNONYMS = ['symbol', 'stock name', 'stock', 'scrip', 'company', 'company name', 'instrument', 'asset', 'ticker', 'script', 'security'];
-const QTY_SYNONYMS = ['quantity', 'qty', 'quantity available', 'holdings', 'shares', 'units', 'volume', 'balance', 'available qty', 'net qty', 'total qty'];
-const PRICE_SYNONYMS = ['average price', 'avg buy price', 'avg price', 'buy price', 'average cost', 'rate', 'cost price', 'purchase price', 'avg. price', 'avg. cost', 'buy avg', 'cost', 'average'];
+const SYMBOL_SYNONYMS = ['symbol', 'stock name', 'nse symbol', 'bse symbol', 'scrip code', 'scrip name', 'company', 'instrument', 'asset', 'name'];
+const QTY_SYNONYMS = ['qty', 'quantity', 'shares', 'volume', 'units'];
+const PRICE_SYNONYMS = ['avg', 'average', 'buy price', 'cost', 'purchase', 'price'];
+const ISIN_SYNONYMS = ['isin', 'isin code', 'isincode'];
 
-function toNSESymbol(brokerSymbol: string): string {
+function toNSESymbol(brokerSymbol: string, isin?: string): string {
   const cleaned = brokerSymbol
     .trim()
     .toUpperCase()
     .replace(/-(T|E|X|Z|GB|BE|BL|N|W|SM|MT|XT|BT|GS|IL|SG|EQ)$/i, '')
     .trim();
-  return NSE_MAPPINGS[cleaned] ?? cleaned;
+
+  // 1. Exact Symbol Match
+  if (isExactNSESymbol(cleaned)) return cleaned;
+  if (NSE_MAPPINGS[cleaned]) return NSE_MAPPINGS[cleaned];
+
+  // 2. ISIN Match
+  if (isin) {
+    const isinResolved = resolveISINToNSE(isin);
+    if (isinResolved) return isinResolved;
+  }
+
+  // 3. Company Name Match
+  const resolved = resolveCompanyNameToNSE(brokerSymbol);
+  if (resolved) return resolved;
+
+  return cleaned;
+}
+
+function parseHeuristicRow(rowStrings: string[]) {
+  let isin: string | undefined;
+  let symbol: string | undefined;
+  const numbers: number[] = [];
+
+  for (const cell of rowStrings) {
+    const trimmed = cell.trim();
+    if (!trimmed) continue;
+
+    if (/^IN[A-Z0-9]{10}$/i.test(trimmed)) {
+      isin = trimmed;
+      continue;
+    }
+
+    const numMatch = trimmed.replace(/,/g, '');
+    if (!isNaN(Number(numMatch)) && trimmed !== '') {
+      numbers.push(Number(numMatch));
+      continue;
+    }
+
+    if (!symbol && trimmed.length > 1) {
+      symbol = trimmed;
+    }
+  }
+
+  if (symbol && numbers.length >= 2) {
+    return { symbol, isin, qty: numbers[0], avg: numbers[1] };
+  }
+  if (isin && numbers.length >= 2) {
+     return { symbol: isin, isin, qty: numbers[0], avg: numbers[1] };
+  }
+  return null;
 }
 
 async function loadPdfJs() {
@@ -155,28 +218,48 @@ function parseZerodhaExcel(file: File): Promise<Holding[]> {
           const rowStrings = row.map(cell => String(cell ?? '').trim().toLowerCase());
           const hasSymbol = rowStrings.some(val => SYMBOL_SYNONYMS.includes(val));
           const hasQty = rowStrings.some(val => QTY_SYNONYMS.some(q => val.includes(q)));
-          // Require both Symbol and Quantity to prevent falsely matching generic client detail rows
           return hasSymbol && hasQty;
         });
         
-        if (headerIndex === -1) { resolve([]); return; }
+        const holdings: Holding[] = [];
+
+        if (headerIndex === -1) {
+          // Heuristic fallback if headers are completely missing
+          for (let i = 0; i < rows.length; i++) {
+            const rowStrings = rows[i].map(c => String(c ?? ''));
+            const heuristic = parseHeuristicRow(rowStrings);
+            if (heuristic && heuristic.qty > 0 && heuristic.avg > 0) {
+              const nseSymbol = toNSESymbol(heuristic.symbol, heuristic.isin);
+              holdings.push({ 
+                stock_symbol: nseSymbol, 
+                nse_symbol: nseSymbol, 
+                company_name: nseSymbol, 
+                buy_price: heuristic.avg, 
+                quantity: heuristic.qty 
+              });
+            }
+          }
+          resolve(holdings);
+          return;
+        }
         
         const headers = rows[headerIndex].map(c => String(c ?? '').trim().toLowerCase());
         const si = headers.findIndex(h => SYMBOL_SYNONYMS.includes(h));
         const qi = headers.findIndex(h => QTY_SYNONYMS.some(q => h.includes(q)));
         const ai = headers.findIndex(h => PRICE_SYNONYMS.some(p => h.includes(p)));
+        const ii = headers.findIndex(h => ISIN_SYNONYMS.includes(h));
         
-        const holdings: Holding[] = [];
         for (let i = headerIndex + 1; i < rows.length; i++) {
           const row = rows[i];
           if (!row || !row[si]) continue;
           const symbol = String(row[si] ?? '').trim();
           if (!symbol || ['symbol', 'total', ''].includes(symbol.toLowerCase())) continue;
           
+          const isin = ii >= 0 ? String(row[ii] ?? '').trim() : undefined;
           const qty = parseFloat(String(row[qi] ?? '0')) || 0;
           const avg = parseFloat(String(row[ai] ?? '0')) || 0;
           if (qty > 0 && avg > 0) {
-            const nseSymbol = toNSESymbol(symbol);
+            const nseSymbol = toNSESymbol(symbol, isin);
             holdings.push({ 
               stock_symbol: nseSymbol, 
               nse_symbol: nseSymbol, 
@@ -204,21 +287,36 @@ function parseCSVBrowser(text: string): Holding[] {
     return hasSymbol && hasQty;
   });
   
-  if (headerIndex === -1) return [];
+  const holdings: Holding[] = [];
+  if (headerIndex === -1) {
+    // Heuristic fallback
+    for (let i = 0; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
+      const heuristic = parseHeuristicRow(cols);
+      if (heuristic && heuristic.qty > 0 && heuristic.avg > 0) {
+        const nseSymCSV = toNSESymbol(heuristic.symbol, heuristic.isin);
+        holdings.push({ stock_symbol: nseSymCSV, nse_symbol: nseSymCSV, company_name: nseSymCSV, buy_price: heuristic.avg, quantity: heuristic.qty });
+      }
+    }
+    return holdings;
+  }
+
   const headers = lines[headerIndex].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
   const si = headers.findIndex(h => SYMBOL_SYNONYMS.includes(h));
   const qi = headers.findIndex(h => QTY_SYNONYMS.some(q => h.includes(q)));
   const ai = headers.findIndex(h => PRICE_SYNONYMS.some(p => h.includes(p)));
-  const holdings: Holding[] = [];
+  const ii = headers.findIndex(h => ISIN_SYNONYMS.includes(h));
+
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const cols = lines[i].split(',').map(c => c.trim().replace(/['"]/g, ''));
     if (cols.length < 3) continue;
     const symbol = si >= 0 ? cols[si] : '';
+    const isin = ii >= 0 ? cols[ii] : undefined;
     if (!symbol || ['symbol', 'total', ''].includes(symbol.toLowerCase())) continue;
     const qty = parseFloat((cols[qi] || '').replace(/[^0-9.]/g, '')) || 0;
     const avg = parseFloat((cols[ai] || '').replace(/[^0-9.]/g, '')) || 0;
     if (qty > 0 && avg > 0) {
-      const nseSymCSV = toNSESymbol(symbol);
+      const nseSymCSV = toNSESymbol(symbol, isin);
       holdings.push({ stock_symbol: nseSymCSV, nse_symbol: nseSymCSV, company_name: nseSymCSV, buy_price: avg, quantity: qty });
     }
   }
