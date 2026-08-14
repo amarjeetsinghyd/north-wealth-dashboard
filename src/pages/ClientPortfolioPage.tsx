@@ -6,6 +6,7 @@ import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, updateDoc, addDoc, collection, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Client, Holding, Transaction, PortfolioSummary } from '../types';
+import { AddClientModal } from '../components/AddClientModal';
 import { SummaryCard } from '../components/SummaryCard';
 import { PnLBadge } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
@@ -41,6 +42,9 @@ export function ClientPortfolioPage() {
   const [buyQuantity, setBuyQuantity] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
   const [savingTransaction, setSavingTransaction] = useState(false);
+  
+  // Upload Statement Modal
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Total Capital & Cash Balance
   const [totalCapital, setTotalCapital] = useState<number>(0);
@@ -703,6 +707,21 @@ export function ClientPortfolioPage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <button
+                onClick={() => setShowUploadModal(true)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '9px 16px', background: 'var(--color-primary-600)',
+                  border: 'none', borderRadius: 8, cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 13, color: '#fff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)', transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
+              >
+                <Upload size={16} /> Upload Statement
+              </button>
+              
+              <button
                 onClick={() => navigate(`/client/${id}/dashboard`)}
                 style={{
                   position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -1042,6 +1061,10 @@ export function ClientPortfolioPage() {
                   Prices last updated: {new Date(Math.max(...holdings.filter(h => h.last_price_update).map(h => new Date(h.last_price_update!).getTime()))).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
+              <span style={{ fontSize: 'var(--text-xs)', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontWeight: 600 }}>
+                <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#16a34a', boxShadow: '0 0 6px #16a34a' }}></span>
+                Prices auto-updated daily between 7:45 PM and 10:45 PM IST
+              </span>
             </div>
             <div>
               <input
@@ -1401,21 +1424,6 @@ export function ClientPortfolioPage() {
               <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Add New Holding</h2>
               <button onClick={() => setShowBuyModal(false)} style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}><XIcon size={18} /></button>
             </div>
-            <div style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>NSE Symbol *</label>
-                <input value={nseSymbol} onChange={e => setNseSymbol(e.target.value.toUpperCase())} placeholder="e.g. RELIANCE" style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 'var(--text-base)', outline: 'none', transition: 'border-color 0.15s' }} onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Quantity *</label>
-                  <input type="number" value={buyQuantity} onChange={e => setBuyQuantity(e.target.value)} placeholder="0" style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 'var(--text-base)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Buy Price (₹) *</label>
-                  <input type="number" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} placeholder="0.00" style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 'var(--text-base)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
-                </div>
-              </div>
               {buyPrice && buyQuantity && (
                 <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-primary-400)' }}>
                   Invested Amount: ₹{(parseFloat(buyPrice || '0') * parseFloat(buyQuantity || '0')).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
