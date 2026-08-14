@@ -12,13 +12,16 @@ import { Spinner } from '../components/Spinner';
 import { getStockMeta, cleanSymbol } from '../lib/sectorMap';
 
 function fmtCurrency(v: number) {
-  if (Math.abs(v) >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
-  if (Math.abs(v) >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`;
   return `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-type SortColumn = 'scrip' | 'sector' | 'marketCap' | 'qty' | 'buy_price' | 'current_price' | 'invested_amount' | 'current_value' | 'unrealised_pnl' | 'unrealised_pnl_pct' | 'alloc' | null;
+function fmtCurrencyKPI(v: number) {
+  return `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+type SortColumn = 'scrip' | 'sector' | 'marketCap' | 'qty' | 'buy_price' | 'current_price' | 'invested_amount' | 'current_value' | 'unrealised_pnl' | 'unrealised_pnl_pct' | 'alloc' | 'source' | 'purchase_date' | null;
 type SortOrder = 'asc' | 'desc';
+type TxSortColumn = 'date' | 'stock_symbol' | 'action' | 'quantity' | 'price' | 'total_value' | null;
 
 export function ClientPortfolioPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,10 +48,28 @@ export function ClientPortfolioPage() {
   const [editingCapital, setEditingCapital] = useState(false);
   const [savingCapital, setSavingCapital] = useState(false);
   
+  const [mutualFunds, setMutualFunds] = useState<number>(0);
+  const [mutualFundsInput, setMutualFundsInput] = useState<string>('');
+  const [editingMutualFunds, setEditingMutualFunds] = useState(false);
+  const [savingMutualFunds, setSavingMutualFunds] = useState(false);
+  
+  // Date / Billing editing
+  const [editingDate, setEditingDate] = useState(false);
+  const [newDate, setNewDate] = useState('');
+  
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [stockSearch, setStockSearch] = useState('');
+  const [txSortColumn, setTxSortColumn] = useState<TxSortColumn>('date');
+  const [txSortOrder, setTxSortOrder] = useState<SortOrder>('desc');
+  const [txStockSearch, setTxStockSearch] = useState('');
+
   const [editingBuyPrice, setEditingBuyPrice] = useState<string | null>(null);
   const [editBuyPriceVal, setEditBuyPriceVal] = useState('');
+  
+  const [editingHoldingSource, setEditingHoldingSource] = useState<string | null>(null);
+  const [editingHoldingDate, setEditingHoldingDate] = useState<string | null>(null);
+  const [editingTxDate, setEditingTxDate] = useState<string | null>(null);
 
   const [sectorFilter, setSectorFilter] = useState<string>('');
   const [mcapFilter, setMcapFilter] = useState<string>('');
@@ -156,6 +177,8 @@ export function ClientPortfolioPage() {
         fetchTransactions(id),
       ]);
       setClient(c);
+      setTotalCapital(c?.total_capital || 0);
+      setMutualFunds(c?.mutual_funds || 0);
       setHoldings(h);
       setTransactions(tx);
       // Load last sync date from price_cache metadata
@@ -218,6 +241,14 @@ export function ClientPortfolioPage() {
         return meta.marketCap === mcapFilter;
       });
     }
+    if (stockSearch) {
+      const s = stockSearch.toLowerCase();
+      filtered = filtered.filter(h => 
+        h.stock_symbol.toLowerCase().includes(s) || 
+        (h.company_name && h.company_name.toLowerCase().includes(s)) ||
+        (h.nse_symbol && h.nse_symbol.toLowerCase().includes(s))
+      );
+    }
 
     if (!sortColumn) return filtered;
     
@@ -271,6 +302,14 @@ export function ClientPortfolioPage() {
           bVal = b.unrealised_pnl_pct;
           break;
       }
+
+      if (sortColumn === 'source') {
+        return sortOrder === 'asc' ? (a.source || '').localeCompare(b.source || '') : (b.source || '').localeCompare(a.source || '');
+      }
+      if (sortColumn === 'purchase_date') {
+        return sortOrder === 'asc' ? (a.purchase_date || '').localeCompare(b.purchase_date || '') : (b.purchase_date || '').localeCompare(a.purchase_date || '');
+      }
+
       return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
     });
     return sorted;
@@ -282,6 +321,35 @@ export function ClientPortfolioPage() {
     } else {
       setSortColumn(col);
       setSortOrder('asc');
+    }
+  };
+
+  const getSortedTransactions = () => {
+    let filtered = transactions;
+    if (txStockSearch) {
+      const s = txStockSearch.toLowerCase();
+      filtered = filtered.filter(tx => 
+        tx.stock_symbol.toLowerCase().includes(s) || 
+        (tx.company_name && tx.company_name.toLowerCase().includes(s))
+      );
+    }
+    if (!txSortColumn) return filtered;
+    return [...filtered].sort((a, b) => {
+      let aVal: any = a[txSortColumn];
+      let bVal: any = b[txSortColumn];
+      if (txSortColumn === 'date' || txSortColumn === 'stock_symbol' || txSortColumn === 'action') {
+        return txSortOrder === 'asc' ? String(aVal || '').localeCompare(String(bVal || '')) : String(bVal || '').localeCompare(String(aVal || ''));
+      }
+      return txSortOrder === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+    });
+  };
+
+  const handleTxSort = (col: TxSortColumn) => {
+    if (txSortColumn === col) {
+      setTxSortOrder(txSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setTxSortColumn(col);
+      setTxSortOrder('asc');
     }
   };
 
@@ -336,6 +404,38 @@ export function ClientPortfolioPage() {
       alert('Failed to save total capital');
     } finally {
       setSavingCapital(false);
+    }
+  };
+
+  const saveMutualFunds = async () => {
+    if (!id) return;
+    const val = parseFloat(mutualFundsInput);
+    if (isNaN(val) || val < 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+    setSavingMutualFunds(true);
+    try {
+      await updateDoc(doc(db, 'clients', id), { mutual_funds: val });
+      setMutualFunds(val);
+      setEditingMutualFunds(false);
+    } catch (err) {
+      console.error('Error saving mutual funds:', err);
+      alert('Failed to save mutual funds');
+    } finally {
+      setSavingMutualFunds(false);
+    }
+  };
+
+  const saveOnboardingDate = async () => {
+    if (!id || !newDate) return;
+    try {
+      await updateDoc(doc(db, 'clients', id), { onboarding_date: newDate });
+      setClient({ ...client, onboarding_date: newDate } as Client);
+      setEditingDate(false);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save date');
     }
   };
 
@@ -450,8 +550,8 @@ export function ClientPortfolioPage() {
     (acc, h) => {
       const hasPrice = h.current_price > 0;
       return {
-        totalInvested: acc.totalInvested + (hasPrice ? (h.invested_amount || h.buy_price * h.quantity) : 0),
-        currentValue: acc.currentValue + (hasPrice ? (h.current_value || h.buy_price * h.quantity) : 0),
+        totalInvested: acc.totalInvested + (h.invested_amount || h.buy_price * h.quantity),
+        currentValue: acc.currentValue + (hasPrice ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)),
         unrealisedPnL: acc.unrealisedPnL + h.unrealised_pnl,
         realisedPnL: acc.realisedPnL + h.realised_pnl,
         unrealisedPnLPct: 0,
@@ -483,8 +583,28 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const cashBalance = totalCapital - summary.totalInvested;
-  const gridCols = isRebalanceMode ? '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 80px' : '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr';
+  const cashBalance = totalCapital - summary.totalInvested - mutualFunds;
+  const gridCols = isRebalanceMode ? '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 80px' : '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr';
+
+  const updateHoldingField = async (holdingId: string, field: string, val: string) => {
+    try {
+      await updateDoc(doc(db, 'holdings', holdingId), { [field]: val });
+      setHoldings(prev => prev.map(h => h.id === holdingId ? { ...h, [field]: val } : h));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update holding');
+    }
+  };
+
+  const updateTxDate = async (txId: string, val: string) => {
+    try {
+      await updateDoc(doc(db, 'transactions', txId), { date: val });
+      setTransactions(prev => prev.map(tx => tx.id === txId ? { ...tx, date: val } : tx));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update transaction date');
+    }
+  };
 
   return (
     <div className="animate-fade-in">
@@ -520,9 +640,35 @@ export function ClientPortfolioPage() {
                 {client.name}
               </h1>
               <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 4 }}>
-                Onboarded {new Date(client.onboarding_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
-                &nbsp;&bull;&nbsp;Portfolio Rebalancing Service
+                {client.risk_profile && <span style={{ color: '#ef4444', fontWeight: 700 }}>Risk: {client.risk_profile} &nbsp;&bull;&nbsp; </span>}
+                {client.rm_name && <span style={{ color: '#C9A84C', fontWeight: 700 }}>RM: {client.rm_name} &nbsp;&bull;&nbsp; </span>}
+                Onboarded: {editingDate ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ padding: '2px 6px', fontSize: 12, borderRadius: 4, border: '1px solid #ccc' }} />
+                    <button onClick={saveOnboardingDate} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a' }}><Check size={14} /></button>
+                    <button onClick={() => setEditingDate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><XIcon size={14} /></button>
+                  </span>
+                ) : (
+                  <span style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc' }} onClick={() => { setNewDate(client.onboarding_date || ''); setEditingDate(true); }}>
+                    {client.onboarding_date ? new Date(client.onboarding_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Set Date'}
+                  </span>
+                )}
               </p>
+              
+              <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12 }}>
+                <div style={{ background: 'rgba(0,0,0,0.03)', padding: '4px 10px', borderRadius: 6 }}>
+                  <span style={{ color: '#666', fontWeight: 600 }}>Billed: </span>
+                  <span style={{ fontWeight: 800 }}>{fmtCurrency(client.billed_amount || 0)}</span>
+                </div>
+                <div style={{ background: 'rgba(34,197,94,0.05)', padding: '4px 10px', borderRadius: 6, color: '#16a34a' }}>
+                  <span style={{ fontWeight: 600 }}>Paid: </span>
+                  <span style={{ fontWeight: 800 }}>{fmtCurrency(client.amount_paid || 0)}</span>
+                </div>
+                <div style={{ background: 'rgba(239,68,68,0.05)', padding: '4px 10px', borderRadius: 6, color: '#ef4444' }}>
+                  <span style={{ fontWeight: 600 }}>Balance: </span>
+                  <span style={{ fontWeight: 800 }}>{fmtCurrency((client.billed_amount || 0) - (client.amount_paid || 0))}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -572,11 +718,12 @@ export function ClientPortfolioPage() {
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
-        <SummaryCard title="Total Invested" value={fmtCurrency(summary.totalInvested)} icon={<IndianRupee size={16} />} accentColor="var(--color-primary-500)" />
-        <SummaryCard title="Current Value" value={fmtCurrency(summary.currentValue)} icon={<BarChart3 size={16} />} accentColor="var(--color-accent-500)" trend={summary.currentValue >= summary.totalInvested ? 'up' : 'down'} />
-        <SummaryCard title="Unrealised P&L" value={fmtCurrency(summary.unrealisedPnL)} subtitle={`${summary.unrealisedPnLPct >= 0 ? '+' : ''}${summary.unrealisedPnLPct.toFixed(2)}%`} icon={summary.unrealisedPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />} trend={summary.unrealisedPnL >= 0 ? 'up' : 'down'} accentColor={summary.unrealisedPnL >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)'} />
-        <SummaryCard title="Realised P&L" value={fmtCurrency(summary.realisedPnL)} icon={summary.realisedPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />} trend={summary.realisedPnL >= 0 ? 'up' : summary.realisedPnL < 0 ? 'down' : 'neutral'} accentColor={summary.realisedPnL >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)'} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
+        <SummaryCard title="Total Invested" value={fmtCurrencyKPI(summary.totalInvested)} icon={<IndianRupee size={16} />} accentColor="var(--color-primary-500)" />
+        <SummaryCard title="Current Value" value={fmtCurrencyKPI(summary.currentValue)} icon={<BarChart3 size={16} />} accentColor="var(--color-accent-500)" trend={summary.currentValue >= summary.totalInvested ? 'up' : 'down'} />
+        <SummaryCard title="Unrealised P&L" value={fmtCurrencyKPI(summary.unrealisedPnL)} subtitle={`${summary.unrealisedPnLPct >= 0 ? '+' : ''}${summary.unrealisedPnLPct.toFixed(2)}%`} icon={summary.unrealisedPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />} trend={summary.unrealisedPnL >= 0 ? 'up' : 'down'} accentColor={summary.unrealisedPnL >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)'} />
+        <SummaryCard title="Realised P&L" value={fmtCurrencyKPI(summary.realisedPnL)} icon={summary.realisedPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />} trend={summary.realisedPnL >= 0 ? 'up' : summary.realisedPnL < 0 ? 'down' : 'neutral'} accentColor={summary.realisedPnL >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)'} />
+        <SummaryCard title="Free Cash" value={fmtCurrencyKPI(Math.max(0, (client.total_capital || 0) - summary.totalInvested))} icon={<Wallet size={16} />} accentColor="#C9A84C" />
       </div>
 
       {/* ── Rebalancing Capital Panel ───────────────────────────────────── */}
@@ -613,7 +760,7 @@ export function ClientPortfolioPage() {
               }}>
                 <Landmark size={16} />
               </div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#ffffff', margin: 0, letterSpacing: '0.3px' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#EAE0C8', margin: 0, letterSpacing: '0.3px' }}>
                 Rebalancing Capital Overview
               </h3>
             </div>
@@ -641,7 +788,7 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
             {/* Total Capital Input */}
             <div style={{
               background: 'rgba(0,0,0,0.4)',
@@ -672,7 +819,7 @@ export function ClientPortfolioPage() {
                     autoFocus
                     style={{
                       flex: 1, padding: '6px 10px', fontSize: 18, fontWeight: 800,
-                      background: 'rgba(201,168,76,0.06)', color: '#ffffff',
+                      background: 'rgba(201,168,76,0.06)', color: '#EAE0C8',
                       border: '1px solid var(--gold-border)', borderRadius: 6, outline: 'none',
                       fontFamily: 'var(--font-sans)',
                     }}
@@ -697,6 +844,61 @@ export function ClientPortfolioPage() {
               <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Click to set the total capital deployed</div>
             </div>
 
+            {/* Mutual Funds Input */}
+            <div style={{
+              background: 'rgba(0,0,0,0.4)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: 12,
+              padding: '16px 20px',
+              transition: 'border-color 0.2s',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Mutual Funds</span>
+                <div style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--gold)',
+                }}>
+                  <Wallet size={14} />
+                </div>
+              </div>
+              {editingMutualFunds ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: 'var(--gold)', fontSize: 22, fontWeight: 800 }}>₹</span>
+                  <input
+                    type="number"
+                    value={mutualFundsInput}
+                    onChange={e => setMutualFundsInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveMutualFunds(); if (e.key === 'Escape') { setEditingMutualFunds(false); setMutualFundsInput(String(mutualFunds)); } }}
+                    autoFocus
+                    style={{
+                      flex: 1, padding: '6px 10px', fontSize: 18, fontWeight: 800,
+                      background: 'rgba(201,168,76,0.06)', color: '#EAE0C8',
+                      border: '1px solid var(--gold-border)', borderRadius: 6, outline: 'none',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  />
+                  <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 4 }}><Check size={16} /></button>
+                  <button onClick={() => { setEditingMutualFunds(false); setMutualFundsInput(String(mutualFunds)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 4 }}><XIcon size={16} /></button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold-light)', letterSpacing: '-0.5px' }}>
+                    {mutualFunds > 0 ? fmtCurrency(mutualFunds) : '₹0.00'}
+                  </span>
+                  <button
+                    onClick={() => { setEditingMutualFunds(true); setMutualFundsInput(String(mutualFunds)); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, opacity: 0.6, display: 'flex', alignItems: 'center' }}
+                    title="Edit mutual funds"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Amount invested in MFs</div>
+            </div>
+
             {/* Total Investment (read-only) */}
             <div style={{
               background: 'rgba(0,0,0,0.4)',
@@ -715,7 +917,7 @@ export function ClientPortfolioPage() {
                   <IndianRupee size={14} />
                 </div>
               </div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.5px' }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#EAE0C8', letterSpacing: '-0.5px' }}>
                 {fmtCurrency(summary.totalInvested)}
               </div>
               <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Sum of all invested amounts</div>
@@ -762,19 +964,30 @@ export function ClientPortfolioPage() {
 
       {/* Holdings Table */}
       <section style={{ marginBottom: 'var(--space-10)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#ffffff', margin: 0 }}>
-              Holdings &nbsp;
-              <span style={{ fontSize: 15, fontWeight: 400, color: '#555555' }}>
-                ({holdings.length} positions)
-              </span>
-            </h2>
-            {holdings.some(h => h.last_price_update) && (
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
-                Prices last updated: {new Date(Math.max(...holdings.filter(h => h.last_price_update).map(h => new Date(h.last_price_update!).getTime()))).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                Holdings &nbsp;
+                <span style={{ fontSize: 15, fontWeight: 400, color: '#555555' }}>
+                  ({holdings.length} positions)
+                </span>
+              </h2>
+              {holdings.some(h => h.last_price_update) && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+                  Prices last updated: {new Date(Math.max(...holdings.filter(h => h.last_price_update).map(h => new Date(h.last_price_update!).getTime()))).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Search stock..."
+                value={stockSearch}
+                onChange={e => setStockSearch(e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}
+              />
+            </div>
           </div>
           
           {/* Action Buttons */}
@@ -872,9 +1085,9 @@ export function ClientPortfolioPage() {
             <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>Upload a broker statement or add holdings manually</p>
           </div>
         ) : (
-          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflowY: 'auto', maxHeight: '75vh' }}>
             {/* Table Header */}
-            <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.02)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</div>
               <button onClick={() => handleSort('scrip')}
                 style={{
@@ -917,6 +1130,24 @@ export function ClientPortfolioPage() {
                   </button>
                 );
               })}
+              <button onClick={() => handleSort('source')}
+                style={{
+                  fontSize: 'var(--text-xs)', color: sortColumn === 'source' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
+                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
+                }}
+              >
+                Source {sortColumn === 'source' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
+              <button onClick={() => handleSort('purchase_date')}
+                style={{
+                  fontSize: 'var(--text-xs)', color: sortColumn === 'purchase_date' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
+                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
+                }}
+              >
+                Pur. Date {sortColumn === 'purchase_date' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
               {isRebalanceMode && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Action</span>}
             </div>
 
@@ -963,7 +1194,45 @@ export function ClientPortfolioPage() {
                 <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}</div>
                 <div style={{ color: h.unrealised_pnl >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{h.current_price > 0 ? `${h.unrealised_pnl >= 0 ? '+' : ''}${fmtCurrency(h.unrealised_pnl)}` : '0'}</div>
                 <div>{h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>0%</span>}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{summary.currentValue > 0 ? (((h.current_value || h.buy_price * h.quantity) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{summary.currentValue > 0 ? (((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}</div>
+                
+                {/* Holding Source */}
+                <div>
+                  {editingHoldingSource === h.id ? (
+                    <select
+                      autoFocus
+                      value={h.source || 'Existing'}
+                      onChange={e => { updateHoldingField(h.id, 'source', e.target.value); setEditingHoldingSource(null); }}
+                      onBlur={() => setEditingHoldingSource(null)}
+                      style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none' }}
+                    >
+                      <option value="Existing">Existing</option>
+                      <option value="Fresh">Fresh</option>
+                    </select>
+                  ) : (
+                    <span onClick={() => setEditingHoldingSource(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {h.source || 'Existing'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Purchase Date */}
+                <div>
+                  {editingHoldingDate === h.id ? (
+                    <input
+                      type="date"
+                      autoFocus
+                      value={h.purchase_date || ''}
+                      onChange={e => { updateHoldingField(h.id, 'purchase_date', e.target.value); setEditingHoldingDate(null); }}
+                      onBlur={() => setEditingHoldingDate(null)}
+                      style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none', width: '100%' }}
+                    />
+                  ) : (
+                    <span onClick={() => setEditingHoldingDate(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      {h.purchase_date ? new Date(h.purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : 'Set Date'}
+                    </span>
+                  )}
+                </div>
                 
                 {/* Inline Rebalance Sell Action */}
                 {isRebalanceMode && (
@@ -987,27 +1256,62 @@ export function ClientPortfolioPage() {
 
       {/* Transaction Log */}
       <section>
-        <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 var(--space-4)' }}>
-          Transaction Log &nbsp;
-          <span style={{ fontSize: 'var(--text-base)', fontWeight: 400, color: 'var(--text-muted)' }}>({transactions.length} transactions)</span>
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+          <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            Transaction Log &nbsp;
+            <span style={{ fontSize: 'var(--text-base)', fontWeight: 400, color: 'var(--text-muted)' }}>({transactions.length} transactions)</span>
+          </h2>
+          <div>
+            <input
+              type="text"
+              placeholder="Search stock..."
+              value={txStockSearch}
+              onChange={e => setTxStockSearch(e.target.value)}
+              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}
+            />
+          </div>
+        </div>
         {transactions.length === 0 ? (
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
             No transactions recorded yet
           </div>
         ) : (
-          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.02)' }}>
-              {['Date', 'Symbol', 'Action', 'Quantity', 'Price', 'Total'].map(col => (
-                <span key={col} style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</span>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflowY: 'auto', maxHeight: '60vh' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
+              {[
+                { col: 'date', label: 'Date' },
+                { col: 'stock_symbol', label: 'Symbol' },
+                { col: 'action', label: 'Action' },
+                { col: 'quantity', label: 'Quantity' },
+                { col: 'price', label: 'Price' },
+                { col: 'total_value', label: 'Total' }
+              ].map(({ col, label }) => (
+                <button key={col} onClick={() => handleTxSort(col as TxSortColumn)} style={{ fontSize: 'var(--text-xs)', color: txSortColumn === col ? 'var(--color-primary-400)' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                  {label} {txSortColumn === col ? (txSortOrder === 'asc' ? '↑' : '↓') : ''}
+                </button>
               ))}
             </div>
-            {transactions.map((tx, i) => (
-              <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderBottom: i < transactions.length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background 0.15s' }}
+            {getSortedTransactions().map((tx, i) => (
+              <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderBottom: i < getSortedTransactions().length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background 0.15s' }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
               >
-                <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>{new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                <div>
+                  {editingTxDate === tx.id ? (
+                    <input
+                      type="date"
+                      autoFocus
+                      value={tx.date || ''}
+                      onChange={e => { updateTxDate(tx.id, e.target.value); setEditingTxDate(null); }}
+                      onBlur={() => setEditingTxDate(null)}
+                      style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none' }}
+                    />
+                  ) : (
+                    <div onClick={() => setEditingTxDate(tx.id)} style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', cursor: 'pointer', borderBottom: '1px dashed #ccc', display: 'inline-block' }}>
+                      {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                  )}
+                </div>
                 <div style={{ fontWeight: 600, color: 'var(--color-primary-400)', fontSize: 'var(--text-sm)' }}>{cleanSymbol(tx)}</div>
                 <div>
                   <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 'var(--radius-full)', fontSize: 'var(--text-xs)', fontWeight: 700, background: tx.action === 'BUY' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: tx.action === 'BUY' ? 'var(--color-success-500)' : 'var(--color-error-500)' }}>

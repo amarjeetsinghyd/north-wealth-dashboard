@@ -2,6 +2,14 @@ export interface Client {
   id: string;
   name: string;
   onboarding_date: string;
+  total_capital?: number;
+  mutual_funds?: number;
+  rm_name?: string;
+  phone?: string;
+  email?: string;
+  billed_amount?: number;
+  amount_paid?: number;
+  risk_profile?: string;
   created_at: string;
 }
 
@@ -21,6 +29,8 @@ export interface Holding {
   realised_pnl: number;
   rebalancing_date: string | null;
   last_price_update: string | null;
+  purchase_date?: string;
+  source?: 'Fresh' | 'Existing';
   created_at: string;
 }
 

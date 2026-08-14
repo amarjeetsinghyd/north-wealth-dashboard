@@ -13,6 +13,8 @@ import {
   Search, ShieldCheck, ChevronRight, X as XIcon, Building2
 } from 'lucide-react';
 
+import { BulkOrderWizardModal } from '../components/BulkOrderWizardModal';
+
 interface HoldingWithClient {
   id: string;
   stock_symbol: string;
@@ -58,8 +60,6 @@ const VIBRANT_PALETTE = [
 ];
 
 function fmtCurrency(v: number) {
-  if (Math.abs(v) >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
-  if (Math.abs(v) >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`;
   return `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -70,17 +70,25 @@ function fmtPct(v: number) {
 export function AnalyticsPage() {
   const [data, setData] = useState<HoldingWithClient[]>([]);
   const [clients, setClients] = useState<any[]>([]);
+  const [rmList, setRmList] = useState<string[]>([
+    'Suraj Sharma', 'Shubham Chakraborty', 'Samrat Samanta', 'Swarnendu Shekhar Das', 
+    'Raunak Paul', 'Uttam Paul', 'Amit Singh', 'Shantanu Saha'
+  ]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [clientSortCol, setClientSortCol] = useState<string>('value');
   const [clientSortOrder, setClientSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // ── Smart Search ───────────────────────────────────────────────────────────
-  const [searchMode, setSearchMode] = useState<'stock' | 'cash' | 'client' | 'sector'>('stock');
+  const [searchMode, setSearchMode] = useState<'stock' | 'cash' | 'client' | 'sector' | 'rm' | 'risk' | 'settings'>('stock');
   const [stockQuery, setStockQuery] = useState('');
   const [clientQuery, setClientQuery] = useState('');
+  const [selectedRm, setSelectedRm] = useState('');
   const [selectedSector, setSelectedSector] = useState('');
+  const [selectedRiskProfile, setSelectedRiskProfile] = useState('');
   const [cashMinFilter, setCashMinFilter] = useState(0);
+  
+  const [newRmName, setNewRmName] = useState('');
 
   // ── Buy Modal ──────────────────────────────────────────────────────────────
   const [buyModalData, setBuyModalData] = useState<{ clientId: string; clientName: string; freeCash: number } | null>(null);
@@ -95,6 +103,11 @@ export function AnalyticsPage() {
   const [sellQty, setSellQty] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // ── Bulk Action Modals ─────────────────────────────────────────────────────
+  const [bulkWizard, setBulkWizard] = useState<{ mode: 'buy'|'sell', symbol?: string, selectedClientIds?: string[], holdingsData?: any[] } | null>(null);
+  const [selectedStockRows, setSelectedStockRows] = useState<Set<string>>(new Set());
+  const [selectedClientRows, setSelectedClientRows] = useState<Set<string>>(new Set());
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -105,19 +118,30 @@ export function AnalyticsPage() {
           getDocs(collection(db, 'clients'))
         ]);
 
-        const clientMap: Record<string, { name: string; totalCapital: number }> = {};
+        const clientMap: Record<string, { name: string; totalCapital: number; mutual_funds: number; rm: string }> = {};
         
         clientSnap.docs.forEach(d => {
           const cdata = d.data();
           clientMap[d.id] = {
             name: cdata.name ?? 'Unknown',
-            totalCapital: cdata.total_capital ?? 0
+            totalCapital: cdata.total_capital ?? 0,
+            mutual_funds: cdata.mutual_funds ?? 0,
+            rm: cdata.rm_name ?? 'Unassigned'
           };
         });
 
+        // Load RM List
+        try {
+          const { getDoc } = await import('firebase/firestore');
+          const d = await getDoc(doc(db, 'settings', 'rm_list'));
+          if (d.exists() && d.data().rms) {
+            setRmList(d.data().rms);
+          }
+        } catch(e) {}
+
         const holdings = holdingSnap.docs.map(d => {
           const h = d.data() as any;
-          const clin = clientMap[h.client_id] || { name: 'Unknown', totalCapital: 0 };
+          const clin = clientMap[h.client_id] || { name: 'Unknown', totalCapital: 0, mutual_funds: 0 };
           return {
             ...h,
             id: d.id,
@@ -138,7 +162,9 @@ export function AnalyticsPage() {
               pnl: 0,
               stockCount: 0,
               etfCount: 0,
-              totalCapital: clientMap[h.client_id]?.totalCapital ?? 0
+              totalCapital: clientMap[h.client_id]?.totalCapital ?? 0,
+              mutual_funds: clientMap[h.client_id]?.mutual_funds ?? 0,
+              rm: clientMap[h.client_id]?.rm ?? 'Unassigned'
             };
           }
           const val = h.current_value || h.buy_price * h.quantity;
@@ -167,7 +193,9 @@ export function AnalyticsPage() {
               pnl: 0,
               stockCount: 0,
               etfCount: 0,
-              totalCapital: d.data().total_capital ?? 0
+              totalCapital: d.data().total_capital ?? 0,
+              mutual_funds: d.data().mutual_funds ?? 0,
+              rm: d.data().rm_name ?? 'Unassigned'
             };
           }
         });
@@ -376,9 +404,9 @@ export function AnalyticsPage() {
     return clients
       .map(c => ({
         ...c,
-        freeCash: Math.max(0, (c.totalCapital || 0) - (c.invested || 0)),
+        freeCash: Math.max(0, (c.totalCapital || 0) - (c.invested || 0) - (c.mutual_funds || 0)),
         freeCashPct: c.totalCapital > 0
-          ? Math.max(0, ((c.totalCapital - c.invested) / c.totalCapital) * 100)
+          ? Math.max(0, ((c.totalCapital - c.invested - (c.mutual_funds || 0)) / c.totalCapital) * 100)
           : 0,
       }))
       .filter(c => c.freeCash >= cashMinFilter)
@@ -427,6 +455,34 @@ export function AnalyticsPage() {
     return { totalVal, totalInv, totalPnl, pnlPct, aumPct };
   }, [sectorDrilldown, totalValue]);
 
+  // Mode 5: RM-wise Search
+  const rmClients = useMemo(() => {
+    if (!selectedRm) return [];
+    const matchedClients = clients.filter(c => c.rm === selectedRm);
+    return matchedClients.map(c => ({
+      ...c,
+      holdings: data
+        .filter(h => h.client_id === c.id)
+        .sort((a, b) => (b.current_value || 0) - (a.current_value || 0)),
+    }));
+  }, [clients, selectedRm, data]);
+
+  const handleAddRm = async () => {
+    const name = newRmName.trim();
+    if (!name) return;
+    try {
+      const { setDoc } = await import('firebase/firestore');
+      const newList = [...rmList, name];
+      await setDoc(doc(db, 'settings', 'rm_list'), { rms: newList }, { merge: true });
+      setRmList(newList);
+      setNewRmName('');
+      alert('RM Added successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to add RM');
+    }
+  };
+
   // Buy modal suggested quantity
   const suggestedBuyQty = useMemo(() => {
     const price = parseFloat(buyPrice);
@@ -462,20 +518,20 @@ export function AnalyticsPage() {
         getDocs(collection(db, 'holdings')),
         getDocs(collection(db, 'clients')),
       ]);
-      const clientMap: Record<string, { name: string; totalCapital: number }> = {};
+      const clientMap: Record<string, { name: string; totalCapital: number; mutual_funds: number; rm: string }> = {};
       clientSnap.docs.forEach(d => {
         const cdata = d.data();
-        clientMap[d.id] = { name: cdata.name ?? 'Unknown', totalCapital: cdata.total_capital ?? 0 };
+        clientMap[d.id] = { name: cdata.name ?? 'Unknown', totalCapital: cdata.total_capital ?? 0, mutual_funds: cdata.mutual_funds ?? 0, rm: cdata.rm_name ?? 'Unassigned' };
       });
       const holdings = holdingSnap.docs.map(d => {
         const h = d.data() as any;
-        const clin = clientMap[h.client_id] || { name: 'Unknown', totalCapital: 0 };
+        const clin = clientMap[h.client_id] || { name: 'Unknown', totalCapital: 0, mutual_funds: 0 };
         return { ...h, id: d.id, client_name: clin.name } as HoldingWithClient;
       });
       setData(holdings);
       const clientGroups = holdings.reduce((acc, h) => {
         if (!acc[h.client_id]) {
-          acc[h.client_id] = { id: h.client_id, name: h.client_name, invested: 0, value: 0, pnl: 0, stockCount: 0, etfCount: 0, totalCapital: clientMap[h.client_id]?.totalCapital ?? 0 };
+          acc[h.client_id] = { id: h.client_id, name: h.client_name, invested: 0, value: 0, pnl: 0, stockCount: 0, etfCount: 0, totalCapital: clientMap[h.client_id]?.totalCapital ?? 0, mutual_funds: clientMap[h.client_id]?.mutual_funds ?? 0, rm: clientMap[h.client_id]?.rm ?? 'Unassigned' };
         }
         const val = h.current_value || h.buy_price * h.quantity;
         const inv = h.invested_amount || h.buy_price * h.quantity;
@@ -489,7 +545,7 @@ export function AnalyticsPage() {
       }, {} as Record<string, any>);
       clientSnap.docs.forEach(d => {
         if (!clientGroups[d.id]) {
-          clientGroups[d.id] = { id: d.id, name: d.data().name ?? 'Unknown', invested: 0, value: 0, pnl: 0, stockCount: 0, etfCount: 0, totalCapital: d.data().total_capital ?? 0 };
+          clientGroups[d.id] = { id: d.id, name: d.data().name ?? 'Unknown', invested: 0, value: 0, pnl: 0, stockCount: 0, etfCount: 0, totalCapital: d.data().total_capital ?? 0, mutual_funds: d.data().mutual_funds ?? 0, rm: d.data().rm_name ?? 'Unassigned' };
         }
       });
       setClients(Object.values(clientGroups));
@@ -596,8 +652,7 @@ export function AnalyticsPage() {
     }
   };
 
-
-
+  // ── Bulk Order Executions ──────────────────────────────────────────────────
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
       <Spinner size={36} />
@@ -605,46 +660,58 @@ export function AnalyticsPage() {
   );
 
   return (
-    <div className="animate-fade-in" style={{ paddingBottom: 40 }}>
+    <div className="animate-fade-in" style={{ paddingBottom: 80 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
         <div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.8px', margin: 0 }}>
-            Firm-Wide Analytics
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.8px', margin: 0 }}>
+            Firm Analytics
           </h1>
           <p style={{ color: '#555555', fontSize: 15, marginTop: 4 }}>
-            Aggregated dashboard across all client portfolios under management
+            Aggregated dashboard & firm-wide management settings
           </p>
         </div>
+        <button 
+          onClick={() => setBulkWizard({ mode: 'buy' })}
+          style={{ padding: '10px 20px', background: '#C9A84C', color: '#000', borderRadius: 8, fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+        >
+          <Briefcase size={18} /> New Bulk Order
+        </button>
       </div>
 
       {/* ── Smart Search Panel ──────────────────────────────────────────────── */}
-      <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24, marginBottom: 32 }}>
+      <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24, marginBottom: 32 }}>
 
         {/* Tab strip */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
           <Search size={18} color="#C9A84C" />
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
             Smart Search
           </h3>
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3, gap: 2 }}>
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: 3, gap: 2 }}>
             {([
-              { key: 'stock', label: '🔍 Stock', icon: null },
-              { key: 'cash', label: '💰 Free Cash', icon: null },
-              { key: 'client', label: '👤 Client', icon: null },
-              { key: 'sector', label: '🏭 Sector', icon: null },
+              { key: 'stock', label: 'Stock', icon: <Search size={13} style={{ marginRight: 6 }} /> },
+              { key: 'cash', label: 'Free Cash', icon: <Briefcase size={13} style={{ marginRight: 6 }} /> },
+              { key: 'client', label: 'Client', icon: <Users size={13} style={{ marginRight: 6 }} /> },
+              { key: 'rm', label: 'By RM', icon: <Briefcase size={13} style={{ marginRight: 6 }} /> },
+              { key: 'risk', label: 'Risk Profile', icon: <Users size={13} style={{ marginRight: 6 }} /> },
+              { key: 'sector', label: 'Sector', icon: <Building2 size={13} style={{ marginRight: 6 }} /> },
+              { key: 'settings', label: 'Settings', icon: <ShieldCheck size={13} style={{ marginRight: 6 }} /> },
             ] as const).map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setSearchMode(tab.key)}
                 style={{
                   padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 700,
+                  fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center',
                   background: searchMode === tab.key ? '#C9A84C' : 'transparent',
                   color: searchMode === tab.key ? '#000000' : '#777777',
                   transition: 'all 0.15s',
                 }}
-              >{tab.label}</button>
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
             ))}
           </div>
         </div>
@@ -660,32 +727,46 @@ export function AnalyticsPage() {
                 onChange={e => setStockQuery(e.target.value)}
                 style={{
                   width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, borderRadius: 8, boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.04)', color: '#ffffff',
-                  border: '1px solid rgba(255,255,255,0.10)', outline: 'none', transition: 'border-color 0.15s',
+                  background: 'rgba(0,0,0,0.04)', color: 'var(--text-primary)',
+                  border: '1px solid rgba(0,0,0,0.10)', outline: 'none', transition: 'border-color 0.15s',
                 }}
                 onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.55)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'}
+                onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
               />
               <Search size={16} color="#555" style={{ position: 'absolute', left: 14, top: 14, pointerEvents: 'none' }} />
               {stockQuery && (
                 <button onClick={() => setStockQuery('')} style={{ position: 'absolute', right: 12, top: 10, background: 'none', border: 'none', color: '#777', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
               )}
             </div>
+            
             {stockQuery && stockSearchResults.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#555', fontSize: 13 }}>
-                No holdings found for <strong style={{ color: '#C9A84C' }}>"{stockQuery}"</strong>
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                No existing holdings found for <strong style={{ color: '#C9A84C' }}>"{stockQuery}"</strong>
               </div>
             )}
+            
             {stockSearchResults.length > 0 && (
-              <div style={{ overflowX: 'auto' }}>
-                <div style={{ marginBottom: 8, fontSize: 12, color: '#555' }}>
-                  <strong style={{ color: '#C9A84C' }}>{stockSearchResults.length}</strong> client holding{stockSearchResults.length !== 1 ? 's' : ''} matching <strong style={{ color: '#fff' }}>"{stockQuery}"</strong>
+              <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <strong style={{ color: '#C9A84C' }}>{stockSearchResults.length}</strong> client holding{stockSearchResults.length !== 1 ? 's' : ''} matching <strong style={{ color: 'var(--text-primary)' }}>"{stockQuery}"</strong>
+                  </div>
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.01)' }}>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
+                      <th style={{ padding: '10px 12px', width: 40 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedStockRows.size > 0 && selectedStockRows.size === stockSearchResults.length}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedStockRows(new Set(stockSearchResults.map(h => h.client_id)));
+                            else setSelectedStockRows(new Set());
+                          }} 
+                        />
+                      </th>
                       {['Client', 'Symbol', 'Company', 'Qty', 'Avg Buy', 'Curr Price', 'Value', 'Unreal P&L', 'Action'].map(col => (
-                        <th key={col} style={{ padding: '10px 12px', textAlign: ['Client', 'Symbol', 'Company'].includes(col) ? 'left' : 'right', fontWeight: 800, color: '#555', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</th>
+                        <th key={col} style={{ padding: '10px 12px', textAlign: ['Client', 'Symbol', 'Company'].includes(col) ? 'left' : 'right', fontWeight: 800, color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</th>
                       ))}
                     </tr>
                   </thead>
@@ -695,17 +776,30 @@ export function AnalyticsPage() {
                       const pnlPct = (h.invested_amount || 0) > 0 ? (pnl / h.invested_amount) * 100 : 0;
                       const avgBuy = h.buy_price || 0;
                       const currPrice = h.current_price || 0;
+                      const isSelected = selectedStockRows.has(h.client_id);
                       return (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
-                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.01)'}
-                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', transition: 'background 0.15s', background: isSelected ? 'rgba(201,168,76,0.05)' : 'transparent' }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isSelected ? 'rgba(201,168,76,0.05)' : 'rgba(0,0,0,0.01)'}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isSelected ? 'rgba(201,168,76,0.05)' : 'transparent'}
                         >
-                          <td style={{ padding: '12px 12px', fontWeight: 700, color: '#fff', cursor: 'pointer' }} onClick={() => navigate(`/client/${h.client_id}`)}>{h.client_name}</td>
+                          <td style={{ padding: '12px 12px' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => {
+                                const next = new Set(selectedStockRows);
+                                if (next.has(h.client_id)) next.delete(h.client_id);
+                                else next.add(h.client_id);
+                                setSelectedStockRows(next);
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: '12px 12px', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => navigate(`/client/${h.client_id}`)}>{h.client_name}</td>
                           <td style={{ padding: '12px 12px', fontWeight: 800, color: '#C9A84C', fontFamily: 'monospace' }}>{h.nse_symbol || h.stock_symbol}</td>
-                          <td style={{ padding: '12px 12px', color: '#aaa', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.company_name}</td>
-                          <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>{h.quantity.toLocaleString('en-IN')}</td>
+                          <td style={{ padding: '12px 12px', color: '#666', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.company_name}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{h.quantity.toLocaleString('en-IN')}</td>
                           <td style={{ padding: '12px 12px', textAlign: 'right', color: '#777', fontFamily: 'monospace' }}>₹{avgBuy.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td style={{ padding: '12px 12px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>{currPrice > 0 ? `₹${currPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>{currPrice > 0 ? `₹${currPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
                           <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtCurrency(h.current_value || 0)}</td>
                           <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                             <span style={{ padding: '3px 7px', borderRadius: 4, fontSize: 11, fontWeight: 700, fontFamily: 'monospace', background: pnl >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
@@ -725,8 +819,9 @@ export function AnalyticsPage() {
                   {stockSearchTotals && (
                     <tfoot>
                       <tr style={{ borderTop: '2px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.03)' }}>
+                        <td colSpan={2}></td>
                         <td style={{ padding: '11px 12px', fontWeight: 800, color: '#C9A84C', fontSize: 11, textTransform: 'uppercase' }} colSpan={3}>Total ({stockSearchResults.length} clients)</td>
-                        <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>{stockSearchTotals.totalQty.toLocaleString('en-IN')}</td>
+                        <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{stockSearchTotals.totalQty.toLocaleString('en-IN')}</td>
                         <td colSpan={2}></td>
                         <td style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 800, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtCurrency(stockSearchTotals.totalVal)}</td>
                         <td style={{ padding: '11px 12px', textAlign: 'right' }}>
@@ -749,58 +844,60 @@ export function AnalyticsPage() {
         {searchMode === 'cash' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Min Free Cash:</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Min Free Cash:</span>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {[0, 100000, 500000, 1000000, 5000000].map(v => (
-                  <button key={v} onClick={() => setCashMinFilter(v)} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid', cursor: 'pointer', fontSize: 12, fontWeight: 700, transition: 'all 0.15s', borderColor: cashMinFilter === v ? '#C9A84C' : 'rgba(255,255,255,0.10)', background: cashMinFilter === v ? 'rgba(201,168,76,0.12)' : 'transparent', color: cashMinFilter === v ? '#C9A84C' : '#777' }}>
+                  <button key={v} onClick={() => setCashMinFilter(v)} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid', cursor: 'pointer', fontSize: 12, fontWeight: 700, transition: 'all 0.15s', borderColor: cashMinFilter === v ? '#C9A84C' : 'rgba(0,0,0,0.10)', background: cashMinFilter === v ? 'rgba(201,168,76,0.12)' : 'transparent', color: cashMinFilter === v ? '#C9A84C' : '#777' }}>
                     {v === 0 ? 'All' : v >= 1000000 ? `≥₹${(v / 100000).toFixed(0)}L` : `≥₹${(v / 100000).toFixed(1)}L`}
                   </button>
                 ))}
               </div>
-              <span style={{ fontSize: 12, color: '#555', marginLeft: 'auto' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
                 <strong style={{ color: '#C9A84C' }}>{freeCashClients.length}</strong> of {clients.length} clients
               </span>
             </div>
             {freeCashClients.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#555', fontSize: 13 }}>No clients above the threshold.</div>
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No clients above the threshold.</div>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.01)' }}>
-                    {['#', 'Client', 'Total Capital', 'Deployed', 'Free Cash', 'Free %', 'Action'].map(col => (
-                      <th key={col} style={{ padding: '10px 12px', textAlign: ['#', 'Client'].includes(col) ? 'left' : 'right', fontWeight: 800, color: '#555', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {freeCashClients.map((c, i) => {
-                    const pct = c.freeCashPct;
-                    const pillColor = pct >= 20 ? '#22c55e' : pct >= 10 ? '#f59e0b' : '#ef4444';
-                    const pillBg = pct >= 20 ? 'rgba(34,197,94,0.08)' : pct >= 10 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
-                    return (
-                      <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
-                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.02)'}
-                        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-                      >
-                        <td style={{ padding: '13px 12px', color: '#555', fontWeight: 700, width: 32 }}>#{i + 1}</td>
-                        <td style={{ padding: '13px 12px', fontWeight: 700, color: '#fff', cursor: 'pointer' }} onClick={() => navigate(`/client/${c.id}`)}>{c.name}</td>
-                        <td style={{ padding: '13px 12px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>{fmtCurrency(c.totalCapital || 0)}</td>
-                        <td style={{ padding: '13px 12px', textAlign: 'right', color: '#777', fontFamily: 'monospace' }}>{fmtCurrency(c.invested || 0)}</td>
-                        <td style={{ padding: '13px 12px', textAlign: 'right', fontWeight: 800, color: '#C9A84C', fontFamily: 'monospace', fontSize: 14 }}>{fmtCurrency(c.freeCash)}</td>
-                        <td style={{ padding: '13px 12px', textAlign: 'right' }}>
-                          <span style={{ padding: '4px 10px', borderRadius: 5, fontSize: 11, fontWeight: 800, background: pillBg, color: pillColor, fontFamily: 'monospace' }}>{pct.toFixed(1)}%</span>
-                        </td>
-                        <td style={{ padding: '13px 12px', textAlign: 'right' }}>
-                          <button
-                            onClick={() => { setBuyModalData({ clientId: c.id, clientName: c.name, freeCash: c.freeCash }); setBuySymbol(''); setBuyPrice(''); setBuyQty(''); setDeployPct(50); }}
-                            style={{ padding: '5px 12px', borderRadius: 5, border: '1px solid rgba(34,197,94,0.35)', background: 'rgba(34,197,94,0.08)', color: '#22c55e', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                          >Buy Stock →</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
+                      {['#', 'Client', 'Total Capital', 'Deployed', 'Free Cash', 'Free %', 'Action'].map(col => (
+                        <th key={col} style={{ padding: '10px 12px', textAlign: ['#', 'Client'].includes(col) ? 'left' : 'right', fontWeight: 800, color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {freeCashClients.map((c, i) => {
+                      const pct = c.freeCashPct;
+                      const pillColor = pct >= 20 ? '#22c55e' : pct >= 10 ? '#f59e0b' : '#ef4444';
+                      const pillBg = pct >= 20 ? 'rgba(34,197,94,0.08)' : pct >= 10 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)';
+                      return (
+                        <tr key={c.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.02)'}
+                          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '13px 12px', color: 'var(--text-muted)', fontWeight: 700, width: 32 }}>#{i + 1}</td>
+                          <td style={{ padding: '13px 12px', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => navigate(`/client/${c.id}`)}>{c.name}</td>
+                          <td style={{ padding: '13px 12px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>{fmtCurrency(c.totalCapital || 0)}</td>
+                          <td style={{ padding: '13px 12px', textAlign: 'right', color: '#777', fontFamily: 'monospace' }}>{fmtCurrency(c.invested || 0)}</td>
+                          <td style={{ padding: '13px 12px', textAlign: 'right', fontWeight: 800, color: '#C9A84C', fontFamily: 'monospace', fontSize: 14 }}>{fmtCurrency(c.freeCash)}</td>
+                          <td style={{ padding: '13px 12px', textAlign: 'right' }}>
+                            <span style={{ padding: '4px 10px', borderRadius: 5, fontSize: 11, fontWeight: 800, background: pillBg, color: pillColor, fontFamily: 'monospace' }}>{pct.toFixed(1)}%</span>
+                          </td>
+                          <td style={{ padding: '13px 12px', textAlign: 'right' }}>
+                            <button
+                              onClick={() => { setBuyModalData({ clientId: c.id, clientName: c.name, freeCash: c.freeCash }); setBuySymbol(''); setBuyPrice(''); setBuyQty(''); setDeployPct(50); }}
+                              style={{ padding: '5px 12px', borderRadius: 5, border: '1px solid rgba(34,197,94,0.35)', background: 'rgba(34,197,94,0.08)', color: '#22c55e', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            >Buy Stock →</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}
@@ -814,23 +911,34 @@ export function AnalyticsPage() {
                 placeholder="Type a client name…"
                 value={clientQuery}
                 onChange={e => setClientQuery(e.target.value)}
-                style={{ width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, borderRadius: 8, boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.10)', outline: 'none', transition: 'border-color 0.15s' }}
+                style={{ width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, borderRadius: 8, boxSizing: 'border-box', background: 'rgba(0,0,0,0.04)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.10)', outline: 'none', transition: 'border-color 0.15s' }}
                 onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.55)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'}
+                onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
               />
               <Search size={16} color="#555" style={{ position: 'absolute', left: 14, top: 14, pointerEvents: 'none' }} />
               {clientQuery && <button onClick={() => setClientQuery('')} style={{ position: 'absolute', right: 12, top: 10, background: 'none', border: 'none', color: '#777', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>}
             </div>
             {clientQuery && clientSearchResults.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#555', fontSize: 13 }}>No client found for <strong style={{ color: '#C9A84C' }}>"{clientQuery}"</strong></div>
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No client found for <strong style={{ color: '#C9A84C' }}>"{clientQuery}"</strong></div>
             )}
             {clientSearchResults.map(c => {
-              const freeCash = Math.max(0, (c.totalCapital || 0) - (c.invested || 0));
+              const freeCash = Math.max(0, (c.totalCapital || 0) - (c.invested || 0) - (c.mutual_funds || 0));
               return (
-                <div key={c.id} style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div key={c.id} style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid rgba(0,0,0,0.05)' }}>
                   {/* Client summary bar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
-                    <div style={{ fontWeight: 800, color: '#fff', fontSize: 16, cursor: 'pointer' }} onClick={() => navigate(`/client/${c.id}`)}>{c.name} <ChevronRight size={14} style={{ verticalAlign: 'middle', color: '#555' }} /></div>
+                    <input 
+                      type="checkbox"
+                      checked={selectedClientRows.has(c.id)}
+                      onChange={() => {
+                        const next = new Set(selectedClientRows);
+                        if (next.has(c.id)) next.delete(c.id);
+                        else next.add(c.id);
+                        setSelectedClientRows(next);
+                      }}
+                      style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                    />
+                    <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 16, cursor: 'pointer' }} onClick={() => navigate(`/client/${c.id}`)}>{c.name} <ChevronRight size={14} style={{ verticalAlign: 'middle', color: 'var(--text-muted)' }} /></div>
                     {[
                       { label: 'Valuation', val: fmtCurrency(c.value || 0), color: '#C9A84C' },
                       { label: 'Free Cash', val: fmtCurrency(freeCash), color: freeCash > 0 ? '#22c55e' : '#555' },
@@ -838,7 +946,7 @@ export function AnalyticsPage() {
                       { label: 'Positions', val: `${c.holdings.length}`, color: '#8b5cf6' },
                     ].map(stat => (
                       <div key={stat.label} style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
                         <div style={{ fontSize: 14, fontWeight: 800, color: stat.color, fontFamily: 'monospace' }}>{stat.val}</div>
                       </div>
                     ))}
@@ -853,7 +961,7 @@ export function AnalyticsPage() {
                   {c.holdings.length > 0 ? (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead>
-                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
                           {['Symbol', 'Company', 'Qty', 'Buy Price', 'Curr Price', 'Value', 'P&L', 'Action'].map(col => (
                             <th key={col} style={{ padding: '6px 10px', textAlign: ['Symbol', 'Company'].includes(col) ? 'left' : 'right', fontWeight: 700, color: '#444', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.4px' }}>{col}</th>
                           ))}
@@ -864,12 +972,12 @@ export function AnalyticsPage() {
                           const pnl = h.unrealised_pnl || 0;
                           const pnlPct = (h.invested_amount || 0) > 0 ? (pnl / h.invested_amount) * 100 : 0;
                           return (
-                            <tr key={j} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                            <tr key={j} style={{ borderBottom: '1px solid rgba(0,0,0,0.02)' }}>
                               <td style={{ padding: '8px 10px', fontWeight: 700, color: '#C9A84C', fontFamily: 'monospace' }}>{h.nse_symbol || h.stock_symbol}</td>
-                              <td style={{ padding: '8px 10px', color: '#aaa', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.company_name}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', color: '#fff', fontFamily: 'monospace' }}>{h.quantity.toLocaleString('en-IN')}</td>
+                              <td style={{ padding: '8px 10px', color: '#666', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.company_name}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'monospace' }}>{h.quantity.toLocaleString('en-IN')}</td>
                               <td style={{ padding: '8px 10px', textAlign: 'right', color: '#777', fontFamily: 'monospace' }}>₹{h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                              <td style={{ padding: '8px 10px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>{h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
+                              <td style={{ padding: '8px 10px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>{h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
                               <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtCurrency(h.current_value || 0)}</td>
                               <td style={{ padding: '8px 10px', textAlign: 'right' }}>
                                 <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>{pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%</span>
@@ -883,7 +991,7 @@ export function AnalyticsPage() {
                       </tbody>
                     </table>
                   ) : (
-                    <div style={{ textAlign: 'center', padding: '12px 0', color: '#555', fontSize: 12 }}>No holdings yet</div>
+                    <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: 12 }}>No holdings yet</div>
                   )}
                 </div>
               );
@@ -900,34 +1008,34 @@ export function AnalyticsPage() {
               <select
                 value={selectedSector}
                 onChange={e => setSelectedSector(e.target.value)}
-                style={{ padding: '8px 14px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.12)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: 1, maxWidth: 320 }}
+                style={{ padding: '8px 14px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: 1, maxWidth: 320 }}
               >
                 <option value="">— Select a Sector —</option>
-                {allSectors.map(s => <option key={s} value={s} style={{ background: '#111' }}>{s}</option>)}
+                {allSectors.map(s => <option key={s} value={s} style={{ background: 'var(--bg-elevated)' }}>{s}</option>)}
               </select>
               {sectorDrilldownTotals && (
                 <div style={{ display: 'flex', gap: 16, marginLeft: 'auto', flexWrap: 'wrap' }}>
                   {[
                     { label: 'AUM Weight', val: `${sectorDrilldownTotals.aumPct.toFixed(1)}%`, color: '#C9A84C' },
-                    { label: 'Total Value', val: fmtCurrency(sectorDrilldownTotals.totalVal), color: '#fff' },
+                    { label: 'Total Value', val: fmtCurrency(sectorDrilldownTotals.totalVal), color: 'var(--text-primary)' },
                     { label: 'Unreal P&L', val: `${sectorDrilldownTotals.totalPnl >= 0 ? '+' : ''}${fmtCurrency(sectorDrilldownTotals.totalPnl)}`, color: sectorDrilldownTotals.totalPnl >= 0 ? '#22c55e' : '#ef4444' },
                   ].map(stat => (
                     <div key={stat.label} style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
                       <div style={{ fontSize: 14, fontWeight: 800, color: stat.color, fontFamily: 'monospace' }}>{stat.val}</div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            {selectedSector && sectorDrilldown.length === 0 && <div style={{ textAlign: 'center', padding: '24px 0', color: '#555', fontSize: 13 }}>No holdings in this sector.</div>}
+            {selectedSector && sectorDrilldown.length === 0 && <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No holdings in this sector.</div>}
             {sectorDrilldown.length > 0 && (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.01)' }}>
+                    <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)', background: 'rgba(0,0,0,0.01)' }}>
                       {['Client', 'Symbol', 'Company', 'Qty', 'Avg Buy', 'Curr Price', 'Value', 'Unreal P&L', 'AUM %'].map(col => (
-                        <th key={col} style={{ padding: '10px 12px', textAlign: ['Client', 'Symbol', 'Company'].includes(col) ? 'left' : 'right', fontWeight: 800, color: '#555', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</th>
+                        <th key={col} style={{ padding: '10px 12px', textAlign: ['Client', 'Symbol', 'Company'].includes(col) ? 'left' : 'right', fontWeight: 800, color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{col}</th>
                       ))}
                     </tr>
                   </thead>
@@ -937,17 +1045,17 @@ export function AnalyticsPage() {
                       const pnlPct = (h.invested_amount || 0) > 0 ? (pnl / h.invested_amount) * 100 : 0;
                       const aumPct = totalValue > 0 ? ((h.current_value || 0) / totalValue) * 100 : 0;
                       return (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s', cursor: 'pointer' }}
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', transition: 'background 0.15s', cursor: 'pointer' }}
                           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.02)'}
                           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                           onClick={() => navigate(`/client/${h.client_id}`)}
                         >
-                          <td style={{ padding: '12px 12px', fontWeight: 700, color: '#fff' }}>{h.client_name}</td>
+                          <td style={{ padding: '12px 12px', fontWeight: 700, color: 'var(--text-primary)' }}>{h.client_name}</td>
                           <td style={{ padding: '12px 12px', fontWeight: 800, color: '#C9A84C', fontFamily: 'monospace' }}>{h.nse_symbol || h.stock_symbol}</td>
-                          <td style={{ padding: '12px 12px', color: '#aaa', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.company_name}</td>
-                          <td style={{ padding: '12px 12px', textAlign: 'right', color: '#fff', fontFamily: 'monospace' }}>{h.quantity.toLocaleString('en-IN')}</td>
+                          <td style={{ padding: '12px 12px', color: '#666', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.company_name}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'monospace' }}>{h.quantity.toLocaleString('en-IN')}</td>
                           <td style={{ padding: '12px 12px', textAlign: 'right', color: '#777', fontFamily: 'monospace' }}>₹{h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td style={{ padding: '12px 12px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>{h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
+                          <td style={{ padding: '12px 12px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>{h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</td>
                           <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtCurrency(h.current_value || 0)}</td>
                           <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                             <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', padding: '3px 7px', borderRadius: 4, background: pnl >= 0 ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', color: pnl >= 0 ? '#22c55e' : '#ef4444' }}>
@@ -965,22 +1073,147 @@ export function AnalyticsPage() {
             {!selectedSector && <div style={{ textAlign: 'center', padding: '18px 0', color: '#444', fontSize: 13 }}>Select a sector to see all holdings and their client exposure</div>}
           </div>
         )}
+
+        {/* ── MODE 5: RM-wise Search ── */}
+        {searchMode === 'rm' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+              <Users size={15} color="#C9A84C" />
+              <select
+                value={selectedRm}
+                onChange={e => setSelectedRm(e.target.value)}
+                style={{ padding: '8px 14px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: 1, maxWidth: 320 }}
+              >
+                <option value="">— Select a Relationship Manager —</option>
+                {rmList.map(r => <option key={r} value={r} style={{ background: 'var(--bg-elevated)' }}>{r}</option>)}
+                <option value="Unassigned" style={{ background: 'var(--bg-elevated)' }}>Unassigned</option>
+              </select>
+            </div>
+            {selectedRm && rmClients.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No clients found for <strong style={{ color: '#C9A84C' }}>{selectedRm}</strong></div>
+            )}
+            {rmClients.map(c => {
+              const freeCash = Math.max(0, (c.totalCapital || 0) - (c.invested || 0) - (c.mutual_funds || 0));
+              return (
+                <div key={c.id} style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid rgba(0,0,0,0.05)' }}>
+                  {/* Client summary bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 16, cursor: 'pointer' }} onClick={() => navigate(`/client/${c.id}`)}>{c.name} <ChevronRight size={14} style={{ verticalAlign: 'middle', color: 'var(--text-muted)' }} /></div>
+                    {[
+                      { label: 'Valuation', val: fmtCurrency(c.value || 0), color: '#C9A84C' },
+                      { label: 'Free Cash', val: fmtCurrency(freeCash), color: freeCash > 0 ? '#22c55e' : '#555' },
+                      { label: 'P&L', val: `${c.pnl >= 0 ? '+' : ''}${fmtCurrency(c.pnl || 0)}`, color: c.pnl >= 0 ? '#22c55e' : '#ef4444' },
+                      { label: 'Positions', val: `${c.holdings.length}`, color: '#8b5cf6' },
+                    ].map(stat => (
+                      <div key={stat.label} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: stat.color, fontFamily: 'monospace' }}>{stat.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {!selectedRm && <div style={{ textAlign: 'center', padding: '18px 0', color: '#444', fontSize: 13 }}>Select an RM to view their assigned clients</div>}
+          </div>
+        )}
+
+        {/* ── MODE: Risk Profile Search ── */}
+        {searchMode === 'risk' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+              <Users size={15} color="#C9A84C" />
+              <select
+                value={selectedRiskProfile}
+                onChange={e => setSelectedRiskProfile(e.target.value)}
+                style={{ padding: '8px 14px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: 1, maxWidth: 320 }}
+              >
+                <option value="">— Select a Risk Profile —</option>
+                <option value="Aggressive" style={{ background: 'var(--bg-elevated)' }}>Aggressive</option>
+                <option value="Moderate" style={{ background: 'var(--bg-elevated)' }}>Moderate</option>
+                <option value="Conservative" style={{ background: 'var(--bg-elevated)' }}>Conservative</option>
+                <option value="Unassigned" style={{ background: 'var(--bg-elevated)' }}>Unassigned</option>
+              </select>
+            </div>
+            {selectedRiskProfile && (clients.filter(c => (c.risk_profile || 'Unassigned') === selectedRiskProfile).length === 0) && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No clients found for <strong style={{ color: '#C9A84C' }}>{selectedRiskProfile}</strong></div>
+            )}
+            {clients.filter(c => (c.risk_profile || 'Unassigned') === selectedRiskProfile).map(c => {
+              const freeCash = Math.max(0, (c.totalCapital || 0) - (c.invested || 0) - (c.mutual_funds || 0));
+              return (
+                <div key={c.id} style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: 16, marginBottom: 16, border: '1px solid rgba(0,0,0,0.05)' }}>
+                  {/* Client summary bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 16, cursor: 'pointer' }} onClick={() => navigate(`/client/${c.id}`)}>{c.name} <ChevronRight size={14} style={{ verticalAlign: 'middle', color: 'var(--text-muted)' }} /></div>
+                    {[
+                      { label: 'Valuation', val: fmtCurrency(c.value || 0), color: '#C9A84C' },
+                      { label: 'Free Cash', val: fmtCurrency(freeCash), color: freeCash > 0 ? '#22c55e' : '#555' },
+                      { label: 'P&L', val: `${c.pnl >= 0 ? '+' : ''}${fmtCurrency(c.pnl || 0)}`, color: c.pnl >= 0 ? '#22c55e' : '#ef4444' },
+                      { label: 'Positions', val: `${c.holdings?.length || 0}`, color: '#8b5cf6' },
+                    ].map(stat => (
+                      <div key={stat.label} style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: stat.color, fontFamily: 'monospace' }}>{stat.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {!selectedRiskProfile && <div style={{ textAlign: 'center', padding: '18px 0', color: '#444', fontSize: 13 }}>Select a risk profile to view associated clients</div>}
+          </div>
+        )}
+
+        {/* ── MODE 6: Settings ── */}
+        {searchMode === 'settings' && (
+          <div>
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>Relationship Managers</h4>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>Manage the list of available Relationship Managers (RMs) across the firm.</p>
+              
+              <div style={{ display: 'flex', gap: 10, marginBottom: 24, maxWidth: 400 }}>
+                <input
+                  type="text"
+                  placeholder="Enter new RM name..."
+                  value={newRmName}
+                  onChange={e => setNewRmName(e.target.value)}
+                  style={{ flex: 1, padding: '10px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.1)', outline: 'none', fontSize: 13 }}
+                />
+                <button
+                  onClick={handleAddRm}
+                  disabled={!newRmName.trim()}
+                  style={{ padding: '0 20px', borderRadius: 8, background: newRmName.trim() ? '#C9A84C' : '#555', color: newRmName.trim() ? '#000' : '#aaa', border: 'none', fontWeight: 800, cursor: newRmName.trim() ? 'pointer' : 'not-allowed', fontSize: 13 }}
+                >
+                  Add RM
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {rmList.map(rm => (
+                  <div key={rm} style={{ padding: '8px 14px', borderRadius: 20, background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600 }}>
+                    {rm}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Buy Modal ─────────────────────────────────────────────────────────── */}
       {buyModalData && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#151515', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw' }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <div style={{ fontWeight: 900, fontSize: 18, color: '#fff' }}>Buy Stock</div>
-                <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>Client: <span style={{ color: '#C9A84C', fontWeight: 700 }}>{buyModalData.clientName}</span></div>
+                <div style={{ fontWeight: 900, fontSize: 18, color: 'var(--text-primary)' }}>Buy Stock</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Client: <span style={{ color: '#C9A84C', fontWeight: 700 }}>{buyModalData.clientName}</span></div>
               </div>
-              <button onClick={() => setBuyModalData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555' }}><XIcon size={20} /></button>
+              <button onClick={() => setBuyModalData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={20} /></button>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, padding: 12, background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 8 }}>
               <div style={{ textAlign: 'center', flex: 1 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: '#555', textTransform: 'uppercase' }}>Free Cash Available</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Free Cash Available</div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: '#22c55e', fontFamily: 'monospace' }}>{fmtCurrency(buyModalData.freeCash)}</div>
               </div>
             </div>
@@ -989,30 +1222,30 @@ export function AnalyticsPage() {
               { label: 'Buy Price (₹)', value: buyPrice, set: setBuyPrice, placeholder: 'e.g. 925.50', transform: (v: string) => v },
             ].map(field => (
               <div key={field.label} style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{field.label}</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{field.label}</label>
                 <input type="text" value={field.value} onChange={e => field.set(field.transform(e.target.value))} placeholder={field.placeholder}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.10)', outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.10)', outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
                   onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.55)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
                 />
               </div>
             ))}
             {buyPrice && parseFloat(buyPrice) > 0 && (
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Deploy % of Free Cash: <span style={{ color: '#C9A84C' }}>{deployPct}%</span></label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Deploy % of Free Cash: <span style={{ color: '#C9A84C' }}>{deployPct}%</span></label>
                 <input type="range" min={10} max={100} step={5} value={deployPct} onChange={e => { setDeployPct(Number(e.target.value)); setDeployPct(Number(e.target.value)); }}
                   style={{ width: '100%', accentColor: '#C9A84C' }} />
-                <div style={{ fontSize: 12, color: '#555', marginTop: 4 }}>
-                  Suggested qty: <strong style={{ color: '#C9A84C' }}>{suggestedBuyQty.toLocaleString('en-IN')}</strong> shares @ ₹{parseFloat(buyPrice).toLocaleString('en-IN')} = <strong style={{ color: '#fff' }}>{fmtCurrency(suggestedBuyQty * parseFloat(buyPrice))}</strong>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Suggested qty: <strong style={{ color: '#C9A84C' }}>{suggestedBuyQty.toLocaleString('en-IN')}</strong> shares @ ₹{parseFloat(buyPrice).toLocaleString('en-IN')} = <strong style={{ color: 'var(--text-primary)' }}>{fmtCurrency(suggestedBuyQty * parseFloat(buyPrice))}</strong>
                 </div>
               </div>
             )}
             <div style={{ marginBottom: 18 }}>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Quantity {suggestedBuyQty > 0 ? `(suggested: ${suggestedBuyQty})` : ''}</label>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Quantity {suggestedBuyQty > 0 ? `(suggested: ${suggestedBuyQty})` : ''}</label>
               <input type="number" value={buyQty || (suggestedBuyQty > 0 ? String(suggestedBuyQty) : '')} onChange={e => setBuyQty(e.target.value)} placeholder={suggestedBuyQty > 0 ? String(suggestedBuyQty) : 'Enter quantity'}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.10)', outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.10)', outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
                 onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.55)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'}
+                onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
               />
             </div>
             {buyCost > 0 && (
@@ -1023,7 +1256,7 @@ export function AnalyticsPage() {
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setBuyModalData(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,0.10)', background: 'transparent', color: '#777', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setBuyModalData(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid rgba(0,0,0,0.10)', background: 'transparent', color: '#777', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleBulkBuy} disabled={saving || !buySymbol.trim() || !buyPrice} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: saving ? '#555' : '#22c55e', color: saving ? '#aaa' : '#000', fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.15s' }}>
                 {saving ? 'Adding…' : 'Confirm Buy'}
               </button>
@@ -1035,15 +1268,15 @@ export function AnalyticsPage() {
       {/* ── Sell Modal ─────────────────────────────────────────────────────────── */}
       {sellModalData && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: '#151515', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw' }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <div style={{ fontWeight: 900, fontSize: 18, color: '#fff' }}>Sell Holding</div>
-                <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>
+                <div style={{ fontWeight: 900, fontSize: 18, color: 'var(--text-primary)' }}>Sell Holding</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                   <span style={{ color: '#C9A84C', fontWeight: 700 }}>{sellModalData.clientName}</span> · <span style={{ color: '#ef4444', fontWeight: 700 }}>{sellModalData.holding.nse_symbol || sellModalData.holding.stock_symbol}</span>
                 </div>
               </div>
-              <button onClick={() => setSellModalData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555' }}><XIcon size={20} /></button>
+              <button onClick={() => setSellModalData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={20} /></button>
             </div>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, padding: 12, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8 }}>
               {[
@@ -1052,8 +1285,8 @@ export function AnalyticsPage() {
                 { label: 'Current Price', val: sellModalData.holding.current_price > 0 ? `₹${sellModalData.holding.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—' },
               ].map(stat => (
                 <div key={stat.label} style={{ textAlign: 'center', flex: 1 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: '#555', textTransform: 'uppercase' }}>{stat.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', fontFamily: 'monospace' }}>{stat.val}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{stat.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{stat.val}</div>
                 </div>
               ))}
             </div>
@@ -1062,28 +1295,66 @@ export function AnalyticsPage() {
               { label: 'Sell Price (₹)', value: sellPrice, set: setSellPrice, placeholder: 'e.g. 950.00', type: 'text' },
             ].map(field => (
               <div key={field.label} style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{field.label}</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>{field.label}</label>
                 <input type={field.type} value={field.value} onChange={e => field.set(e.target.value)} placeholder={field.placeholder}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.10)', outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.10)', outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
                   onFocus={e => e.currentTarget.style.borderColor = 'rgba(239,68,68,0.55)'}
-                  onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.10)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
                 />
               </div>
             ))}
             {sellPnlPreview && sellPnlPreview.totalValue > 0 && (
               <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: sellPnlPreview.realisedPnl >= 0 ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)', border: `1px solid ${sellPnlPreview.realisedPnl >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
-                <div style={{ fontSize: 12, color: '#555', marginBottom: 4 }}>Proceeds: <strong style={{ color: '#fff', fontFamily: 'monospace' }}>{fmtCurrency(sellPnlPreview.totalValue)}</strong></div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>Proceeds: <strong style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{fmtCurrency(sellPnlPreview.totalValue)}</strong></div>
                 <div style={{ fontSize: 13, fontWeight: 800, color: sellPnlPreview.realisedPnl >= 0 ? '#22c55e' : '#ef4444', fontFamily: 'monospace' }}>
                   Realised P&L: {sellPnlPreview.realisedPnl >= 0 ? '+' : ''}{fmtCurrency(sellPnlPreview.realisedPnl)} ({sellPnlPreview.realisedPct >= 0 ? '+' : ''}{sellPnlPreview.realisedPct.toFixed(2)}%)
                 </div>
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => setSellModalData(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,0.10)', background: 'transparent', color: '#777', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => setSellModalData(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: '1px solid rgba(0,0,0,0.10)', background: 'transparent', color: '#777', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleBulkSell} disabled={saving || !sellQty || !sellPrice} style={{ flex: 2, padding: '10px 0', borderRadius: 8, border: 'none', background: saving ? '#555' : '#ef4444', color: saving ? '#aaa' : '#fff', fontSize: 13, fontWeight: 800, cursor: saving ? 'not-allowed' : 'pointer', transition: 'all 0.15s' }}>
                 {saving ? 'Selling…' : 'Confirm Sell'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {bulkWizard && (
+        <BulkOrderWizardModal
+          onClose={() => setBulkWizard(null)}
+          onSuccess={() => { setBulkWizard(null); setSelectedStockRows(new Set()); setSelectedClientRows(new Set()); reloadData(); }}
+          clients={clients}
+          initialMode={bulkWizard.mode}
+          initialSymbol={bulkWizard.symbol}
+          initialSelectedClientIds={bulkWizard.selectedClientIds}
+          holdingsData={bulkWizard.holdingsData}
+        />
+      )}
+
+      {/* ── Floating Action Bar ──────────────────────────────────────────────── */}
+      {(selectedStockRows.size > 0 || selectedClientRows.size > 0) && (
+        <div className="animate-slide-up" style={{
+          position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+          borderRadius: 16, padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 24,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.2)', zIndex: 1000
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {selectedStockRows.size > 0 ? selectedStockRows.size : selectedClientRows.size} Selected
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            {selectedStockRows.size > 0 && (
+              <>
+                <button onClick={() => setBulkWizard({ mode: 'buy', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows) })} style={{ padding: '8px 16px', borderRadius: 8, background: '#22c55e', color: '#fff', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Buy More</button>
+                <button onClick={() => setBulkWizard({ mode: 'sell', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows), holdingsData: stockSearchResults })} style={{ padding: '8px 16px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Bulk Sell</button>
+              </>
+            )}
+            {selectedClientRows.size > 0 && (
+              <button onClick={() => setBulkWizard({ mode: 'buy', selectedClientIds: Array.from(selectedClientRows) })} style={{ padding: '8px 16px', borderRadius: 8, background: '#C9A84C', color: '#000', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Bulk Buy Stock</button>
+            )}
+            <button onClick={() => { setSelectedStockRows(new Set()); setSelectedClientRows(new Set()); }} style={{ padding: '8px 16px', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
           </div>
         </div>
       )}
@@ -1098,7 +1369,7 @@ export function AnalyticsPage() {
           { label: 'Unique Securities', value: activeHoldingsCount.toString(), icon: <Award size={16} />, color: '#8b5cf6' }
         ].map((kpi, idx) => (
           <div key={idx} style={{
-            background: '#111111', border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)',
             borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column',
             justifyContent: 'space-between', minHeight: 100
           }}>
@@ -1111,7 +1382,7 @@ export function AnalyticsPage() {
               }}>{kpi.icon}</div>
             </div>
             <div style={{ marginTop: 12 }}>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.5px' }}>{kpi.value}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>{kpi.value}</div>
               {kpi.subtitle && (
                 <div style={{ fontSize: 11, fontWeight: 700, color: kpi.color, marginTop: 2 }}>{kpi.subtitle}</div>
               )}
@@ -1123,10 +1394,10 @@ export function AnalyticsPage() {
       {/* Visual Analytics Charts Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
         {/* Aggregate Asset Class */}
-        <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24 }}>
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <PieIcon size={18} color="#C9A84C" />
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Asset Class Allocation
             </h3>
           </div>
@@ -1137,7 +1408,7 @@ export function AnalyticsPage() {
                   <Pie data={assetClassData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} innerRadius={40}>
                     {assetClassData.map((_, i) => <Cell key={i} fill={VIBRANT_PALETTE[i % VIBRANT_PALETTE.length]} />)}
                   </Pie>
-                  <ChartTooltip formatter={(v: any) => [`${v.toFixed(2)}%`]} contentStyle={{ background: '#111', border: '1px solid #222', borderRadius: 8 }} />
+                  <ChartTooltip formatter={(v: any) => [`${v.toFixed(2)}%`]} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -1146,11 +1417,11 @@ export function AnalyticsPage() {
                 <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: VIBRANT_PALETTE[i % VIBRANT_PALETTE.length] }} />
-                    <span style={{ color: '#aaa', fontWeight: 600 }}>{d.name}</span>
+                    <span style={{ color: '#666', fontWeight: 600 }}>{d.name}</span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ color: '#ffffff', fontWeight: 800 }}>{d.value.toFixed(1)}%</span>
-                    <span style={{ fontSize: 10, color: '#555', display: 'block' }}>{fmtCurrency(d.raw)}</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{d.value.toFixed(1)}%</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block' }}>{fmtCurrency(d.raw)}</span>
                   </div>
                 </div>
               ))}
@@ -1159,20 +1430,20 @@ export function AnalyticsPage() {
         </div>
 
         {/* Aggregate Market Cap (Equity Only) */}
-        <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24 }}>
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <BarChart2 size={18} color="#C9A84C" />
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Market Cap Distribution
             </h3>
           </div>
           <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={mcapData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: '#777', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#777', fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}%`} axisLine={false} tickLine={false} />
-                <ChartTooltip formatter={(v: any) => [`${v.toFixed(1)}%`]} contentStyle={{ background: '#111', border: '1px solid #222', borderRadius: 8 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `${v.toFixed(0)}%`} axisLine={false} tickLine={false} />
+                <ChartTooltip formatter={(v: any) => [`${v.toFixed(1)}%`]} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} />
                 <Bar dataKey="value" fill="#C9A84C" radius={[4, 4, 0, 0]} maxBarSize={35}>
                   {mcapData.map((entry, i) => (
                     <Cell key={i} fill={entry.name === 'Large' ? '#c9a84c' : entry.name === 'Mid' ? '#457b9d' : '#8b5cf6'} />
@@ -1187,20 +1458,20 @@ export function AnalyticsPage() {
       {/* Aggregate Sector Allocation Exposure & Observations Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 20, marginBottom: 32 }}>
         {/* Sector Allocation */}
-        <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24 }}>
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <Activity size={18} color="#C9A84C" />
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Sector Concentration Exposure
             </h3>
           </div>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={sectorData.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: '#777', fontSize: 10 }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fill: '#aaa', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} width={130} />
-                <ChartTooltip formatter={(v: any) => [`${v.toFixed(1)}%`]} contentStyle={{ background: '#111', border: '1px solid #222', borderRadius: 8 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `${v}%`} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fill: '#4b5563', fontSize: 10, fontWeight: 700 }} axisLine={false} tickLine={false} width={130} />
+                <ChartTooltip formatter={(v: any) => [`${v.toFixed(1)}%`]} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={15}>
                   {sectorData.slice(0, 8).map((entry, i) => (
                     <Cell key={i} fill={SECTOR_COLORS[entry.name] || VIBRANT_PALETTE[i % VIBRANT_PALETTE.length]} />
@@ -1212,11 +1483,11 @@ export function AnalyticsPage() {
         </div>
 
         {/* Observations Panel */}
-        <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
               <ShieldCheck size={18} color="#C9A84C" />
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Aggregate Observations
               </h3>
             </div>
@@ -1230,12 +1501,12 @@ export function AnalyticsPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16, marginTop: 20 }}>
-            <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 16, marginTop: 20 }}>
+            <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555555', textTransform: 'uppercase' }}>Aggregate HHI Index</div>
               <div style={{ fontSize: 18, fontWeight: 900, color: '#C9A84C', marginTop: 4 }}>{(aggregateHhi * 10000).toFixed(0)}</div>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
+            <div style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 8, padding: 12, textAlign: 'center' }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: '#555555', textTransform: 'uppercase' }}>Effective Stock Conviction</div>
               <div style={{ fontSize: 18, fontWeight: 900, color: '#C9A84C', marginTop: 4 }}>{effectiveStocksCount} Positions</div>
             </div>
@@ -1244,10 +1515,10 @@ export function AnalyticsPage() {
       </div>
 
       {/* Clients Portfolio Directory */}
-      <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24, marginBottom: 32 }}>
+      <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24, marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
           <Users size={18} color="#C9A84C" />
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Client Portfolios Directory
           </h3>
         </div>
@@ -1255,7 +1526,7 @@ export function AnalyticsPage() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}>
+              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'rgba(0,0,0,0.01)' }}>
                 {['Client Name:name', 'AUM Capital:totalCapital', 'Valuation:value', 'Unrealised P&L:pnl', 'Net P&L %:pnlPct', 'Allocation Share:value', 'Positions (S / E):stockCount'].map(col => {
                   const [label, key] = col.split(':');
                   const isSorted = clientSortCol === key;
@@ -1280,14 +1551,14 @@ export function AnalyticsPage() {
                 const weight = totalValue > 0 ? (c.value / totalValue) * 100 : 0;
                 return (
                   <tr key={c.id} onClick={() => navigate(`/client/${c.id}`)} style={{
-                    borderBottom: '1px solid rgba(255,255,255,0.03)', cursor: 'pointer',
+                    borderBottom: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer',
                     transition: 'background 0.15s'
                   }}
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.02)'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                   >
-                    <td style={{ padding: '16px 16px', fontWeight: 700, color: '#ffffff' }}>{c.name}</td>
-                    <td style={{ padding: '16px 16px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>{fmtCurrency(c.totalCapital)}</td>
+                    <td style={{ padding: '16px 16px', fontWeight: 700, color: 'var(--text-primary)' }}>{c.name}</td>
+                    <td style={{ padding: '16px 16px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>{fmtCurrency(c.totalCapital)}</td>
                     <td style={{ padding: '16px 16px', textAlign: 'right', fontWeight: 700, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtCurrency(c.value)}</td>
                     <td style={{ padding: '16px 16px', textAlign: 'right', fontWeight: 600, color: pnl >= 0 ? '#22c55e' : '#ef4444', fontFamily: 'monospace' }}>
                       {pnl >= 0 ? '+' : ''}{fmtCurrency(pnl)}
@@ -1301,9 +1572,9 @@ export function AnalyticsPage() {
                         {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
                       </span>
                     </td>
-                    <td style={{ padding: '16px 16px', textAlign: 'right', fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>{weight.toFixed(1)}%</td>
+                    <td style={{ padding: '16px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{weight.toFixed(1)}%</td>
                     <td style={{ padding: '16px 16px', textAlign: 'right', color: '#777', fontWeight: 600 }}>{c.stockCount}s / {c.etfCount}e</td>
-                    <td style={{ padding: '16px 16px', color: '#555' }}><ChevronRight size={16} /></td>
+                    <td style={{ padding: '16px 16px', color: 'var(--text-muted)' }}><ChevronRight size={16} /></td>
                   </tr>
                 );
               })}
@@ -1313,11 +1584,11 @@ export function AnalyticsPage() {
       </div>
 
       {/* Aggregate Holdings Explorer */}
-      <div style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: 24 }}>
+      <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Briefcase size={18} color="#C9A84C" />
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Firm-Wide Holdings Explorer
             </h3>
           </div>
@@ -1330,12 +1601,12 @@ export function AnalyticsPage() {
               onChange={e => setSearchTerm(e.target.value)}
               style={{
                 width: '100%', padding: '8px 12px 8px 32px', fontSize: 12, borderRadius: 6,
-                background: 'rgba(255,255,255,0.03)', color: '#ffffff',
-                border: '1px solid rgba(255,255,255,0.08)', outline: 'none',
+                background: 'rgba(0,0,0,0.03)', color: 'var(--text-primary)',
+                border: '1px solid rgba(0,0,0,0.08)', outline: 'none',
                 transition: 'border-color 0.15s'
               }}
               onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.45)'}
-              onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'}
+              onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.08)'}
             />
             <Search size={14} color="#555" style={{ position: 'absolute', left: 10, top: 10 }} />
           </div>
@@ -1344,7 +1615,7 @@ export function AnalyticsPage() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.01)' }}>
+              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'rgba(0,0,0,0.01)' }}>
                 {['Scrip', 'Asset Name', 'Sector', 'Avg Buy', 'Current Price', 'Quantity', 'Invested', 'Current Value', 'Unrealised P&L', 'Alloc %', 'Clients'].map(col => (
                   <th key={col} style={{
                     padding: '10px 14px', textAlign: ['Scrip', 'Asset Name', 'Sector'].includes(col) ? 'left' : 'right',
@@ -1358,7 +1629,7 @@ export function AnalyticsPage() {
             <tbody>
               {filteredHoldings.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ padding: '30px', textAlign: 'center', color: '#555' }}>
+                  <td colSpan={11} style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
                     No securities match your search query.
                   </td>
                 </tr>
@@ -1368,13 +1639,13 @@ export function AnalyticsPage() {
                   const avgBuy = h.invested / h.quantity;
                   const currPrice = h.value / h.quantity;
                   return (
-                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.01)'}
+                    <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', transition: 'background 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.01)'}
                       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
                     >
                       <td style={{ padding: '12px 14px', fontWeight: 700, color: '#C9A84C' }}>{h.symbol}</td>
-                      <td style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 600 }}>{h.companyName}</td>
-                      <td style={{ padding: '12px 14px', color: '#aaa', fontWeight: 600 }}>
+                      <td style={{ padding: '12px 14px', color: 'var(--text-primary)', fontWeight: 600 }}>{h.companyName}</td>
+                      <td style={{ padding: '12px 14px', color: '#666', fontWeight: 600 }}>
                         <span style={{
                           padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
                           background: `${SECTOR_COLORS[h.sector] || '#333'}15`,
@@ -1385,14 +1656,14 @@ export function AnalyticsPage() {
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', color: '#999', fontFamily: 'monospace' }}>₹{avgBuy.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>₹{currPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#fff', fontWeight: 600 }}>{h.quantity.toLocaleString('en-IN')}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace' }}>{fmtCurrency(h.invested)}</td>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>₹{currPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}>{h.quantity.toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#666', fontFamily: 'monospace' }}>{fmtCurrency(h.invested)}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#C9A84C', fontFamily: 'monospace' }}>{fmtCurrency(h.value)}</td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: h.pnl >= 0 ? '#22c55e' : '#ef4444', fontFamily: 'monospace' }}>
                         {h.pnl >= 0 ? '+' : ''}{fmtCurrency(h.pnl)}
                       </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#ffffff', fontFamily: 'monospace' }}>{weight.toFixed(1)}%</td>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{weight.toFixed(1)}%</td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#8b5cf6' }}>{h.clientsCount} {h.clientsCount === 1 ? 'client' : 'clients'}</td>
                     </tr>
                   );

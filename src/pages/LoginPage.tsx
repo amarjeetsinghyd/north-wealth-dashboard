@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleAlert as AlertCircle, TrendingUp } from 'lucide-react';
 import { useAuth } from '../lib/authContext';
-import NorthWealthLogo from '../assets/North_Wealth_Light_Logo_Cropped.png';
+import NorthWealthLogo from '../assets/North_Wealth_Logo_Transparent_White.png';
 
 export function LoginPage() {
   const [username, setUsername] = useState('');

@@ -7,58 +7,61 @@ interface SummaryCardProps {
   accentColor?: string;
 }
 
-export function SummaryCard({ title, value, subtitle, icon, trend, accentColor = '#C9A84C' }: SummaryCardProps) {
+export function SummaryCard({ title, value, subtitle, icon, trend, accentColor = 'var(--gold)' }: SummaryCardProps) {
   const trendColor =
-    trend === 'up' ? '#22c55e' :
-    trend === 'down' ? '#ef4444' :
-    '#a0a0a0';
+    trend === 'up' ? 'var(--color-success-500)' :
+    trend === 'down' ? 'var(--color-error-500)' :
+    'var(--text-muted)';
 
-  const valueColor = trend ? trendColor : '#ffffff';
+  const valueColor = trend ? trendColor : 'var(--text-primary)';
 
   return (
     <div
       style={{
-        background: '#111111',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-default)',
         borderRadius: 12,
-        padding: '20px 24px',
+        padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 14,
-        transition: 'border-color 0.2s ease, transform 0.2s ease',
+        gap: 10,
+        transition: 'border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
         cursor: 'default',
         position: 'relative',
         overflow: 'hidden',
+        boxShadow: 'var(--shadow-sm)',
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLElement;
-        el.style.borderColor = 'rgba(201,168,76,0.35)';
+        el.style.borderColor = 'var(--gold)';
         el.style.transform = 'translateY(-2px)';
+        el.style.boxShadow = 'var(--shadow-md)';
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLElement;
-        el.style.borderColor = 'rgba(255,255,255,0.08)';
+        el.style.borderColor = 'var(--border-default)';
         el.style.transform = 'translateY(0)';
+        el.style.boxShadow = 'var(--shadow-sm)';
       }}
     >
       {/* Top accent line */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 2,
+        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
         background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`,
-        opacity: 0.6,
+        opacity: 0.8,
       }} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{
-          fontSize: 11, color: '#666666',
+          fontSize: 11, color: 'var(--text-muted)',
           fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px',
         }}>
           {title}
         </span>
         <div style={{
           width: 34, height: 34, borderRadius: 8,
-          background: `${accentColor}18`,
-          border: `1px solid ${accentColor}30`,
+          background: 'var(--gold-subtle)',
+          border: '1px solid var(--border-gold)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: accentColor,
         }}>
@@ -76,7 +79,7 @@ export function SummaryCard({ title, value, subtitle, icon, trend, accentColor =
         </div>
         {subtitle && (
           <div style={{
-            fontSize: 13, color: trend ? trendColor : '#666666',
+            fontSize: 13, color: trend ? trendColor : 'var(--text-secondary)',
             marginTop: 5, fontWeight: 600,
           }}>
             {subtitle}

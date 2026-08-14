@@ -15,6 +15,7 @@ export function AddHoldingModal({ clientId, onClose, onSuccess }: AddHoldingModa
   const [quantity, setQuantity] = useState('');
   const [action, setAction] = useState<'BUY' | 'SELL'>('BUY');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [source, setSource] = useState<'Existing' | 'Fresh'>('Fresh');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
@@ -41,6 +42,8 @@ export function AddHoldingModal({ clientId, onClose, onSuccess }: AddHoldingModa
         unrealised_pnl: 0,
         unrealised_pnl_pct: 0,
         realised_pnl: 0,
+        source,
+        purchase_date: date,
         rebalancing_date: null,
         last_price_update: null,
       }]);
@@ -136,12 +139,21 @@ export function AddHoldingModal({ clientId, onClose, onSuccess }: AddHoldingModa
                 </select>
               </div>
             </div>
-            <div>
-              <label style={labelStyle}>Company Name</label>
-              <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Reliance Industries" style={inputStyle}
-                onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'}
-                onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+              <div>
+                <label style={labelStyle}>Company Name</label>
+                <input value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. Reliance Industries" style={inputStyle}
+                  onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'}
+                  onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>Holding Source</label>
+                <select value={source} onChange={e => setSource(e.target.value as 'Existing' | 'Fresh')} style={inputStyle}>
+                  <option value="Fresh">Fresh</option>
+                  <option value="Existing">Existing</option>
+                </select>
+              </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
               <div>

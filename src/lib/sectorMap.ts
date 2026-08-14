@@ -2,7 +2,7 @@ import companyMaster from './companyMaster.json';
 import etfMaster from './etfMaster.json';
 
 export type MarketCap = 'Large' | 'Mid' | 'Small';
-export type AssetClass = 'Equity' | 'Commodity' | 'Debt' | 'ETF';
+export type AssetClass = 'Equity' | 'Commodity' | 'Debt' | 'ETF' | 'Mutual Fund';
 
 export interface StockMeta {
   sector: string;
@@ -256,7 +256,7 @@ const SECTOR_MAP: Record<string, StockMeta> = {
 };
 
 function standardizeSector(rawSector: string): string {
-  if (!rawSector) return 'Active';
+  if (!rawSector) return 'Others';
   const sector = rawSector.toLowerCase().trim();
   
   if (sector.includes('bank')) return 'Banking';
@@ -294,26 +294,29 @@ function standardizeSector(rawSector: string): string {
   if (sector.includes('infrastructure')) return 'Infrastructure';
   if (sector.includes('diversified')) return 'Conglomerate';
   
-  return 'Active';
+  return 'Others';
 }
 
 function standardizeEtfCategory(category: string, etfName: string): { sector: string, assetClass: AssetClass } {
   const cat = (category || '').toLowerCase().trim();
   const name = (etfName || '').toLowerCase().trim();
   
-  if (cat.includes('commodity')) {
-    if (name.includes('silver')) {
-      return { sector: 'Silver ETF', assetClass: 'Commodity' };
-    }
-    return { sector: 'Gold ETF', assetClass: 'Commodity' };
+  if (name.includes('silver')) return { sector: 'Silver', assetClass: 'Commodity' };
+  if (name.includes('gold')) return { sector: 'Gold', assetClass: 'Commodity' };
+  if (name.includes('metal')) return { sector: 'Metals & Mining', assetClass: 'ETF' };
+  if (name.includes('bank')) return { sector: 'Banking', assetClass: 'ETF' };
+  if (name.includes('it ') || name.includes(' it') || name.includes('tech')) return { sector: 'Information Technology', assetClass: 'ETF' };
+  if (name.includes('pharma') || name.includes('health')) return { sector: 'Pharma & Healthcare', assetClass: 'ETF' };
+  if (name.includes('auto')) return { sector: 'Automobiles', assetClass: 'ETF' };
+  if (name.includes('infra')) return { sector: 'Infrastructure', assetClass: 'ETF' };
+  if (name.includes('fmcg') || name.includes('consum')) return { sector: 'FMCG', assetClass: 'ETF' };
+  
+  if (cat.includes('debt') || name.includes('liquid') || name.includes('gilt')) {
+    return { sector: 'Debt', assetClass: 'Debt' };
   }
   
-  if (cat.includes('debt')) {
-    return { sector: 'Liquid ETF', assetClass: 'Debt' };
-  }
-  
-  // Default to standard Index ETF
-  return { sector: 'Index ETF', assetClass: 'ETF' };
+  // Default for Nifty 50, Next 50, 100, 200, 500, etc.
+  return { sector: 'Broad Based', assetClass: 'ETF' };
 }
 
 /**
@@ -384,10 +387,11 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
           companyName: company[0] as string
         };
       } else {
-        // 4. Fallback to default (treated as Inactive since it's not in the master database)
+        // 4. Fallback to Mutual Fund (assuming unknown entries in statements are Mutual Funds)
         meta = {
           ...DEFAULT_META,
-          sector: 'Inactive'
+          sector: 'Mutual Fund',
+          assetClass: 'Mutual Fund'
         };
       }
     }
@@ -426,6 +430,7 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
     'Silver ETF': { pe: 0, pb: 0, divYield: 0 },
     'Index ETF': { pe: 22.0, pb: 3.5, divYield: 1.2 },
     'Liquid ETF': { pe: 0, pb: 0, divYield: 6.2 },
+    'Mutual Fund': { pe: 0, pb: 0, divYield: 0 },
     'Active': { pe: 20.0, pb: 2.5, divYield: 1.0 },
     'Inactive': { pe: 0, pb: 0, divYield: 0 },
     'Others': { pe: 20.0, pb: 2.5, divYield: 1.0 },

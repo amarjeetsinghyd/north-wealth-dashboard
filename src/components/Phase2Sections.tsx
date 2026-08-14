@@ -98,10 +98,10 @@ export function BenchmarkComparison({ benchmarkData, stockMarketData, holdings, 
         <div style={{ height: 160 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#666', fontWeight: 600 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#666' }} tickFormatter={(val: number) => `${val}%`} />
-              <RechartsTooltip formatter={(value: any) => [`${value}%`]} cursor={{ fill: '#f5f5f5' }} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280', fontWeight: 600 }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(val: number) => `${val}%`} />
+              <RechartsTooltip formatter={(val: any) => `${Number(val).toFixed(2)}%`} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} cursor={{ fill: '#f3f4f6' }} />
               <Bar dataKey="Portfolio" fill="#C9A84C" radius={[4, 4, 0, 0]} barSize={20} />
               <Bar dataKey="Nifty500" fill="#334155" radius={[4, 4, 0, 0]} barSize={20} />
             </BarChart>

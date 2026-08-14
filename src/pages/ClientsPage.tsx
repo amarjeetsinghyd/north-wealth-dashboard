@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, User, TrendingUp, Calendar, Trash2, ChevronRight } from 'lucide-react';
+import { Plus, User, TrendingUp, Calendar, Trash2, ChevronRight, Edit2 } from 'lucide-react';
 import { fetchClients, deleteClient } from '../lib/queries';
 import type { Client } from '../types';
 import { AddClientModal } from '../components/AddClientModal';
@@ -10,6 +10,7 @@ export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -39,10 +40,10 @@ export function ClientsPage() {
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 'var(--space-8)' }}>
         <div>
-          <h1 style={{ fontSize: 32, fontWeight: 900, color: '#ffffff', letterSpacing: '-0.8px', marginBottom: 6 }}>
+          <h1 style={{ fontSize: 32, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.8px', marginBottom: 6 }}>
             Client Portfolios
           </h1>
-          <p style={{ color: '#555555', fontSize: 15 }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
             Manage portfolios under the Portfolio Rebalancing Service
           </p>
         </div>
@@ -52,15 +53,15 @@ export function ClientsPage() {
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '11px 22px',
             borderRadius: 8,
-            background: '#C9A84C', color: '#000000',
+            background: 'var(--gold)', color: '#000000',
             fontSize: 14, fontWeight: 800,
             border: 'none', cursor: 'pointer',
             transition: 'background 0.15s, transform 0.15s',
             flexShrink: 0,
             letterSpacing: '0.2px',
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#DFC06A'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#C9A84C'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--gold-light)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--gold)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
         >
           <Plus size={16} /> Add New Client
         </button>
@@ -77,11 +78,12 @@ export function ClientsPage() {
           { label: 'Service', value: 'Rebalancing', icon: <Calendar size={16} />, color: '#C9A84C' },
         ].map(stat => (
           <div key={stat.label} style={{
-            background: '#111111',
-            border: '1px solid rgba(255,255,255,0.07)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
             borderRadius: 12,
             padding: '18px 20px',
             display: 'flex', alignItems: 'center', gap: 14,
+            boxShadow: 'var(--shadow-sm)'
           }}>
             <div style={{
               width: 38, height: 38, borderRadius: 9,
@@ -91,8 +93,8 @@ export function ClientsPage() {
               color: stat.color, flexShrink: 0,
             }}>{stat.icon}</div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#ffffff' }}>{stat.value}</div>
-              <div style={{ fontSize: 11, color: '#555555', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>{stat.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{stat.value}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>{stat.label}</div>
             </div>
           </div>
         ))}
@@ -105,13 +107,13 @@ export function ClientsPage() {
         </div>
       ) : clients.length === 0 ? (
         <div style={{
-          background: '#111111',
-          border: '2px dashed rgba(255,255,255,0.10)',
+          background: 'var(--bg-surface)',
+          border: '2px dashed var(--border-strong)',
           borderRadius: 16, padding: 'var(--space-16)', textAlign: 'center',
         }}>
-          <User size={48} style={{ color: '#333', margin: '0 auto var(--space-4)', display: 'block' }} />
-          <p style={{ color: '#ffffff', fontWeight: 700, fontSize: 18 }}>No clients yet</p>
-          <p style={{ color: '#555555', fontSize: 14, marginTop: 8, marginBottom: 24 }}>
+          <User size={48} style={{ color: 'var(--text-muted)', margin: '0 auto var(--space-4)', display: 'block' }} />
+          <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 18 }}>No clients yet</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginTop: 8, marginBottom: 24 }}>
             Add your first client to get started
           </p>
           <button
@@ -119,7 +121,7 @@ export function ClientsPage() {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '11px 22px', borderRadius: 8,
-              background: '#C9A84C', color: '#000000',
+              background: 'var(--gold)', color: '#000000',
               fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
             }}
           >
@@ -150,19 +152,20 @@ export function ClientsPage() {
                 animationDelay: `${i * 40}ms`,
                 display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto',
                 gap: 'var(--space-4)', alignItems: 'center',
-                background: '#111111',
-                border: '1px solid rgba(255,255,255,0.07)',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-default)',
                 borderRadius: 12,
                 padding: '16px 20px',
                 cursor: 'pointer', transition: 'all 0.15s ease',
+                boxShadow: 'var(--shadow-sm)'
               }}
               onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(201,168,76,0.45)';
-                (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.04)';
+                (e.currentTarget as HTMLElement).style.borderColor = 'var(--gold)';
+                (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
               }}
               onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)';
-                (e.currentTarget as HTMLElement).style.background = '#111111';
+                (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)';
+                (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)';
               }}
             >
               {/* Name */}
@@ -170,18 +173,18 @@ export function ClientsPage() {
                 <div style={{
                   width: 40, height: 40,
                   borderRadius: 10,
-                  background: `rgba(201,168,76,0.12)`,
-                  border: '1px solid rgba(201,168,76,0.2)',
+                  background: `var(--gold-subtle)`,
+                  border: '1px solid var(--border-gold)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontWeight: 800, fontSize: 17,
-                  color: '#C9A84C',
+                  color: 'var(--gold-dark)',
                   flexShrink: 0,
                 }}>
                   {client.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 'var(--text-md)' }}>{client.name}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ID: {client.id.slice(0, 8)}...</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ID: {client.id.slice(0, 8)}... {client.rm_name && <span style={{ marginLeft: 8, color: 'var(--gold-dark)' }}>• RM: {client.rm_name}</span>}</div>
                 </div>
               </div>
 
@@ -208,6 +211,23 @@ export function ClientsPage() {
 
               {/* Actions */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                <button
+                  onClick={e => { e.stopPropagation(); setEditingClient(client); }}
+                  style={{
+                    width: 32, height: 32,
+                    borderRadius: 'var(--radius-md)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--text-muted)',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--gold-dark)'; (e.currentTarget as HTMLElement).style.background = 'rgba(201, 168, 76, 0.1)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <Edit2 size={15} />
+                </button>
                 <button
                   onClick={e => handleDelete(e, client.id)}
                   disabled={deletingId === client.id}
@@ -239,6 +259,13 @@ export function ClientsPage() {
         <AddClientModal
           onClose={() => setShowModal(false)}
           onSuccess={load}
+        />
+      )}
+      {editingClient && (
+        <AddClientModal
+          onClose={() => setEditingClient(null)}
+          onSuccess={() => { setEditingClient(null); load(); }}
+          existingClient={editingClient}
         />
       )}
     </div>

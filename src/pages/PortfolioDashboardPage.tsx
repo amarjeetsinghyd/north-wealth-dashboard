@@ -15,13 +15,11 @@ import type { Client, Holding } from '../types';
 import { getStockMeta, cleanSymbol } from '../lib/sectorMap';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import NorthWealthLogo from '../assets/North_Wealth_White_Logo.png';
+import NorthWealthLogo from '../assets/North_Wealth_Logo_Transparent.png';
 import { BenchmarkComparison, StockLevelAnalysis, RiskAndVolatilityTable, TransactionAnalytics } from '../components/Phase2Sections';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCurrency(v: number) {
-  if (Math.abs(v) >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
-  if (Math.abs(v) >= 1e5) return `₹${(v / 1e5).toFixed(2)} L`;
   return `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -363,7 +361,7 @@ export function PortfolioDashboardPage() {
 
   // ─── Computational Derived Metrics ───────────────────────────────────────────
   const totalInvested = holdings.reduce((s, h) => s + (h.invested_amount || h.buy_price * h.quantity), 0);
-  const totalValue = holdings.reduce((s, h) => s + (h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : 0), 0);
+  const totalValue = holdings.reduce((s, h) => s + (h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)), 0);
   const totalUnrealisedPnl = holdings.reduce((s, h) => s + h.unrealised_pnl, 0);
   const overallPnlPct = totalInvested > 0 ? (totalUnrealisedPnl / totalInvested) * 100 : 0;
 
@@ -398,7 +396,8 @@ export function PortfolioDashboardPage() {
   let portfolioVolatility = 0;
   const betaEstimate = holdings.reduce((s, h) => {
     const meta = getStockMeta(h.nse_symbol, h.stock_symbol);
-    const weight = totalValue > 0 ? (h.current_value || h.buy_price * h.quantity) / totalValue : 0;
+    const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
+    const weight = totalValue > 0 ? val / totalValue : 0;
     
     let betaVal = meta.marketCap === 'Large' ? 0.9 : meta.marketCap === 'Mid' ? 1.1 : 1.3;
     let volVal = 15; // default 15% assumption if no data
@@ -443,7 +442,8 @@ export function PortfolioDashboardPage() {
 
   const weightedDivYield = totalValue > 0 ? holdings.reduce((s, h) => {
     const meta = getStockMeta(h.nse_symbol, h.stock_symbol);
-    const weight = (h.current_value || h.buy_price * h.quantity) / totalValue;
+    const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
+    const weight = val / totalValue;
     return s + ((meta.divYield || 1.0) * weight);
   }, 0) : 0;
 
@@ -500,7 +500,8 @@ export function PortfolioDashboardPage() {
   }).length;
 
   const hhi = holdings.reduce((s, h) => {
-    const w = (h.current_value || h.buy_price * h.quantity) / totalValue;
+    const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
+    const w = val / totalValue;
     return s + (w * w);
   }, 0);
   const hhiDisplay = (hhi * 10000).toFixed(0);
@@ -548,7 +549,8 @@ export function PortfolioDashboardPage() {
 
   const recommendations: Array<{ type: 'warning' | 'info'; title: string; desc: string }> = [];
   holdings.forEach(h => {
-    const weight = totalValue > 0 ? ((h.current_value || h.buy_price * h.quantity) / totalValue * 100) : 0;
+    const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
+    const weight = totalValue > 0 ? (val / totalValue * 100) : 0;
     if (weight > 15) {
       recommendations.push({
         type: 'warning',
@@ -613,7 +615,7 @@ export function PortfolioDashboardPage() {
           'Current Val': h.current_value || (h.buy_price * h.quantity),
           'Net P&L': h.unrealised_pnl,
           'Net P&L %': h.unrealised_pnl_pct,
-          'Alloc %': totalValue > 0 ? (((h.current_value || h.buy_price * h.quantity) / totalValue) * 100) : 0
+          'Alloc %': totalValue > 0 ? ((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / totalValue) * 100 : 0
         };
       });
 
@@ -945,10 +947,10 @@ export function PortfolioDashboardPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 32, alignItems: 'center' }}>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={sectorData.slice(0, 8)} layout="vertical" margin={{ top: 0, right: 30, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.12} />
-                <XAxis type="number" unit="%" fontSize={10} fontWeight={600} stroke="#888" tickLine={false} />
-                <YAxis dataKey="name" type="category" width={110} fontSize={9} fontWeight={700} stroke="#444" tickLine={false} />
-                <Tooltip formatter={(value) => [`${value}%`, 'Exposure']} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.5} />
+                <XAxis type="number" unit="%" fontSize={10} fontWeight={600} stroke="#6b7280" tickLine={false} />
+                <YAxis dataKey="name" type="category" width={110} fontSize={9} fontWeight={700} stroke="#4b5563" tickLine={false} />
+                <Tooltip formatter={(value) => [`${value}%`, 'Exposure']} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} cursor={{ fill: '#f3f4f6' }} />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                   {sectorData.slice(0, 8).map((entry, idx) => (
                     <Cell key={idx} fill={SECTOR_COLORS[entry.name] || '#333'} />
@@ -977,10 +979,10 @@ export function PortfolioDashboardPage() {
           <SectionCard title="Top 10 Holdings Allocation" icon={<BarChart2 size={16} />}>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={top10Holdings} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.12} />
-                <XAxis type="number" unit="%" fontSize={10} fontWeight={600} stroke="#888" tickLine={false} domain={[0, dataMax => dataMax + 1]} />
-                <YAxis dataKey="name" type="category" width={80} fontSize={10} fontWeight={700} stroke="#444" tickLine={false} />
-                <Tooltip formatter={(value) => [`${value}%`, 'Weight']} />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.5} />
+                <XAxis type="number" unit="%" fontSize={10} fontWeight={600} stroke="#6b7280" tickLine={false} domain={[0, dataMax => dataMax + 1]} />
+                <YAxis dataKey="name" type="category" width={80} fontSize={10} fontWeight={700} stroke="#4b5563" tickLine={false} />
+                <Tooltip formatter={(value) => [`${value}%`, 'Weight']} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} cursor={{ fill: '#f3f4f6' }} />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={18}>
                   {top10Holdings.map((entry, idx) => (
                     <Cell key={idx} fill={SECTOR_COLORS[entry.sector] || '#333'} />
@@ -1135,12 +1137,12 @@ export function PortfolioDashboardPage() {
             </button>
           </div>
           
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ maxHeight: '75vh', overflowY: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#f5f5f5' }}>
+                <tr style={{ background: '#1c1917', position: 'sticky', top: 0, zIndex: 10 }}>
                   {['#', 'Asset', 'Sector', 'M Cap', 'Quantity', 'Avg. Buy', 'Curr. Price', 'Invested', 'Current Val', 'Net P&L', 'Alloc %'].map(col => (
-                    <th key={col} style={{ padding: '14px 10px', textAlign: ['Asset', 'Sector', 'M Cap'].includes(col) ? 'left' : (col === '#' ? 'center' : 'right'), fontWeight: 800, color: '#333', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.5px', borderBottom: '2px solid #ddd' }}>
+                    <th key={col} style={{ padding: '14px 10px', textAlign: ['Asset', 'Sector', 'M Cap'].includes(col) ? 'left' : (col === '#' ? 'center' : 'right'), fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', fontSize: 11, letterSpacing: '0.5px', borderBottom: '2px solid #ddd' }}>
                       {col}
                     </th>
                   ))}
@@ -1151,7 +1153,8 @@ export function PortfolioDashboardPage() {
                   const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
                   const displayCompanyName = meta.companyName || h.company_name;
                   const isProfit = h.unrealised_pnl >= 0;
-                  const weight = totalValue > 0 ? (((h.current_value || h.buy_price * h.quantity) / totalValue) * 100) : 0;
+                  const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
+                  const weight = totalValue > 0 ? (val / totalValue) * 100 : 0;
                   const displaySymbol = cleanSymbol(h);
                   
                   return (
@@ -1445,10 +1448,10 @@ export function PortfolioDashboardPage() {
               <SectionCard title="Top 10 Holdings Allocation" icon={<BarChart2 size={14} />}>
                 <ResponsiveContainer width="100%" height={210}>
                   <BarChart data={top10Holdings} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.12} />
-                    <XAxis type="number" unit="%" fontSize={9} fontWeight={600} stroke="#888" tickLine={false} domain={[0, dataMax => dataMax + 1]} />
-                    <YAxis dataKey="name" type="category" width={80} fontSize={9} fontWeight={700} stroke="#444" tickLine={false} />
-                    <Tooltip formatter={(value) => [`${value}%`, 'Weight']} />
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.5} />
+                    <XAxis type="number" unit="%" fontSize={9} fontWeight={600} stroke="#6b7280" tickLine={false} domain={[0, dataMax => dataMax + 1]} />
+                    <YAxis dataKey="name" type="category" width={80} fontSize={9} fontWeight={700} stroke="#4b5563" tickLine={false} />
+                    <Tooltip formatter={(val: any) => `${val.toFixed(2)}%`} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 6, color: '#111827' }} cursor={{ fill: '#f3f4f6' }} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                       {top10Holdings.map((entry, idx) => (
                         <Cell key={idx} fill={SECTOR_COLORS[entry.sector] || '#333'} />
@@ -1578,7 +1581,7 @@ export function PortfolioDashboardPage() {
                   <div>
                     {(() => {
                       const topHoldings = [...holdings].sort((a, b) => (b.current_value || b.buy_price * b.quantity) - (a.current_value || a.buy_price * a.quantity)).slice(0, 5);
-                      const top5Pct = topHoldings.reduce((s, h) => s + (h.current_value || h.buy_price * h.quantity), 0) / totalValue * 100;
+                      const top5Pct = topHoldings.reduce((s, h) => s + (h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)), 0) / totalValue * 100;
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                           <div style={{ background: top5Pct > 60 ? '#fef2f2' : '#f0fdf4', padding: 12, borderRadius: 8, border: `1px solid ${top5Pct > 60 ? '#fecaca' : '#bbf7d0'}` }}>
@@ -1740,7 +1743,8 @@ export function PortfolioDashboardPage() {
                           const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
                           const displayCompanyName = meta.companyName || h.company_name;
                           const isProfit = h.unrealised_pnl >= 0;
-                          const weight = totalValue > 0 ? (((h.current_value || h.buy_price * h.quantity) / totalValue) * 100) : 0;
+                          const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
+                          const weight = totalValue > 0 ? (val / totalValue) * 100 : 0;
                           const displaySymbol = cleanSymbol(h);
                           
                           return (

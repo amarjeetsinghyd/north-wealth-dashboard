@@ -22,23 +22,25 @@
   --color-primary-700: var(--gold-muted);
   --color-primary-900: #4A3510;
 
-  /* ── Pure Black / White surfaces ─────────────────────── */
-  --bg-base:        #000000;
-  --bg-surface:     #0a0a0a;
-  --bg-elevated:    #111111;
-  --bg-card:        #161616;
-  --bg-white-card:  #ffffff;
+  /* ── Light / White surfaces ─────────────────────── */
+  --bg-base:        #F8F9FA;
+  --bg-surface:     #FFFFFF;
+  --bg-elevated:    #FFFFFF;
+  --bg-card:        #FFFFFF;
+  --bg-white-card:  #FFFFFF;
+  --bg-sidebar:     #1A1A2E;
+  --bg-hover:       #F3F4F6;
 
   /* ── Text ─────────────────────────────────────────────── */
-  --text-primary:   #ffffff;
-  --text-secondary: #a0a0a0;
-  --text-muted:     #666666;
-  --text-inverse:   #000000;
+  --text-primary:   #111827;
+  --text-secondary: #4B5563;
+  --text-muted:     #9CA3AF;
+  --text-inverse:   #FFFFFF;
 
   /* ── Borders ───────────────────────────────────────────── */
-  --border-subtle:  rgba(255,255,255,0.06);
-  --border-default: rgba(255,255,255,0.12);
-  --border-strong:  rgba(255,255,255,0.24);
+  --border-subtle:  #F3F4F6;
+  --border-default: #E5E7EB;
+  --border-strong:  #D1D5DB;
   --border-gold:    var(--gold-border);
 
   /* ── Semantic (unchanged) ──────────────────────────────── */
@@ -97,9 +99,9 @@ button { font-family: var(--font-sans); cursor: pointer; border: none; backgroun
 input, select, textarea { font-family: var(--font-sans); }
 
 /* ─── Scrollbar ─────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #0a0a0a; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--gold-dark); }
 
 /* ─── Button utilities ──────────────────────────────────────────── */
@@ -127,18 +129,18 @@ input, select, textarea { font-family: var(--font-sans); }
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 11px 27px;
   background: transparent;
-  color: #ffffff;
+  color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
-  border: 1.5px solid rgba(255,255,255,0.8);
+  border: 1.5px solid var(--border-strong);
   border-radius: 6px;
   cursor: pointer;
-  transition: border-color 0.18s, background 0.18s;
+  transition: border-color 0.18s, background 0.18s, color 0.18s;
 }
 .btn-outline:hover {
   border-color: var(--gold);
-  color: var(--gold);
+  color: var(--gold-dark);
 }
 
 /* ─── White card (light section) ───────────────────────────────── */
