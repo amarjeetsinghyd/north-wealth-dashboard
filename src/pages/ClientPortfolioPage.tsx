@@ -63,7 +63,7 @@ export function ClientPortfolioPage() {
   
   // Asset Allocation editing
   const [isEditingAllocation, setIsEditingAllocation] = useState(false);
-  const [allocationInputs, setAllocationInputs] = useState({ equity: '', mf: '', etf: '', cash: '' });
+  const [allocationInputs, setAllocationInputs] = useState({ equity: '', mf: '', cash: '' });
   const [savingAllocation, setSavingAllocation] = useState(false);
   
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
