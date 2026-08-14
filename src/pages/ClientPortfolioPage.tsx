@@ -678,13 +678,13 @@ export function ClientPortfolioPage() {
     <div className="animate-fade-in">
 
       {/* Back + Header */}
-      <div style={{ marginBottom: 'var(--space-8)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <button
           onClick={() => navigate('/')}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             color: '#555555', fontSize: 13, background: 'none', border: 'none', cursor: 'pointer',
-            marginBottom: 20, padding: '6px 0', transition: 'color 0.15s',
+            padding: '6px 0', transition: 'color 0.15s',
           }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#C9A84C'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#555555'}
@@ -692,6 +692,23 @@ export function ClientPortfolioPage() {
           <ArrowLeft size={16} /> Back to Clients
         </button>
 
+        <button
+          onClick={() => setShowUploadModal(true)}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '8px 16px', background: 'var(--color-primary-600)',
+            border: 'none', borderRadius: 8, cursor: 'pointer',
+            fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 13, color: '#fff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'background 0.2s',
+          }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
+        >
+          <Upload size={16} /> Upload Statement
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 'var(--space-8)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
             <div style={{
@@ -748,18 +765,18 @@ export function ClientPortfolioPage() {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
               <button
-                onClick={() => setShowUploadModal(true)}
+                onClick={() => setIsRebalanceMode(!isRebalanceMode)}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '9px 16px', background: 'var(--color-primary-600)',
-                  border: 'none', borderRadius: 8, cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 13, color: '#fff',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)', transition: 'background 0.2s',
+                  padding: '9px 16px', background: isRebalanceMode ? '#ffffff' : '#8b5cf6',
+                  border: isRebalanceMode ? '1px solid #ddd' : 'none', borderRadius: 8, cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 13, color: isRebalanceMode ? '#0a0804' : '#fff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'background 0.2s',
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? '#f0f0f0' : '#7c3aed'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? '#ffffff' : '#8b5cf6'}
               >
-                <Upload size={16} /> Upload Statement
+                <TrendingUp size={16} /> {isRebalanceMode ? 'Close Rebalance' : 'Rebalance Portfolio'}
               </button>
               
               <button
