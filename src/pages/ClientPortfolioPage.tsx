@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload } from 'lucide-react';
+import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload, PlusCircle } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, updateDoc, addDoc, collection, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -944,20 +944,36 @@ export function ClientPortfolioPage() {
             </div>
 
 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              <button
-                onClick={() => refreshPrices()}
-                disabled={refreshing}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 14px', borderRadius: 8,
-                  background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold-border)',
-                  color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  transition: 'all 0.2s', opacity: refreshing ? 0.6 : 1
-                }}
-              >
-                <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                {refreshing ? 'Refreshing...' : 'Refresh Prices'}
-              </button>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <button
+                  onClick={() => setShowBuyModal(true)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 14px', borderRadius: 8,
+                    background: 'var(--color-primary-600)', border: 'none',
+                    color: '#ffffff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
+                >
+                  <PlusCircle size={14} /> Add Scrip
+                </button>
+                <button
+                  onClick={() => refreshPrices()}
+                  disabled={refreshing}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '8px 14px', borderRadius: 8,
+                    background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold-border)',
+                    color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    transition: 'all 0.2s', opacity: refreshing ? 0.6 : 1
+                  }}
+                >
+                  <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                  {refreshing ? 'Refreshing...' : 'Refresh Prices'}
+                </button>
+              </div>
               {priceAsOf && (
                 <span style={{ fontSize: 10, color: '#888', letterSpacing: '0.3px' }}>
                   Prices as of: {priceAsOf}
