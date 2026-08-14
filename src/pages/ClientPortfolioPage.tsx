@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, PlusCircle, Wallet, Landmark, Download, RefreshCw, Upload } from 'lucide-react';
+import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, updateDoc, addDoc, collection, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
