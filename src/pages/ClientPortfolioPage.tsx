@@ -1234,18 +1234,6 @@ export function ClientPortfolioPage() {
             >
               <Download size={15} /> Export
             </button>
-            <button
-              onClick={() => setShowBuyModal(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
-                background: 'var(--color-primary-600)', border: 'none', color: '#ffffff', fontSize: 13, fontWeight: 600,
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
-            >
-              <PlusCircle size={15} /> Add Holding
-            </button>
           </div>
         </div>
 
