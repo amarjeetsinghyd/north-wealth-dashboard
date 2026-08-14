@@ -563,6 +563,30 @@ export function ClientPortfolioPage() {
     summary.unrealisedPnLPct = (summary.unrealisedPnL / summary.totalInvested) * 100;
   }
 
+  // --- Asset Allocation & Cash Logic ---
+  let equityVal = 0;
+  let mfVal = 0;
+  let etfVal = 0;
+  let trackedMfInvested = 0;
+  
+  holdings.forEach(h => {
+    const meta = getStockMeta(h.nse_symbol, h.company_name);
+    const val = (h.current_value || h.buy_price * h.quantity);
+    const inv = (h.invested_amount || h.buy_price * h.quantity);
+    if (meta.assetClass === 'Mutual Fund') {
+      mfVal += val;
+      trackedMfInvested += inv;
+    }
+    else if (meta.assetClass === 'ETF') etfVal += val;
+    else equityVal += val;
+  });
+
+  const untrackedMf = Math.max(0, mutualFunds - trackedMfInvested);
+  const cashBalance = Math.max(0, totalCapital - summary.totalInvested - untrackedMf);
+  const totalMfCurrent = mfVal + untrackedMf; 
+  const totalPortfolioValue = equityVal + etfVal + totalMfCurrent + cashBalance;
+  // -------------------------------------
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-16)' }}>
@@ -583,7 +607,6 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const cashBalance = totalCapital - summary.totalInvested - mutualFunds;
   const gridCols = isRebalanceMode ? '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 80px' : '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr';
 
   const updateHoldingField = async (holdingId: string, field: string, val: string) => {
@@ -654,8 +677,13 @@ export function ClientPortfolioPage() {
                   </span>
                 )}
               </p>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#16a34a', fontWeight: 600, marginTop: 8 }}>
+                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', boxShadow: '0 0 8px #16a34a' }}></span>
+                Prices automatically updated daily between 7:45 PM and 10:45 PM IST
+              </div>
               
-              <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12 }}>
+              <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12 }}>
                 <div style={{ background: 'rgba(0,0,0,0.03)', padding: '4px 10px', borderRadius: 6 }}>
                   <span style={{ color: '#666', fontWeight: 600 }}>Billed: </span>
                   <span style={{ fontWeight: 800 }}>{fmtCurrency(client.billed_amount || 0)}</span>
@@ -709,21 +737,57 @@ export function ClientPortfolioPage() {
                 <span style={{ fontSize: 14 }}>✦</span>
               </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#16a34a', fontWeight: 600, marginTop: 4 }}>
-              <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', marginRight: 2, boxShadow: '0 0 8px #16a34a' }}></span>
-              Prices automatically updated daily between 7:45 PM and 10:45 PM IST
-            </div>
           </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-8)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         <SummaryCard title="Total Invested" value={fmtCurrencyKPI(summary.totalInvested)} icon={<IndianRupee size={16} />} accentColor="var(--color-primary-500)" />
         <SummaryCard title="Current Value" value={fmtCurrencyKPI(summary.currentValue)} icon={<BarChart3 size={16} />} accentColor="var(--color-accent-500)" trend={summary.currentValue >= summary.totalInvested ? 'up' : 'down'} />
         <SummaryCard title="Unrealised P&L" value={fmtCurrencyKPI(summary.unrealisedPnL)} subtitle={`${summary.unrealisedPnLPct >= 0 ? '+' : ''}${summary.unrealisedPnLPct.toFixed(2)}%`} icon={summary.unrealisedPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />} trend={summary.unrealisedPnL >= 0 ? 'up' : 'down'} accentColor={summary.unrealisedPnL >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)'} />
         <SummaryCard title="Realised P&L" value={fmtCurrencyKPI(summary.realisedPnL)} icon={summary.realisedPnL >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />} trend={summary.realisedPnL >= 0 ? 'up' : summary.realisedPnL < 0 ? 'down' : 'neutral'} accentColor={summary.realisedPnL >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)'} />
-        <SummaryCard title="Free Cash" value={fmtCurrencyKPI(Math.max(0, (client.total_capital || 0) - summary.totalInvested))} icon={<Wallet size={16} />} accentColor="#C9A84C" />
+        <SummaryCard title="Free Cash" value={fmtCurrencyKPI(cashBalance)} icon={<Wallet size={16} />} accentColor="#C9A84C" />
+      </div>
+
+      {/* Asset Allocation Bar */}
+      <div style={{ 
+        background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: '16px 20px', 
+        border: '1px solid rgba(0,0,0,0.06)', marginBottom: 'var(--space-8)',
+        display: 'flex', flexDirection: 'column', gap: 12
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Asset Allocation</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#C9A84C' }}>Portfolio Value: {fmtCurrency(totalPortfolioValue)}</div>
+        </div>
+        
+        {/* Progress Bar */}
+        <div style={{ width: '100%', height: 8, borderRadius: 999, display: 'flex', overflow: 'hidden', background: 'rgba(0,0,0,0.05)' }}>
+          {totalPortfolioValue > 0 && (
+            <>
+              <div style={{ width: `${(equityVal / totalPortfolioValue) * 100}%`, background: '#3b82f6', transition: 'width 0.5s' }} title="Equity" />
+              <div style={{ width: `${(totalMfCurrent / totalPortfolioValue) * 100}%`, background: '#f59e0b', transition: 'width 0.5s' }} title="Mutual Funds" />
+              <div style={{ width: `${(etfVal / totalPortfolioValue) * 100}%`, background: '#8b5cf6', transition: 'width 0.5s' }} title="ETF" />
+              <div style={{ width: `${(cashBalance / totalPortfolioValue) * 100}%`, background: '#10b981', transition: 'width 0.5s' }} title="Free Cash" />
+            </>
+          )}
+        </div>
+        
+        {/* Legends */}
+        <div style={{ display: 'flex', gap: 24, fontSize: 12, fontWeight: 600, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#3b82f6' }} /> Equity: {fmtCurrency(equityVal)} ({(equityVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b' }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b' }} /> Mutual Funds: {fmtCurrency(totalMfCurrent)} ({(totalMfCurrent / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8b5cf6' }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#8b5cf6' }} /> ETF: {fmtCurrency(etfVal)} ({(etfVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981' }} /> Free Cash: {fmtCurrency(cashBalance)} ({(cashBalance / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+          </div>
+        </div>
       </div>
 
       {/* ── Rebalancing Capital Panel ───────────────────────────────────── */}
