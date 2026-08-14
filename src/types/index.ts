@@ -10,6 +10,10 @@ export interface Client {
   billed_amount?: number;
   amount_paid?: number;
   risk_profile?: string;
+  asset_equity?: number;
+  asset_mutual_funds?: number;
+  asset_etf?: number;
+  asset_free_cash?: number;
   created_at: string;
 }
 

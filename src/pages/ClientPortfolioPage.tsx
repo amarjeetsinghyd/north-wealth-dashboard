@@ -61,6 +61,11 @@ export function ClientPortfolioPage() {
   const [editingDate, setEditingDate] = useState(false);
   const [newDate, setNewDate] = useState('');
   
+  // Asset Allocation editing
+  const [isEditingAllocation, setIsEditingAllocation] = useState(false);
+  const [allocationInputs, setAllocationInputs] = useState({ equity: '', mf: '', etf: '', cash: '' });
+  const [savingAllocation, setSavingAllocation] = useState(false);
+  
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [stockSearch, setStockSearch] = useState('');
@@ -357,6 +362,34 @@ export function ClientPortfolioPage() {
     }
   };
 
+  const saveAllocation = async () => {
+    if (!id || !client) return;
+    setSavingAllocation(true);
+    try {
+      const updates: any = {};
+      if (allocationInputs.equity.trim() !== '') updates.asset_equity = parseFloat(allocationInputs.equity);
+      else updates.asset_equity = null;
+      
+      if (allocationInputs.mf.trim() !== '') updates.asset_mutual_funds = parseFloat(allocationInputs.mf);
+      else updates.asset_mutual_funds = null;
+      
+      if (allocationInputs.etf.trim() !== '') updates.asset_etf = parseFloat(allocationInputs.etf);
+      else updates.asset_etf = null;
+      
+      if (allocationInputs.cash.trim() !== '') updates.asset_free_cash = parseFloat(allocationInputs.cash);
+      else updates.asset_free_cash = null;
+
+      await updateDoc(doc(db, 'clients', id), updates);
+      setIsEditingAllocation(false);
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save allocation values');
+    } finally {
+      setSavingAllocation(false);
+    }
+  };
+
   const saveBuyPrice = async (holdingId: string) => {
     const newPrice = parseFloat(editBuyPriceVal);
     if (!newPrice || newPrice <= 0) {
@@ -568,9 +601,9 @@ export function ClientPortfolioPage() {
   }
 
   // --- Asset Allocation & Cash Logic ---
-  let equityVal = 0;
-  let mfVal = 0;
-  let etfVal = 0;
+  let calcEquityVal = 0;
+  let calcMfVal = 0;
+  let calcEtfVal = 0;
   let trackedMfInvested = 0;
   
   holdings.forEach(h => {
@@ -578,16 +611,24 @@ export function ClientPortfolioPage() {
     const val = (h.current_value || h.buy_price * h.quantity);
     const inv = (h.invested_amount || h.buy_price * h.quantity);
     if (meta.assetClass === 'Mutual Fund') {
-      mfVal += val;
+      calcMfVal += val;
       trackedMfInvested += inv;
     }
-    else if (meta.assetClass === 'ETF') etfVal += val;
-    else equityVal += val;
+    else if (meta.assetClass === 'ETF') calcEtfVal += val;
+    else calcEquityVal += val;
   });
 
   const untrackedMf = Math.max(0, mutualFunds - trackedMfInvested);
-  const cashBalance = Math.max(0, totalCapital - summary.totalInvested - untrackedMf);
-  const totalMfCurrent = mfVal + untrackedMf; 
+  
+  const calculatedMfCurrent = calcMfVal + untrackedMf; 
+  const calculatedCashBalance = Math.max(0, totalCapital - summary.totalInvested - untrackedMf);
+
+  // Apply manual overrides if present
+  const equityVal = client?.asset_equity !== undefined && client.asset_equity !== null ? client.asset_equity : calcEquityVal;
+  const etfVal = client?.asset_etf !== undefined && client.asset_etf !== null ? client.asset_etf : calcEtfVal;
+  const totalMfCurrent = client?.asset_mutual_funds !== undefined && client.asset_mutual_funds !== null ? client.asset_mutual_funds : calculatedMfCurrent;
+  const cashBalance = client?.asset_free_cash !== undefined && client.asset_free_cash !== null ? client.asset_free_cash : calculatedCashBalance;
+
   const totalPortfolioValue = equityVal + etfVal + totalMfCurrent + cashBalance;
   // -------------------------------------
 
@@ -793,20 +834,70 @@ export function ClientPortfolioPage() {
         </div>
         
         {/* Legends */}
-        <div style={{ display: 'flex', gap: 24, fontSize: 12, fontWeight: 600, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#3b82f6' }} /> Equity: {fmtCurrency(equityVal)} ({(equityVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 24, fontSize: 12, fontWeight: 600, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#3b82f6' }} /> Equity: {fmtCurrency(equityVal)} ({(equityVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b' }} /> Mutual Funds: {fmtCurrency(totalMfCurrent)} ({(totalMfCurrent / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8b5cf6' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#8b5cf6' }} /> ETF: {fmtCurrency(etfVal)} ({(etfVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981' }} /> Free Cash: {fmtCurrency(cashBalance)} ({(cashBalance / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b' }} /> Mutual Funds: {fmtCurrency(totalMfCurrent)} ({(totalMfCurrent / totalPortfolioValue * 100 || 0).toFixed(1)}%)
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#8b5cf6' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#8b5cf6' }} /> ETF: {fmtCurrency(etfVal)} ({(etfVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981' }} /> Free Cash: {fmtCurrency(cashBalance)} ({(cashBalance / totalPortfolioValue * 100 || 0).toFixed(1)}%)
-          </div>
+
+          <button onClick={() => {
+              setAllocationInputs({
+                equity: client?.asset_equity !== undefined && client?.asset_equity !== null ? String(client.asset_equity) : '',
+                mf: client?.asset_mutual_funds !== undefined && client?.asset_mutual_funds !== null ? String(client.asset_mutual_funds) : '',
+                etf: client?.asset_etf !== undefined && client?.asset_etf !== null ? String(client.asset_etf) : '',
+                cash: client?.asset_free_cash !== undefined && client?.asset_free_cash !== null ? String(client.asset_free_cash) : ''
+              });
+              setIsEditingAllocation(!isEditingAllocation);
+            }} 
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#888', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', padding: 0 }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#3b82f6'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888'}
+          >
+            <Pencil size={12} /> {isEditingAllocation ? 'Close' : 'Update'}
+          </button>
         </div>
+
+        {isEditingAllocation && (
+          <div style={{ background: 'rgba(0,0,0,0.03)', padding: '16px 20px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', marginTop: 8, animation: 'fadeIn 0.2s ease forwards' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              Override automatic calculation with manual values (leave blank to auto-calculate):
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', display: 'block', marginBottom: 6 }}>Equity (₹)</label>
+                <input type="number" value={allocationInputs.equity} onChange={e => setAllocationInputs(prev => ({...prev, equity: e.target.value}))} placeholder="Auto" style={{ width: '100%', padding: '8px 12px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-default)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = '#3b82f6'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#f59e0b', display: 'block', marginBottom: 6 }}>Mutual Funds (₹)</label>
+                <input type="number" value={allocationInputs.mf} onChange={e => setAllocationInputs(prev => ({...prev, mf: e.target.value}))} placeholder="Auto" style={{ width: '100%', padding: '8px 12px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-default)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = '#f59e0b'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#8b5cf6', display: 'block', marginBottom: 6 }}>ETF (₹)</label>
+                <input type="number" value={allocationInputs.etf} onChange={e => setAllocationInputs(prev => ({...prev, etf: e.target.value}))} placeholder="Auto" style={{ width: '100%', padding: '8px 12px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-default)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = '#8b5cf6'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#10b981', display: 'block', marginBottom: 6 }}>Free Cash (₹)</label>
+                <input type="number" value={allocationInputs.cash} onChange={e => setAllocationInputs(prev => ({...prev, cash: e.target.value}))} placeholder="Auto" style={{ width: '100%', padding: '8px 12px', fontSize: 13, borderRadius: 6, border: '1px solid var(--border-default)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = '#10b981'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button onClick={() => setIsEditingAllocation(false)} style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={saveAllocation} disabled={savingAllocation} style={{ padding: '8px 20px', fontSize: 13, fontWeight: 600, background: '#3b82f6', color: 'white', border: 'none', borderRadius: 6, cursor: savingAllocation ? 'not-allowed' : 'pointer', opacity: savingAllocation ? 0.7 : 1 }}>
+                {savingAllocation ? 'Saving...' : 'Save Allocation'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Rebalancing Capital Panel ───────────────────────────────────── */}
