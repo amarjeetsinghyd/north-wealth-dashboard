@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, PlusCircle, Wallet, Landmark, Download, RefreshCw } from 'lucide-react';
+import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, PlusCircle, Wallet, Landmark, Download, RefreshCw, Upload } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, updateDoc, addDoc, collection, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -1424,6 +1424,21 @@ export function ClientPortfolioPage() {
               <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Add New Holding</h2>
               <button onClick={() => setShowBuyModal(false)} style={{ width: 32, height: 32, borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer' }}><XIcon size={18} /></button>
             </div>
+            <div style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>NSE Symbol *</label>
+                <input value={nseSymbol} onChange={e => setNseSymbol(e.target.value.toUpperCase())} placeholder="e.g. RELIANCE" style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 'var(--text-base)', outline: 'none', transition: 'border-color 0.15s' }} onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Quantity *</label>
+                  <input type="number" value={buyQuantity} onChange={e => setBuyQuantity(e.target.value)} placeholder="0" style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 'var(--text-base)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 6 }}>Buy Price (₹) *</label>
+                  <input type="number" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} placeholder="0.00" style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 'var(--text-base)', outline: 'none' }} onFocus={e => (e.target as HTMLElement).style.borderColor = 'var(--color-primary-500)'} onBlur={e => (e.target as HTMLElement).style.borderColor = 'var(--border-default)'} />
+                </div>
+              </div>
               {buyPrice && buyQuantity && (
                 <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3) var(--space-4)', fontSize: 'var(--text-sm)', color: 'var(--color-primary-400)' }}>
                   Invested Amount: ₹{(parseFloat(buyPrice || '0') * parseFloat(buyQuantity || '0')).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
@@ -1474,6 +1489,18 @@ export function ClientPortfolioPage() {
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Upload Statement Modal */}
+      {showUploadModal && client && (
+        <AddClientModal
+          existingClient={client}
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={() => {
+            setShowUploadModal(false);
+            load();
+          }}
+        />
       )}
     </div>
   );
