@@ -736,11 +736,6 @@ export function ClientPortfolioPage() {
                   </span>
                 )}
               </p>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#16a34a', fontWeight: 600, marginTop: 8 }}>
-                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', boxShadow: '0 0 8px #16a34a' }}></span>
-                Prices automatically updated daily between 7:45 PM and 10:45 PM IST
-              </div>
               
               <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12 }}>
                 <div style={{ background: 'rgba(0,0,0,0.03)', padding: '4px 10px', borderRadius: 6 }}>
@@ -810,6 +805,10 @@ export function ClientPortfolioPage() {
                 <span>Portfolio Intelligence</span>
                 <span style={{ fontSize: 14 }}>✦</span>
               </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#16a34a', fontWeight: 400, marginTop: 4, opacity: 0.8 }}>
+              <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#16a34a', boxShadow: '0 0 6px #16a34a' }}></span>
+              Prices auto-updated daily between 7:45 PM and 10:45 PM IST
             </div>
           </div>
         </div>
@@ -1157,10 +1156,6 @@ export function ClientPortfolioPage() {
                   Prices last updated: {new Date(Math.max(...holdings.filter(h => h.last_price_update).map(h => new Date(h.last_price_update!).getTime()))).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              <span style={{ fontSize: 'var(--text-xs)', color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontWeight: 600 }}>
-                <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#16a34a', boxShadow: '0 0 6px #16a34a' }}></span>
-                Prices auto-updated daily between 7:45 PM and 10:45 PM IST
-              </span>
             </div>
             <div>
               <input
