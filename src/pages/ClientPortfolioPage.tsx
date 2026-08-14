@@ -1258,18 +1258,6 @@ export function ClientPortfolioPage() {
             >
               <PlusCircle size={15} /> Add Holding
             </button>
-            <button
-              onClick={() => setIsRebalanceMode(!isRebalanceMode)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
-                background: isRebalanceMode ? '#ffffff' : '#C9A84C', border: 'none', color: '#000000', fontSize: 13, fontWeight: 800,
-                cursor: 'pointer', transition: 'all 0.15s', letterSpacing: '0.2px',
-              }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? '#f0f0f0' : '#DFC06A'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? '#ffffff' : '#C9A84C'}
-            >
-              {isRebalanceMode ? 'Done Rebalancing' : 'Rebalance Portfolio'}
-            </button>
           </div>
         </div>
 
