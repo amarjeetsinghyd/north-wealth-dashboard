@@ -9,46 +9,30 @@ interface SummaryCardProps {
 
 export function SummaryCard({ title, value, subtitle, icon, trend, accentColor = 'var(--gold)' }: SummaryCardProps) {
   const trendColor =
-    trend === 'up' ? 'var(--color-success-500)' :
-    trend === 'down' ? 'var(--color-error-500)' :
+    trend === 'up' ? '#16a34a' :
+    trend === 'down' ? '#ef4444' :
     'var(--text-muted)';
 
   const valueColor = trend ? trendColor : 'var(--text-primary)';
 
   return (
     <div
+      className="glass-card glass-card-interactive"
       style={{
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-default)',
-        borderRadius: 12,
         padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
-        transition: 'border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease',
         cursor: 'default',
         position: 'relative',
         overflow: 'hidden',
-        boxShadow: 'var(--shadow-sm)',
-      }}
-      onMouseEnter={e => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.borderColor = 'var(--gold)';
-        el.style.transform = 'translateY(-2px)';
-        el.style.boxShadow = 'var(--shadow-md)';
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.borderColor = 'var(--border-default)';
-        el.style.transform = 'translateY(0)';
-        el.style.boxShadow = 'var(--shadow-sm)';
       }}
     >
-      {/* Top accent line */}
+      {/* Top ambient accent glow */}
       <div style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: 3,
         background: `linear-gradient(90deg, transparent, ${accentColor}, transparent)`,
-        opacity: 0.8,
+        opacity: 0.85,
       }} />
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -59,9 +43,11 @@ export function SummaryCard({ title, value, subtitle, icon, trend, accentColor =
           {title}
         </span>
         <div style={{
-          width: 34, height: 34, borderRadius: 8,
-          background: 'var(--gold-subtle)',
-          border: '1px solid var(--border-gold)',
+          width: 34, height: 34, borderRadius: 10,
+          background: 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(6px)',
+          border: '1px solid rgba(229, 231, 235, 0.8)',
+          boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: accentColor,
         }}>
@@ -71,16 +57,16 @@ export function SummaryCard({ title, value, subtitle, icon, trend, accentColor =
 
       <div>
         <div style={{
-          fontSize: 26, fontWeight: 800,
+          fontSize: 24, fontWeight: 700,
           color: valueColor,
-          letterSpacing: '-0.5px', lineHeight: 1.1,
+          letterSpacing: '-0.4px', lineHeight: 1.1,
         }}>
           {value}
         </div>
         {subtitle && (
           <div style={{
-            fontSize: 13, color: trend ? trendColor : 'var(--text-secondary)',
-            marginTop: 5, fontWeight: 600,
+            fontSize: 12, color: trend ? trendColor : 'var(--text-secondary)',
+            marginTop: 4, fontWeight: 600,
           }}>
             {subtitle}
           </div>

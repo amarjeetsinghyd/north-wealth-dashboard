@@ -18,10 +18,12 @@ export function Layout({ children }: LayoutProps) {
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)' }}>
       {/* ── Navigation ─────────────────────────────────────────────── */}
       <header style={{
-        background: 'var(--bg-surface)',
-        borderBottom: '1px solid var(--border-default)',
+        background: 'rgba(255, 255, 255, 0.78)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(229, 231, 235, 0.65)',
         position: 'sticky', top: 0, zIndex: 100,
-        boxShadow: 'var(--shadow-sm)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
       }}>
         <div style={{
           maxWidth: 1400, margin: '0 auto',
@@ -33,18 +35,25 @@ export function Layout({ children }: LayoutProps) {
             <img
               src={NorthWealthLogo}
               alt="North Wealth"
-              style={{ height: 48, width: 'auto', borderRadius: 0 }}
+              style={{ height: 46, width: 'auto', borderRadius: 0, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.05))' }}
             />
           </Link>
 
           {/* Nav links (center) */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <nav style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'rgba(243, 244, 246, 0.7)',
+            padding: '4px 6px',
+            borderRadius: 12,
+            border: '1px solid rgba(229, 231, 235, 0.8)',
+            backdropFilter: 'blur(8px)',
+          }}>
             <NavLink
-              to="/" label="Clients" icon={<Users size={14} />}
+              to="/" label="Clients" icon={<Users size={15} />}
               active={isActive('/')}
             />
             <NavLink
-              to="/analytics" label="Analytics" icon={<BarChart2 size={14} />}
+              to="/analytics" label="Analytics" icon={<BarChart2 size={15} />}
               active={isActive('/analytics')}
             />
           </nav>
@@ -53,49 +62,17 @@ export function Layout({ children }: LayoutProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
               onClick={handleLogout}
+              className="btn-glass-light"
               style={{
-                padding: '8px 18px',
-                background: 'transparent', border: 'none',
-                color: 'var(--text-secondary)', fontSize: 14, fontWeight: 500,
-                cursor: 'pointer', borderRadius: 6,
-                transition: 'color 0.15s',
+                padding: '7px 16px',
+                fontSize: 13, fontWeight: 500,
+                color: 'var(--text-secondary)',
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--gold-dark)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <LogOut size={14} /> Logout
               </span>
             </button>
-
-            {/* Dashboard outline-gold button */}
-            <Link
-              to="/"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '8px 20px',
-                background: 'transparent',
-                border: '1.5px solid var(--border-strong)',
-                borderRadius: 6,
-                color: 'var(--text-secondary)',
-                fontSize: 14, fontWeight: 700,
-                textDecoration: 'none',
-                transition: 'all 0.15s',
-                letterSpacing: '0.2px',
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLElement;
-                el.style.borderColor = 'var(--gold)';
-                el.style.color = 'var(--gold-dark)';
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLElement;
-                el.style.borderColor = 'var(--border-strong)';
-                el.style.color = 'var(--text-secondary)';
-              }}
-            >
-              Clients
-            </Link>
           </div>
         </div>
       </header>
@@ -136,23 +113,28 @@ function NavLink({
       to={to}
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        padding: '7px 16px',
-        borderRadius: 6,
-        fontSize: 14, fontWeight: 500,
-        color: active ? 'var(--gold-dark)' : 'var(--text-secondary)',
-        background: active ? 'var(--gold-subtle)' : 'transparent',
+        padding: '6px 16px',
+        borderRadius: 8,
+        fontSize: 13, fontWeight: active ? 600 : 500,
+        color: active ? '#ffffff' : 'var(--text-secondary)',
+        background: active ? 'linear-gradient(135deg, rgba(201,168,76,0.95), rgba(160,124,45,0.95))' : 'transparent',
+        boxShadow: active ? '0 2px 8px rgba(201,168,76,0.35), inset 0 1px 0 rgba(255,255,255,0.4)' : 'none',
         textDecoration: 'none',
-        transition: 'all 0.15s',
+        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         letterSpacing: '0.1px',
       }}
       onMouseEnter={e => {
         if (!active) {
-          (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)';
+          const el = e.currentTarget as HTMLElement;
+          el.style.background = 'rgba(255, 255, 255, 0.9)';
+          el.style.color = 'var(--text-primary)';
         }
       }}
       onMouseLeave={e => {
         if (!active) {
-          (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)';
+          const el = e.currentTarget as HTMLElement;
+          el.style.background = 'transparent';
+          el.style.color = 'var(--text-secondary)';
         }
       }}
     >

@@ -52,19 +52,8 @@ export function ClientsPage() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '11px 22px',
-            borderRadius: 8,
-            background: 'var(--gold)', color: '#000000',
-            fontSize: 14, fontWeight: 800,
-            border: 'none', cursor: 'pointer',
-            transition: 'background 0.15s, transform 0.15s',
-            flexShrink: 0,
-            letterSpacing: '0.2px',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--gold-light)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--gold)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+          className="btn-glass-gold"
+          style={{ padding: '10px 22px', fontSize: 13 }}
         >
           <Plus size={16} /> Add New Client
         </button>
@@ -80,23 +69,20 @@ export function ClientsPage() {
           { label: 'Active Portfolios', value: clients.length.toString(), icon: <TrendingUp size={16} />, color: '#22c55e' },
           { label: 'Service', value: 'Rebalancing', icon: <Calendar size={16} />, color: '#C9A84C' },
         ].map(stat => (
-          <div key={stat.label} style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 12,
-            padding: '18px 20px',
+          <div key={stat.label} className="glass-card glass-card-interactive" style={{
+            padding: '16px 20px',
             display: 'flex', alignItems: 'center', gap: 14,
-            boxShadow: 'var(--shadow-sm)'
           }}>
             <div style={{
-              width: 38, height: 38, borderRadius: 9,
+              width: 38, height: 38, borderRadius: 10,
               background: `${stat.color}15`,
               border: `1px solid ${stat.color}30`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: stat.color, flexShrink: 0,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
             }}>{stat.icon}</div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{stat.value}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>{stat.label}</div>
             </div>
           </div>
@@ -109,10 +95,9 @@ export function ClientsPage() {
           <Spinner size={32} />
         </div>
       ) : clients.length === 0 ? (
-        <div style={{
-          background: 'var(--bg-surface)',
+        <div className="glass-card" style={{
           border: '2px dashed var(--border-strong)',
-          borderRadius: 16, padding: 'var(--space-16)', textAlign: 'center',
+          padding: 'var(--space-16)', textAlign: 'center',
         }}>
           <User size={48} style={{ color: 'var(--text-muted)', margin: '0 auto var(--space-4)', display: 'block' }} />
           <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 18 }}>No clients yet</p>
@@ -121,12 +106,8 @@ export function ClientsPage() {
           </p>
           <button
             onClick={() => setShowModal(true)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '11px 22px', borderRadius: 8,
-              background: 'var(--gold)', color: '#000000',
-              fontSize: 14, fontWeight: 800, border: 'none', cursor: 'pointer',
-            }}
+            className="btn-glass-gold"
+            style={{ padding: '11px 24px' }}
           >
             <Plus size={16} /> Add First Client
           </button>
@@ -150,25 +131,13 @@ export function ClientsPage() {
             <div
               key={client.id}
               onClick={() => navigate(`/client/${client.id}`)}
-              className="animate-fade-in"
+              className="glass-card glass-card-interactive animate-fade-in"
               style={{
                 animationDelay: `${i * 40}ms`,
                 display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto',
                 gap: 'var(--space-4)', alignItems: 'center',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 12,
                 padding: '16px 20px',
-                cursor: 'pointer', transition: 'all 0.15s ease',
-                boxShadow: 'var(--shadow-sm)'
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--gold)';
-                (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)';
-                (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)';
+                cursor: 'pointer',
               }}
             >
               {/* Name */}
@@ -176,12 +145,13 @@ export function ClientsPage() {
                 <div style={{
                   width: 40, height: 40,
                   borderRadius: 10,
-                  background: `var(--gold-subtle)`,
-                  border: '1px solid var(--border-gold)',
+                  background: `rgba(201,168,76,0.1)`,
+                  border: '1px solid rgba(201,168,76,0.25)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 800, fontSize: 17,
+                  fontWeight: 700, fontSize: 16,
                   color: 'var(--gold-dark)',
                   flexShrink: 0,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                 }}>
                   {client.name.charAt(0).toUpperCase()}
                 </div>
@@ -198,16 +168,12 @@ export function ClientsPage() {
 
               {/* Status */}
               <div>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '3px 10px',
-                  borderRadius: 'var(--radius-full)',
-                  background: 'rgba(34, 197, 94, 0.1)',
-                  color: 'var(--color-success-500)',
-                  fontSize: 'var(--text-xs)',
+                <span className="glass-pill" style={{
+                  color: '#16a34a',
                   fontWeight: 600,
+                  fontSize: 12,
                 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--color-success-500)' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
                   Active
                 </span>
               </div>

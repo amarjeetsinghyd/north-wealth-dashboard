@@ -774,17 +774,10 @@ export function ClientPortfolioPage() {
 
         <button
           onClick={() => setShowUploadModal(true)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '8px 16px', background: 'var(--color-primary-600)',
-            border: 'none', borderRadius: 8, cursor: 'pointer',
-            fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 13, color: '#fff',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'background 0.2s',
-          }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
+          className="btn-glass-gold"
+          style={{ padding: '8px 18px', fontSize: 13 }}
         >
-          <Upload size={16} /> Upload Statement
+          <Upload size={15} /> Upload Statement
         </button>
       </div>
 
@@ -855,45 +848,26 @@ export function ClientPortfolioPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 onClick={() => setIsRebalanceMode(!isRebalanceMode)}
+                className="btn-glass-light"
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '8px 15px', background: isRebalanceMode ? 'var(--bg-surface)' : 'rgba(139, 92, 246, 0.12)',
-                  border: isRebalanceMode ? '1px solid var(--border-default)' : '1px solid rgba(139, 92, 246, 0.3)',
-                  borderRadius: 8, cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 13,
-                  color: isRebalanceMode ? 'var(--text-primary)' : '#a78bfa',
-                  transition: 'all 0.2s',
+                  padding: '7px 16px', fontSize: 13,
+                  color: isRebalanceMode ? 'var(--gold-dark)' : 'var(--text-secondary)',
+                  borderColor: isRebalanceMode ? 'var(--gold)' : undefined,
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? 'var(--bg-hover)' : 'rgba(139, 92, 246, 0.2)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? 'var(--bg-surface)' : 'rgba(139, 92, 246, 0.12)'}
               >
-                <TrendingUp size={15} /> {isRebalanceMode ? 'Close Rebalance' : 'Rebalance Portfolio'}
+                <TrendingUp size={14} /> {isRebalanceMode ? 'Close Rebalance' : 'Rebalance Portfolio'}
               </button>
               
               <button
                 onClick={() => navigate(`/client/${id}/dashboard`)}
+                className="btn-glass-gold"
                 style={{
-                  position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '8px 18px', background: 'linear-gradient(135deg, #D4AF37 0%, #F5D078 40%, #C9A84C 70%, #D4AF37 100%)',
-                  backgroundSize: '200% auto', border: 'none', borderRadius: 999, cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 11, color: '#0a0804',
+                  padding: '7px 18px', borderRadius: 999,
+                  fontSize: 11, fontWeight: 700,
                   letterSpacing: '1px', textTransform: 'uppercase',
-                  boxShadow: '0 2px 10px rgba(212,175,55,0.25)',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  overflow: 'hidden',
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.transform = 'scale(1.03) translateY(-1px)';
-                  el.style.boxShadow = '0 4px 16px rgba(212,175,55,0.4)';
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.transform = 'scale(1) translateY(0)';
-                  el.style.boxShadow = '0 2px 10px rgba(212,175,55,0.25)';
                 }}
               >
                 <span>✦</span>
@@ -901,8 +875,8 @@ export function ClientPortfolioPage() {
                 <span>✦</span>
               </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-muted)', fontWeight: 400, marginTop: 4 }}>
-              <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#16a34a' }}></span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 4 }}>
+              <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: '#16a34a' }}></span>
               Prices auto-updated daily between 7:45 PM and 10:45 PM IST
             </div>
           </div>
@@ -1044,35 +1018,23 @@ export function ClientPortfolioPage() {
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <button
                   onClick={() => setShowBuyModal(true)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '8px 14px', borderRadius: 8,
-                    background: 'var(--color-primary-600)', border: 'none',
-                    color: '#ffffff', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-500)'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--color-primary-600)'}
+                  className="btn-glass-gold"
+                  style={{ padding: '7px 14px', fontSize: 12 }}
                 >
                   <PlusCircle size={14} /> Add Scrip
                 </button>
                 <button
                   onClick={() => refreshPrices()}
                   disabled={refreshing}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '8px 14px', borderRadius: 8,
-                    background: 'rgba(201,168,76,0.1)', border: '1px solid var(--gold-border)',
-                    color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    transition: 'all 0.2s', opacity: refreshing ? 0.6 : 1
-                  }}
+                  className="btn-glass-light"
+                  style={{ padding: '7px 14px', fontSize: 12, opacity: refreshing ? 0.6 : 1 }}
                 >
                   <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
                   {refreshing ? 'Refreshing...' : 'Refresh Prices'}
                 </button>
               </div>
               {priceAsOf && (
-                <span style={{ fontSize: 10, color: '#888', letterSpacing: '0.3px' }}>
+                <span style={{ fontSize: 11, color: '#888', letterSpacing: '0.3px' }}>
                   Prices as of: {priceAsOf}
                 </span>
               )}

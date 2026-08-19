@@ -91,7 +91,7 @@ export function BulkOrderWizardModal({
 
   const calculatedOrders = useMemo(() => {
     const orders: CalculatedOrder[] = [];
-    const p = effectivePrice > 0 ? effectivePrice : 1; // Fallback price for preview before price entered
+    const p = effectivePrice > 0 ? effectivePrice : 1;
 
     targetClients.forEach(c => {
       if (!selectedClients.has(c.id)) return;
@@ -107,7 +107,6 @@ export function BulkOrderWizardModal({
           const alloc = parseFloat(allocationPct) || 0;
           budget = freeCash * (alloc / 100);
           qty = p > 0 ? Math.floor(budget / p) : 0;
-          // Fallback if free cash is 0 or low: let default be 1 or custom
           if (qty <= 0 && freeCash === 0) {
             qty = 1;
             budget = qty * p;
@@ -151,7 +150,6 @@ export function BulkOrderWizardModal({
 
       for (const order of calculatedOrders) {
         if (mode === 'buy') {
-          // Check if client already holds this scrip
           const qSnap = await getDocs(
             query(
               collection(db, 'holdings'),
@@ -219,7 +217,6 @@ export function BulkOrderWizardModal({
             created_at: batchDate,
           });
         } else {
-          // Sell logic
           if (!order.holding) continue;
           const h = order.holding;
           const totalVal = order.qty * p;
@@ -283,17 +280,25 @@ export function BulkOrderWizardModal({
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div className="animate-scale-up" style={{ background: 'var(--bg-elevated)', borderRadius: 16, width: '100%', maxWidth: 760, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+    <div className="glass-modal-backdrop">
+      <div className="glass-modal animate-scale-up" style={{ width: '100%', maxWidth: 760, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         
         {/* Header */}
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-surface)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{
+          padding: '18px 24px',
+          borderBottom: '1px solid rgba(229, 231, 235, 0.6)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: 'rgba(255, 255, 255, 0.65)',
+          backdropFilter: 'blur(8px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: mode === 'buy' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+              width: 36, height: 36, borderRadius: 10,
+              background: mode === 'buy' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
               color: mode === 'buy' ? '#16a34a' : '#ef4444',
+              border: `1px solid ${mode === 'buy' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             }}>
               {mode === 'buy' ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
             </div>
@@ -308,13 +313,15 @@ export function BulkOrderWizardModal({
               )}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}><X size={20} /></button>
+          <button onClick={onClose} style={{ background: 'rgba(0,0,0,0.05)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 6, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+            <X size={18} />
+          </button>
         </div>
 
         {/* Content */}
         <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
           {error && (
-            <div style={{ padding: 12, background: 'rgba(239,68,68,0.1)', color: '#ef4444', borderRadius: 8, marginBottom: 20, fontSize: 13, display: 'flex', gap: 8 }}>
+            <div style={{ padding: 12, background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, marginBottom: 20, fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
               <ShieldAlert size={16} /> {error}
             </div>
           )}
@@ -322,7 +329,7 @@ export function BulkOrderWizardModal({
           {/* STEP 1: Select Stock & Action */}
           {step === 'action' && (
             <div>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                 1. Select Action & Stock Symbol
               </h3>
               <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
@@ -330,11 +337,14 @@ export function BulkOrderWizardModal({
                   type="button"
                   onClick={() => setMode('buy')}
                   style={{
-                    flex: 1, padding: '14px 16px', borderRadius: 8,
-                    border: mode === 'buy' ? '2px solid #16a34a' : '1px solid var(--border-default)',
-                    background: mode === 'buy' ? 'rgba(34,197,94,0.08)' : 'transparent',
+                    flex: 1, padding: '14px 16px', borderRadius: 12,
+                    border: mode === 'buy' ? '2px solid #22c55e' : '1px solid rgba(229, 231, 235, 0.8)',
+                    background: mode === 'buy' ? 'rgba(34,197,94,0.09)' : 'rgba(255, 255, 255, 0.5)',
+                    backdropFilter: 'blur(8px)',
                     fontWeight: 600, color: mode === 'buy' ? '#16a34a' : 'var(--text-primary)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    boxShadow: mode === 'buy' ? '0 4px 15px rgba(34,197,94,0.15)' : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   <TrendingUp size={16} /> Buy / Add More Quantity
@@ -343,11 +353,14 @@ export function BulkOrderWizardModal({
                   type="button"
                   onClick={() => setMode('sell')}
                   style={{
-                    flex: 1, padding: '14px 16px', borderRadius: 8,
-                    border: mode === 'sell' ? '2px solid #ef4444' : '1px solid var(--border-default)',
-                    background: mode === 'sell' ? 'rgba(239,68,68,0.08)' : 'transparent',
+                    flex: 1, padding: '14px 16px', borderRadius: 12,
+                    border: mode === 'sell' ? '2px solid #ef4444' : '1px solid rgba(229, 231, 235, 0.8)',
+                    background: mode === 'sell' ? 'rgba(239,68,68,0.09)' : 'rgba(255, 255, 255, 0.5)',
+                    backdropFilter: 'blur(8px)',
                     fontWeight: 600, color: mode === 'sell' ? '#ef4444' : 'var(--text-primary)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    boxShadow: mode === 'sell' ? '0 4px 15px rgba(239,68,68,0.15)' : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   <TrendingDown size={16} /> Bulk Sell
@@ -355,17 +368,19 @@ export function BulkOrderWizardModal({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Stock Symbol (NSE / BSE)</label>
+                <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 6 }}>Stock Symbol (NSE / BSE)</label>
                 <input
                   type="text"
                   placeholder="Enter Stock Symbol (e.g. RELIANCE, NESTLEIND, HDFCBANK)"
                   value={symbol}
                   onChange={e => setSymbol(e.target.value.toUpperCase())}
-                  style={{ width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: 14 }}
+                  className="glass-input"
+                  style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', fontSize: 14 }}
                 />
                 {meta.companyName && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-                    Recognized: <strong style={{ color: 'var(--text-primary)' }}>{meta.companyName}</strong> • Sector: <strong>{meta.sector}</strong>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="glass-pill" style={{ color: 'var(--text-primary)' }}>Recognized: <strong>{meta.companyName}</strong></span>
+                    <span className="glass-pill" style={{ color: 'var(--gold-dark)' }}>Sector: <strong>{meta.sector}</strong></span>
                   </div>
                 )}
               </div>
@@ -374,11 +389,10 @@ export function BulkOrderWizardModal({
                 type="button"
                 disabled={!cleanSym}
                 onClick={() => setStep('clients')}
+                className="btn-glass-gold"
                 style={{
-                  width: '100%', padding: 12, background: 'var(--color-primary-600)', color: '#fff',
-                  borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 14,
+                  width: '100%', padding: 13, fontSize: 14,
                   cursor: cleanSym ? 'pointer' : 'not-allowed', opacity: cleanSym ? 1 : 0.5,
-                  transition: 'background 0.2s'
                 }}
               >
                 Next: Select Clients →
@@ -390,21 +404,22 @@ export function BulkOrderWizardModal({
           {step === 'clients' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                   2. Select Clients & Allocation
                 </h3>
                 <button
                   type="button"
                   onClick={() => setStep('action')}
-                  style={{ background: 'none', border: 'none', color: 'var(--color-primary-400)', fontSize: 12, cursor: 'pointer' }}
+                  className="btn-glass-light"
+                  style={{ padding: '4px 12px', fontSize: 12 }}
                 >
                   ← Change Symbol
                 </button>
               </div>
 
               {mode === 'buy' ? (
-                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                  <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                <div className="glass-card" style={{ padding: 16, marginBottom: 16, background: 'rgba(255, 255, 255, 0.65)' }}>
+                  <div style={{ display: 'flex', gap: 14, marginBottom: 12, flexWrap: 'wrap' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, fontWeight: buyAllocType === 'percent_cash' ? 600 : 400, color: 'var(--text-primary)' }}>
                       <input
                         type="radio"
@@ -436,8 +451,8 @@ export function BulkOrderWizardModal({
 
                   {buyAllocType === 'percent_cash' && (
                     <div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
-                        Free Cash % to deploy across clients (defaults to 1 share if Free Cash is ₹0):
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                        Free Cash % to deploy across clients (auto-allocates 1 share if Free Cash is ₹0):
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         {[5, 10, 15, 20, 25, 50, 100].map(pct => (
@@ -445,13 +460,8 @@ export function BulkOrderWizardModal({
                             key={pct}
                             type="button"
                             onClick={() => setAllocationPct(String(pct))}
-                            style={{
-                              padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                              border: allocationPct === String(pct) ? '1px solid var(--color-primary-500)' : '1px solid var(--border-subtle)',
-                              background: allocationPct === String(pct) ? 'var(--color-primary-600)' : 'var(--bg-elevated)',
-                              color: allocationPct === String(pct) ? '#ffffff' : 'var(--text-secondary)',
-                              fontWeight: 500
-                            }}
+                            className={allocationPct === String(pct) ? 'btn-glass-gold' : 'btn-glass-light'}
+                            style={{ padding: '4px 10px', fontSize: 12 }}
                           >
                             {pct}%
                           </button>
@@ -463,7 +473,8 @@ export function BulkOrderWizardModal({
                             max="100"
                             value={allocationPct}
                             onChange={e => setAllocationPct(e.target.value)}
-                            style={{ width: 55, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 12 }}
+                            className="glass-input"
+                            style={{ width: 55, padding: '4px 8px', fontSize: 12, textAlign: 'center' }}
                           />
                           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>%</span>
                         </div>
@@ -479,7 +490,8 @@ export function BulkOrderWizardModal({
                         min="1"
                         value={fixedQtyValue}
                         onChange={e => setFixedQtyValue(e.target.value)}
-                        style={{ width: 90, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 13 }}
+                        className="glass-input"
+                        style={{ width: 90, padding: '6px 10px', fontSize: 13, textAlign: 'center' }}
                       />
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>shares</span>
                     </div>
@@ -494,13 +506,14 @@ export function BulkOrderWizardModal({
                         step="500"
                         value={fixedAmountValue}
                         onChange={e => setFixedAmountValue(e.target.value)}
-                        style={{ width: 120, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 13 }}
+                        className="glass-input"
+                        style={{ width: 120, padding: '6px 10px', fontSize: 13 }}
                       />
                     </div>
                   )}
                 </div>
               ) : (
-                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+                <div className="glass-card" style={{ padding: 16, marginBottom: 16, background: 'rgba(255, 255, 255, 0.65)' }}>
                   <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>
                     Sell Percentage of Holding:
                   </div>
@@ -510,13 +523,8 @@ export function BulkOrderWizardModal({
                         key={pct}
                         type="button"
                         onClick={() => setSellPercentage(pct)}
-                        style={{
-                          padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-                          border: sellPercentage === pct ? '1px solid #ef4444' : '1px solid var(--border-subtle)',
-                          background: sellPercentage === pct ? '#ef4444' : 'var(--bg-elevated)',
-                          color: sellPercentage === pct ? '#ffffff' : 'var(--text-secondary)',
-                          fontWeight: 600
-                        }}
+                        className={sellPercentage === pct ? 'btn-glass-red' : 'btn-glass-light'}
+                        style={{ padding: '6px 14px', fontSize: 12 }}
                       >
                         {pct === 100 ? '100% (Full Exit)' : `${pct}%`}
                       </button>
@@ -525,27 +533,27 @@ export function BulkOrderWizardModal({
                 </div>
               )}
 
-              <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, maxHeight: 280, overflowY: 'auto' }}>
+              <div className="glass-card" style={{ maxHeight: 280, overflowY: 'auto', padding: 0 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-elevated)', zIndex: 1 }}>
-                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '8px 12px', width: 30 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(8px)', zIndex: 1 }}>
+                    <tr style={{ borderBottom: '1px solid rgba(229, 231, 235, 0.8)' }}>
+                      <th style={{ padding: '9px 12px', width: 30 }}>
                         <input
                           type="checkbox"
                           checked={selectedClients.size > 0 && selectedClients.size === targetClients.length}
                           onChange={toggleAll}
                         />
                       </th>
-                      <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>Client Name</th>
+                      <th style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>Client Name</th>
                       {mode === 'buy' ? (
                         <>
-                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Free Cash</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Target Shares</th>
+                          <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Free Cash</th>
+                          <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Target Shares</th>
                         </>
                       ) : (
                         <>
-                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Holding Qty</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Qty to Sell</th>
+                          <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Holding Qty</th>
+                          <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Qty to Sell</th>
                         </>
                       )}
                     </tr>
@@ -574,8 +582,8 @@ export function BulkOrderWizardModal({
                         <tr
                           key={c.id}
                           style={{
-                            borderBottom: '1px solid var(--border-subtle)',
-                            background: isSelected ? 'rgba(201,168,76,0.04)' : 'transparent',
+                            borderBottom: '1px solid rgba(229, 231, 235, 0.5)',
+                            background: isSelected ? 'rgba(201,168,76,0.06)' : 'transparent',
                             cursor: 'pointer'
                           }}
                           onClick={() => toggleClient(c.id)}
@@ -602,7 +610,8 @@ export function BulkOrderWizardModal({
                                     const val = parseInt(e.target.value, 10) || 0;
                                     setCustomClientQty(prev => ({ ...prev, [c.id]: val }));
                                   }}
-                                  style={{ width: 70, padding: '3px 6px', textAlign: 'right', borderRadius: 4, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: 12 }}
+                                  className="glass-input"
+                                  style={{ width: 70, padding: '3px 6px', textAlign: 'right', fontSize: 12 }}
                                 />
                               </td>
                             </>
@@ -621,7 +630,8 @@ export function BulkOrderWizardModal({
                                     const val = parseInt(e.target.value, 10) || 0;
                                     setCustomClientQty(prev => ({ ...prev, [c.id]: val }));
                                   }}
-                                  style={{ width: 70, padding: '3px 6px', textAlign: 'right', borderRadius: 4, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: '#ef4444', fontWeight: 600, fontSize: 12 }}
+                                  className="glass-input"
+                                  style={{ width: 70, padding: '3px 6px', textAlign: 'right', color: '#ef4444', fontWeight: 600, fontSize: 12 }}
                                 />
                               </td>
                             </>
@@ -637,11 +647,10 @@ export function BulkOrderWizardModal({
                 type="button"
                 disabled={selectedClients.size === 0}
                 onClick={() => setStep('price')}
+                className="btn-glass-gold"
                 style={{
-                  width: '100%', marginTop: 20, padding: 12, background: 'var(--color-primary-600)', color: '#fff',
-                  borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 14,
+                  width: '100%', marginTop: 20, padding: 13, fontSize: 14,
                   cursor: selectedClients.size > 0 ? 'pointer' : 'not-allowed', opacity: selectedClients.size > 0 ? 1 : 0.5,
-                  transition: 'background 0.2s'
                 }}
               >
                 Next: Pricing Strategy ({selectedClients.size} clients selected) →
@@ -653,13 +662,14 @@ export function BulkOrderWizardModal({
           {step === 'price' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                   3. Pricing Strategy
                 </h3>
                 <button
                   type="button"
                   onClick={() => setStep('clients')}
-                  style={{ background: 'none', border: 'none', color: 'var(--color-primary-400)', fontSize: 12, cursor: 'pointer' }}
+                  className="btn-glass-light"
+                  style={{ padding: '4px 12px', fontSize: 12 }}
                 >
                   ← Back to Clients
                 </button>
@@ -670,10 +680,13 @@ export function BulkOrderWizardModal({
                   type="button"
                   onClick={() => setPriceMode('exact')}
                   style={{
-                    flex: 1, padding: 12, borderRadius: 8,
-                    border: priceMode === 'exact' ? '2px solid var(--color-primary-500)' : '1px solid var(--border-default)',
-                    background: priceMode === 'exact' ? 'rgba(201,168,76,0.08)' : 'transparent',
-                    fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer'
+                    flex: 1, padding: 12, borderRadius: 12,
+                    border: priceMode === 'exact' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
+                    background: priceMode === 'exact' ? 'rgba(201,168,76,0.12)' : 'rgba(255, 255, 255, 0.5)',
+                    backdropFilter: 'blur(8px)',
+                    fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
+                    boxShadow: priceMode === 'exact' ? '0 4px 15px rgba(201,168,76,0.18)' : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   Exact Execution Price
@@ -682,10 +695,13 @@ export function BulkOrderWizardModal({
                   type="button"
                   onClick={() => setPriceMode('band')}
                   style={{
-                    flex: 1, padding: 12, borderRadius: 8,
-                    border: priceMode === 'band' ? '2px solid var(--color-primary-500)' : '1px solid var(--border-default)',
-                    background: priceMode === 'band' ? 'rgba(201,168,76,0.08)' : 'transparent',
-                    fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer'
+                    flex: 1, padding: 12, borderRadius: 12,
+                    border: priceMode === 'band' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
+                    background: priceMode === 'band' ? 'rgba(201,168,76,0.12)' : 'rgba(255, 255, 255, 0.5)',
+                    backdropFilter: 'blur(8px)',
+                    fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
+                    boxShadow: priceMode === 'band' ? '0 4px 15px rgba(201,168,76,0.18)' : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   Price Band (Min - Max)
@@ -694,36 +710,39 @@ export function BulkOrderWizardModal({
 
               {priceMode === 'exact' ? (
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Execution Price (₹)</label>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 6 }}>Execution Price (₹)</label>
                   <input
                     type="number"
                     value={exactPrice}
                     onChange={e => setExactPrice(e.target.value)}
                     placeholder="Enter price per share (e.g. 2500.00)"
                     autoFocus
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: 14 }}
+                    className="glass-input"
+                    style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', fontSize: 14 }}
                   />
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Min Price (₹)</label>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 6 }}>Min Price (₹)</label>
                     <input
                       type="number"
                       value={minPrice}
                       onChange={e => setMinPrice(e.target.value)}
                       placeholder="e.g. 2480.00"
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: 14 }}
+                      className="glass-input"
+                      style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', fontSize: 14 }}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Max Price (₹)</label>
+                    <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500, marginBottom: 6 }}>Max Price (₹)</label>
                     <input
                       type="number"
                       value={maxPrice}
                       onChange={e => setMaxPrice(e.target.value)}
                       placeholder="e.g. 2520.00"
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)', boxSizing: 'border-box', fontSize: 14 }}
+                      className="glass-input"
+                      style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', fontSize: 14 }}
                     />
                   </div>
                 </div>
@@ -733,12 +752,11 @@ export function BulkOrderWizardModal({
                 type="button"
                 disabled={priceMode === 'exact' ? (!exactPrice || parseFloat(exactPrice) <= 0) : (!minPrice || !maxPrice)}
                 onClick={() => setStep('confirm')}
+                className="btn-glass-gold"
                 style={{
-                  width: '100%', padding: 12, background: 'var(--color-primary-600)', color: '#fff',
-                  borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 14,
+                  width: '100%', padding: 13, fontSize: 14,
                   cursor: (priceMode === 'exact' ? (exactPrice && parseFloat(exactPrice) > 0) : (minPrice && maxPrice)) ? 'pointer' : 'not-allowed',
                   opacity: (priceMode === 'exact' ? (exactPrice && parseFloat(exactPrice) > 0) : (minPrice && maxPrice)) ? 1 : 0.5,
-                  transition: 'background 0.2s'
                 }}
               >
                 Review Order Execution →
@@ -750,19 +768,20 @@ export function BulkOrderWizardModal({
           {step === 'confirm' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                   4. Confirm Bulk Order Execution
                 </h3>
                 <button
                   type="button"
                   onClick={() => setStep('price')}
-                  style={{ background: 'none', border: 'none', color: 'var(--color-primary-400)', fontSize: 12, cursor: 'pointer' }}
+                  className="btn-glass-light"
+                  style={{ padding: '4px 12px', fontSize: 12 }}
                 >
                   ← Edit Price
                 </button>
               </div>
 
-              <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: 16, borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+              <div className="glass-card" style={{ padding: 16, marginBottom: 16, background: 'rgba(255, 255, 255, 0.65)', fontSize: 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ color: 'var(--text-muted)' }}>Action:</span>
                   <strong style={{ color: mode === 'buy' ? '#16a34a' : '#ef4444' }}>BULK {mode.toUpperCase()}</strong>
@@ -783,21 +802,21 @@ export function BulkOrderWizardModal({
                 </div>
               </div>
 
-              <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, maxHeight: 220, overflowY: 'auto', marginBottom: 20 }}>
+              <div className="glass-card" style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 20, padding: 0 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, textAlign: 'left' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-elevated)', zIndex: 1 }}>
-                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '6px 10px', fontWeight: 600, color: 'var(--text-muted)' }}>Client</th>
-                      <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Qty</th>
-                      <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Est. Total Amount</th>
+                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(255, 255, 255, 0.92)', backdropFilter: 'blur(8px)', zIndex: 1 }}>
+                    <tr style={{ borderBottom: '1px solid rgba(229, 231, 235, 0.8)' }}>
+                      <th style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-muted)' }}>Client</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Qty</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, color: 'var(--text-muted)' }}>Est. Total Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {calculatedOrders.map((o, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '6px 10px', fontWeight: 600, color: 'var(--text-primary)' }}>{o.client.name}</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', color: 'var(--text-primary)' }}>{o.qty.toLocaleString('en-IN')} shares</td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 500, color: 'var(--text-primary)' }}>
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(229, 231, 235, 0.5)' }}>
+                        <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>{o.client.name}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>{o.qty.toLocaleString('en-IN')} shares</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: 'var(--text-primary)' }}>
                           ₹{(o.qty * effectivePrice).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -810,11 +829,11 @@ export function BulkOrderWizardModal({
                 type="button"
                 disabled={isProcessing || calculatedOrders.length === 0 || effectivePrice <= 0}
                 onClick={handleExecute}
+                className={mode === 'buy' ? 'btn-glass-green' : 'btn-glass-red'}
                 style={{
-                  width: '100%', padding: 14, background: mode === 'buy' ? '#16a34a' : '#ef4444',
-                  color: '#fff', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 14,
-                  cursor: isProcessing ? 'wait' : 'pointer', opacity: (isProcessing || calculatedOrders.length === 0 || effectivePrice <= 0) ? 0.5 : 1,
-                  transition: 'background 0.2s'
+                  width: '100%', padding: 14, fontSize: 14,
+                  cursor: isProcessing ? 'wait' : 'pointer',
+                  opacity: (isProcessing || calculatedOrders.length === 0 || effectivePrice <= 0) ? 0.5 : 1,
                 }}
               >
                 {isProcessing ? 'Executing in Firestore...' : `Execute ${mode.toUpperCase()} for ${calculatedOrders.length} Client(s)`}

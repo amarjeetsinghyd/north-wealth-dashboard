@@ -739,22 +739,23 @@ export function AnalyticsPage() {
         </div>
         <button 
           onClick={() => setBulkWizard({ mode: 'buy' })}
-          style={{ padding: '10px 20px', background: '#C9A84C', color: '#000', borderRadius: 8, fontWeight: 800, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+          className="btn-glass-gold"
+          style={{ padding: '10px 22px', fontSize: 13 }}
         >
-          <Briefcase size={18} /> New Bulk Order
+          <Briefcase size={16} /> New Bulk Order
         </button>
       </div>
 
       {/* ── Smart Search Panel ──────────────────────────────────────────────── */}
-      <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24, marginBottom: 32 }}>
+      <div className="glass-card" style={{ padding: 24, marginBottom: 32 }}>
 
         {/* Tab strip */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
           <Search size={18} color="#C9A84C" />
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
             Smart Search
           </h3>
-          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: 3, gap: 2 }}>
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.03)', borderRadius: 12, padding: 3, gap: 3, border: '1px solid rgba(229, 231, 235, 0.7)' }}>
             {([
               { key: 'stock', label: 'Stock', icon: <Search size={13} style={{ marginRight: 6 }} /> },
               { key: 'cash', label: 'Free Cash', icon: <Briefcase size={13} style={{ marginRight: 6 }} /> },
@@ -768,11 +769,12 @@ export function AnalyticsPage() {
                 key={tab.key}
                 onClick={() => setSearchMode(tab.key)}
                 style={{
-                  padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer',
-                  fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center',
-                  background: searchMode === tab.key ? '#C9A84C' : 'transparent',
-                  color: searchMode === tab.key ? '#000000' : '#777777',
-                  transition: 'all 0.15s',
+                  padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  fontSize: 12, fontWeight: searchMode === tab.key ? 600 : 500, display: 'flex', alignItems: 'center',
+                  background: searchMode === tab.key ? 'linear-gradient(135deg, rgba(201,168,76,0.95), rgba(160,124,45,0.95))' : 'transparent',
+                  color: searchMode === tab.key ? '#ffffff' : 'var(--text-secondary)',
+                  boxShadow: searchMode === tab.key ? '0 2px 8px rgba(201,168,76,0.35), inset 0 1px 0 rgba(255,255,255,0.4)' : 'none',
+                  transition: 'all 0.15s ease',
                 }}
               >
                 {tab.icon}
@@ -791,15 +793,12 @@ export function AnalyticsPage() {
                 placeholder="Type a symbol or company name (e.g. SBIN, IRFC, Reliance)…"
                 value={stockQuery}
                 onChange={e => setStockQuery(e.target.value)}
+                className="glass-input"
                 style={{
-                  width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, borderRadius: 8, boxSizing: 'border-box',
-                  background: 'rgba(0,0,0,0.04)', color: 'var(--text-primary)',
-                  border: '1px solid rgba(0,0,0,0.10)', outline: 'none', transition: 'border-color 0.15s',
+                  width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, boxSizing: 'border-box',
                 }}
-                onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.55)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
               />
-              <Search size={16} color="#555" style={{ position: 'absolute', left: 14, top: 14, pointerEvents: 'none' }} />
+              <Search size={16} color="#888" style={{ position: 'absolute', left: 14, top: 14, pointerEvents: 'none' }} />
               {stockQuery && (
                 <button onClick={() => setStockQuery('')} style={{ position: 'absolute', right: 12, top: 10, background: 'none', border: 'none', color: '#777', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
               )}
@@ -1457,26 +1456,31 @@ export function AnalyticsPage() {
 
       {/* ── Floating Action Bar ──────────────────────────────────────────────── */}
       {(selectedStockRows.size > 0 || selectedClientRows.size > 0) && (
-        <div className="animate-slide-up" style={{
+        <div className="animate-scale-up" style={{
           position: 'fixed', bottom: 30, left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-          borderRadius: 16, padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 24,
-          boxShadow: '0 20px 40px rgba(0,0,0,0.2)', zIndex: 1000
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          border: '1px solid rgba(255, 255, 255, 0.85)',
+          borderRadius: 20, padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 20,
+          boxShadow: '0 20px 50px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.9)', zIndex: 1000
         }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-            {selectedStockRows.size > 0 ? selectedStockRows.size : selectedClientRows.size} Selected
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+            <span className="glass-pill" style={{ color: 'var(--gold-dark)', fontWeight: 700, marginRight: 4 }}>
+              {selectedStockRows.size > 0 ? selectedStockRows.size : selectedClientRows.size}
+            </span> Selected
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {selectedStockRows.size > 0 && (
               <>
-                <button onClick={() => setBulkWizard({ mode: 'buy', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows) })} style={{ padding: '8px 16px', borderRadius: 8, background: '#22c55e', color: '#fff', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Buy More</button>
-                <button onClick={() => setBulkWizard({ mode: 'sell', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows), holdingsData: stockSearchResults })} style={{ padding: '8px 16px', borderRadius: 8, background: '#ef4444', color: '#fff', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Bulk Sell</button>
+                <button onClick={() => setBulkWizard({ mode: 'buy', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows) })} className="btn-glass-green" style={{ padding: '7px 16px', fontSize: 12 }}>+ Buy More</button>
+                <button onClick={() => setBulkWizard({ mode: 'sell', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows), holdingsData: stockSearchResults })} className="btn-glass-red" style={{ padding: '7px 16px', fontSize: 12 }}>Bulk Sell</button>
               </>
             )}
             {selectedClientRows.size > 0 && (
-              <button onClick={() => setBulkWizard({ mode: 'buy', selectedClientIds: Array.from(selectedClientRows) })} style={{ padding: '8px 16px', borderRadius: 8, background: '#C9A84C', color: '#000', border: 'none', fontWeight: 800, cursor: 'pointer' }}>Bulk Buy Stock</button>
+              <button onClick={() => setBulkWizard({ mode: 'buy', selectedClientIds: Array.from(selectedClientRows) })} className="btn-glass-gold" style={{ padding: '7px 16px', fontSize: 12 }}>Bulk Buy Stock</button>
             )}
-            <button onClick={() => { setSelectedStockRows(new Set()); setSelectedClientRows(new Set()); }} style={{ padding: '8px 16px', borderRadius: 8, background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => { setSelectedStockRows(new Set()); setSelectedClientRows(new Set()); }} className="btn-glass-light" style={{ padding: '6px 14px', fontSize: 12 }}>Cancel</button>
           </div>
         </div>
       )}

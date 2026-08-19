@@ -324,45 +324,38 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
 
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 'var(--space-4)',
-      }}
+      className="glass-modal-backdrop"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="animate-fade-in" style={{
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border-default)',
-        borderRadius: 'var(--radius-xl)',
-        width: '100%', maxWidth: 520,
+      <div className="glass-modal animate-scale-up" style={{
+        width: '100%', maxWidth: 540,
         maxHeight: '90vh',
         display: 'flex', flexDirection: 'column',
-        boxShadow: 'var(--shadow-xl)',
       }}>
         {/* Header */}
         <div style={{
-          padding: 'var(--space-6)',
-          borderBottom: '1px solid var(--border-subtle)',
+          padding: '18px 24px',
+          borderBottom: '1px solid rgba(229, 231, 235, 0.6)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'rgba(255, 255, 255, 0.65)',
+          backdropFilter: 'blur(8px)',
         }}>
           <div>
-            <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
               {step === 'missing_prices' ? 'Enter Missing Buy Prices' : existingClient ? 'Edit Client Details' : 'Add New Client'}
             </h2>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 4 }}>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
               {step === 'missing_prices'
                 ? `${missingPrices.length} scrip${missingPrices.length > 1 ? 's' : ''} found without buy price in document`
                 : existingClient ? 'Update client details or upload a new statement' : 'Upload a broker statement (CSV, Excel, PDF) to auto-extract holdings'}
             </p>
           </div>
           <button onClick={onClose} style={{
-            width: 32, height: 32, borderRadius: 'var(--radius-md)',
+            width: 32, height: 32, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', background: 'rgba(0,0,0,0.04)', border: 'none', cursor: 'pointer',
           }}>
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
@@ -650,22 +643,23 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
 
         {/* Footer */}
         <div style={{
-          padding: 'var(--space-4) var(--space-6)',
-          borderTop: '1px solid var(--border-subtle)',
-          display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end',
-          background: 'var(--bg-elevated)', borderBottomLeftRadius: 'var(--radius-xl)', borderBottomRightRadius: 'var(--radius-xl)'
+          padding: '14px 24px',
+          borderTop: '1px solid rgba(229, 231, 235, 0.6)',
+          display: 'flex', gap: 10, justifyContent: 'flex-end',
+          background: 'rgba(255, 255, 255, 0.65)',
+          backdropFilter: 'blur(8px)',
         }}>
           {step === 'missing_prices' && (
             <>
-              <button onClick={() => { onSuccess(); onClose(); }} style={{ padding: '9px 20px', borderRadius: 'var(--radius-md)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: 500, border: '1px solid var(--border-default)', cursor: 'pointer' }}>Skip for now</button>
-              <button onClick={saveMissingPrices} disabled={savingMissing} style={{ padding: '9px 24px', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-600)', color: 'white', fontSize: 'var(--text-sm)', fontWeight: 600, border: 'none', cursor: savingMissing ? 'not-allowed' : 'pointer', opacity: savingMissing ? 0.7 : 1 }}>{savingMissing ? 'Saving...' : 'Save & Continue'}</button>
+              <button onClick={() => { onSuccess(); onClose(); }} className="btn-glass-light">Skip for now</button>
+              <button onClick={saveMissingPrices} disabled={savingMissing} className="btn-glass-gold" style={{ opacity: savingMissing ? 0.7 : 1 }}>{savingMissing ? 'Saving...' : 'Save & Continue'}</button>
             </>
           )}
 
           {step === 'form' && (
             <>
-              <button onClick={onClose} style={{ padding: '9px 20px', borderRadius: 'var(--radius-md)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: 500, border: '1px solid var(--border-default)', cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleSubmit} disabled={!name.trim()} style={{ padding: '9px 24px', borderRadius: 'var(--radius-md)', background: name.trim() ? 'var(--color-primary-600)' : 'var(--color-neutral-700)', color: 'white', fontSize: 'var(--text-sm)', fontWeight: 600, border: 'none', cursor: name.trim() ? 'pointer' : 'not-allowed' }}>{existingClient ? (files.length > 0 ? `Update & Extract (${files.length})` : 'Update Client') : (files.length > 0 ? `Add Client & Extract (${files.length})` : 'Add Client')}</button>
+              <button onClick={onClose} className="btn-glass-light">Cancel</button>
+              <button onClick={handleSubmit} disabled={!name.trim()} className="btn-glass-gold" style={{ opacity: name.trim() ? 1 : 0.5, cursor: name.trim() ? 'pointer' : 'not-allowed' }}>{existingClient ? (files.length > 0 ? `Update & Extract (${files.length})` : 'Update Client') : (files.length > 0 ? `Add Client & Extract (${files.length})` : 'Add Client')}</button>
             </>
           )}
         </div>
