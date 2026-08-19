@@ -53,11 +53,13 @@ export function BulkOrderWizardModal({
   // Sell Allocation Controls
   const [sellPercentage, setSellPercentage] = useState<number>(100);
 
-  // Pricing Strategy
+  // Pricing Strategy & Execution Layer
   const [priceMode, setPriceMode] = useState<'exact' | 'band'>('exact');
   const [exactPrice, setExactPrice] = useState<string>('');
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
+  const [executionDate, setExecutionDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [strategyBucket, setStrategyBucket] = useState<'Long-Term' | 'Momentum'>('Long-Term');
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -145,11 +147,16 @@ export function BulkOrderWizardModal({
       if (effectivePrice <= 0) throw new Error("Please enter a valid price before executing.");
       if (calculatedOrders.length === 0) throw new Error("No valid orders calculated. Please select clients and quantity.");
       
-      const batchDate = new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      const tradeDate = executionDate || nowIso.split('T')[0];
       const p = effectivePrice;
       const companyName = meta.companyName || cleanSym;
+      const priceRangeStr = priceMode === 'band' ? `₹${minPrice} - ₹${maxPrice}` : null;
 
       for (const order of calculatedOrders) {
+        const clientRef = doc(db, 'clients', order.client.id);
+        const currFreeCash = getClientFreeCash(order.client);
+
         if (mode === 'buy') {
           const qSnap = await getDocs(
             query(
@@ -182,7 +189,8 @@ export function BulkOrderWizardModal({
               current_value: newCurrentVal,
               unrealised_pnl: unrealPnl,
               unrealised_pnl_pct: unrealPnlPct,
-              last_price_update: batchDate,
+              purchase_date: tradeDate,
+              last_price_update: nowIso,
             });
           } else {
             await addDoc(collection(db, 'holdings'), {
@@ -199,23 +207,30 @@ export function BulkOrderWizardModal({
               unrealised_pnl_pct: 0,
               realised_pnl: 0,
               source: 'Fresh',
+              purchase_date: tradeDate,
               rebalancing_date: null,
-              last_price_update: batchDate,
-              created_at: batchDate,
+              last_price_update: nowIso,
+              created_at: nowIso,
             });
           }
+
+          // Deduct from Client's Free Cash
+          const newFreeCash = Math.max(0, currFreeCash - (order.qty * p));
+          await updateDoc(clientRef, { asset_free_cash: newFreeCash });
 
           // Add Transaction record
           await addDoc(collection(db, 'transactions'), {
             client_id: order.client.id,
-            date: batchDate.split('T')[0],
+            date: tradeDate,
             action: 'BUY',
             stock_symbol: cleanSym,
             company_name: companyName,
             quantity: order.qty,
             price: p,
             total_value: order.qty * p,
-            created_at: batchDate,
+            price_range: priceRangeStr,
+            bucket: strategyBucket,
+            created_at: nowIso,
           });
         } else {
           if (!order.holding) continue;
@@ -242,21 +257,27 @@ export function BulkOrderWizardModal({
               unrealised_pnl: unrealPnl,
               unrealised_pnl_pct: unrealPnlPct,
               realised_pnl: (h.realised_pnl || 0) + profitLoss,
-              last_price_update: batchDate,
+              last_price_update: nowIso,
             });
           }
+
+          // Add to Client's Free Cash
+          const newFreeCash = currFreeCash + totalVal;
+          await updateDoc(clientRef, { asset_free_cash: newFreeCash });
 
           // Add Transaction record
           await addDoc(collection(db, 'transactions'), {
             client_id: order.client.id,
-            date: batchDate.split('T')[0],
+            date: tradeDate,
             action: 'SELL',
             stock_symbol: (h.nse_symbol || h.stock_symbol || cleanSym).toUpperCase(),
             company_name: h.company_name || companyName,
             quantity: order.qty,
             price: p,
             total_value: totalVal,
-            created_at: batchDate,
+            price_range: priceRangeStr,
+            bucket: strategyBucket,
+            created_at: nowIso,
           });
         }
       }
@@ -686,12 +707,12 @@ export function BulkOrderWizardModal({
             </div>
           )}
 
-          {/* STEP 3: Pricing Strategy */}
+          {/* STEP 3: Pricing Strategy & Execution Details */}
           {step === 'price' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-                  3. Pricing Strategy
+                  3. Pricing & Strategy Layer
                 </h3>
                 <button
                   type="button"
@@ -703,37 +724,93 @@ export function BulkOrderWizardModal({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-                <button
-                  type="button"
-                  onClick={() => setPriceMode('exact')}
-                  style={{
-                    flex: 1, padding: 12, borderRadius: 12,
-                    border: priceMode === 'exact' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
-                    background: priceMode === 'exact' ? 'rgba(201,168,76,0.12)' : 'rgba(255, 255, 255, 0.5)',
-                    backdropFilter: 'blur(8px)',
-                    fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
-                    boxShadow: priceMode === 'exact' ? '0 4px 15px rgba(201,168,76,0.18)' : 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  Exact Execution Price
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPriceMode('band')}
-                  style={{
-                    flex: 1, padding: 12, borderRadius: 12,
-                    border: priceMode === 'band' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
-                    background: priceMode === 'band' ? 'rgba(201,168,76,0.12)' : 'rgba(255, 255, 255, 0.5)',
-                    backdropFilter: 'blur(8px)',
-                    fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
-                    boxShadow: priceMode === 'band' ? '0 4px 15px rgba(201,168,76,0.18)' : 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  Price Band (Min - Max)
-                </button>
+              {/* Execution Date & Strategy Bucket Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 6 }}>
+                    Execution Date
+                  </label>
+                  <input
+                    type="date"
+                    value={executionDate}
+                    onChange={e => setExecutionDate(e.target.value)}
+                    className="glass-input"
+                    style={{ width: '100%', padding: '10px 14px', boxSizing: 'border-box', fontSize: 13 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 6 }}>
+                    Strategy Bucket
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setStrategyBucket('Long-Term')}
+                      style={{
+                        flex: 1, padding: '9px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                        border: strategyBucket === 'Long-Term' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
+                        background: strategyBucket === 'Long-Term' ? 'rgba(201,168,76,0.15)' : 'rgba(255, 255, 255, 0.5)',
+                        color: strategyBucket === 'Long-Term' ? '#8c6314' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      Long-Term Core
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStrategyBucket('Momentum')}
+                      style={{
+                        flex: 1, padding: '9px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                        border: strategyBucket === 'Momentum' ? '2px solid #8b5cf6' : '1px solid rgba(229, 231, 235, 0.8)',
+                        background: strategyBucket === 'Momentum' ? 'rgba(139,92,246,0.15)' : 'rgba(255, 255, 255, 0.5)',
+                        color: strategyBucket === 'Momentum' ? '#6d28d9' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      Momentum Strategy
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pricing Mode Toggle */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 6 }}>
+                  Order Pricing Mode
+                </label>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button
+                    type="button"
+                    onClick={() => setPriceMode('exact')}
+                    style={{
+                      flex: 1, padding: 12, borderRadius: 12,
+                      border: priceMode === 'exact' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
+                      background: priceMode === 'exact' ? 'rgba(201,168,76,0.12)' : 'rgba(255, 255, 255, 0.5)',
+                      backdropFilter: 'blur(8px)',
+                      fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
+                      boxShadow: priceMode === 'exact' ? '0 4px 15px rgba(201,168,76,0.18)' : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    Exact Execution Price
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPriceMode('band')}
+                    style={{
+                      flex: 1, padding: 12, borderRadius: 12,
+                      border: priceMode === 'band' ? '2px solid var(--gold)' : '1px solid rgba(229, 231, 235, 0.8)',
+                      background: priceMode === 'band' ? 'rgba(201,168,76,0.12)' : 'rgba(255, 255, 255, 0.5)',
+                      backdropFilter: 'blur(8px)',
+                      fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer',
+                      boxShadow: priceMode === 'band' ? '0 4px 15px rgba(201,168,76,0.18)' : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    Target Buying Range (Min - Max)
+                  </button>
+                </div>
               </div>
 
               {priceMode === 'exact' ? (
@@ -743,7 +820,7 @@ export function BulkOrderWizardModal({
                     type="number"
                     value={exactPrice}
                     onChange={e => setExactPrice(e.target.value)}
-                    placeholder="Enter price per share (e.g. 2500.00)"
+                    placeholder="Enter execution price per share (e.g. 2500.00)"
                     autoFocus
                     className="glass-input"
                     style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', fontSize: 14 }}
@@ -805,7 +882,7 @@ export function BulkOrderWizardModal({
                   className="btn-glass-light"
                   style={{ padding: '4px 12px', fontSize: 12 }}
                 >
-                  ← Edit Price
+                  ← Edit Price & Strategy
                 </button>
               </div>
 
@@ -819,13 +896,23 @@ export function BulkOrderWizardModal({
                   <strong style={{ color: 'var(--text-primary)' }}>{cleanSym} {meta.companyName ? `(${meta.companyName})` : ''}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Execution Date:</span>
+                  <strong style={{ color: 'var(--text-primary)' }}>{executionDate}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Strategy Bucket:</span>
+                  <span className={strategyBucket === 'Long-Term' ? 'glass-pill-gold' : 'glass-pill-blue'} style={{ fontSize: 11 }}>
+                    {strategyBucket}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                   <span style={{ color: 'var(--text-muted)' }}>Target Clients:</span>
                   <strong style={{ color: 'var(--text-primary)' }}>{calculatedOrders.length} client(s)</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Execution Price:</span>
                   <strong style={{ color: 'var(--text-primary)' }}>
-                    ₹{effectivePrice.toFixed(2)}
+                    ₹{effectivePrice.toFixed(2)} {priceMode === 'band' ? `(Range: ₹${minPrice} - ₹${maxPrice})` : ''}
                   </strong>
                 </div>
               </div>

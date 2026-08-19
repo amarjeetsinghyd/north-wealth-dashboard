@@ -47,6 +47,8 @@ export interface Transaction {
   quantity: number;
   price: number;
   total_value: number;
+  price_range?: string | null;
+  bucket?: 'Long-Term' | 'Momentum';
   created_at: string;
 }
 
