@@ -733,8 +733,8 @@ export function ClientPortfolioPage() {
   }
 
   const gridCols = isRebalanceMode
-    ? '44px 160px 140px 85px 75px 110px 120px 110px 120px 130px 85px 75px 85px 105px 80px 60px'
-    : '44px 160px 140px 85px 75px 110px 120px 110px 120px 130px 85px 75px 85px 105px 60px';
+    ? '38px 160px 155px 75px 65px 105px 115px 105px 115px 120px 85px 70px 80px 95px 80px 50px'
+    : '38px 160px 155px 75px 65px 105px 115px 105px 115px 120px 85px 70px 80px 95px 50px';
 
   const updateHoldingField = async (holdingId: string, field: string, val: string) => {
     try {
@@ -1389,11 +1389,11 @@ export function ClientPortfolioPage() {
               const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
               const displayCompanyName = meta.companyName || h.company_name;
               return (
-              <div key={h.id} style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-4) var(--space-5)', borderBottom: i < getSortedHoldings().length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background 0.15s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'}
+              <div key={h.id} style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', alignItems: 'center', padding: '10px 18px', borderBottom: i < getSortedHoldings().length - 1 ? '1px solid rgba(229, 231, 235, 0.7)' : 'none', transition: 'background 0.15s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201, 168, 76, 0.03)'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
               >
-                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{i + 1}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>{i + 1}</div>
                 <div>
                   {editingScrip === h.id ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1410,23 +1410,31 @@ export function ClientPortfolioPage() {
                     </div>
                   ) : (
                     <>
-                      <div style={{ fontWeight: 700, color: 'var(--color-primary-400)', fontSize: 'var(--text-sm)', letterSpacing: '0.3px' }}>{cleanSymbol(h)}</div>
-                      <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
+                        <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={10} /></button>
+                      </div>
                       {displayCompanyName && (
-                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 400, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 155 }} title={displayCompanyName}>
                           {displayCompanyName}
                         </div>
                       )}
                     </>
                   )}
-
                 </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{meta.sector}</div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{meta.marketCap}</div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{h.quantity.toLocaleString('en-IN')}</div>
+
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={meta.sector}>
+                  {meta.sector}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 500 }}>
+                  {meta.marketCap}
+                </div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                  {h.quantity.toLocaleString('en-IN')}
+                </div>
                 
                 {/* Buy Price with Edit options */}
-                <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {editingBuyPrice === h.id ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <input type="number" value={editBuyPriceVal} onChange={e => setEditBuyPriceVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveBuyPrice(h.id); if (e.key === 'Escape') { setEditingBuyPrice(null); setEditBuyPriceVal(''); } }} autoFocus style={{ width: 80, padding: '2px 6px', fontSize: 12, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--color-primary-500)', borderRadius: 4, outline: 'none' }} />
@@ -1435,18 +1443,32 @@ export function ClientPortfolioPage() {
                     </div>
                   ) : (
                     <>
-                      {h.buy_price > 0 ? `₹${h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ color: 'var(--color-accent-400)', fontSize: 11, fontStyle: 'italic' }}>Not set</span>}
-                      <button onClick={() => { setEditingBuyPrice(h.id); setEditBuyPriceVal(h.buy_price > 0 ? String(h.buy_price) : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit buy price"><Pencil size={11} /></button>
+                      <span className="tabular-nums" style={{ fontWeight: 400 }}>
+                        {h.buy_price > 0 ? `₹${h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ color: 'var(--color-accent-400)', fontSize: 11, fontStyle: 'italic' }}>Not set</span>}
+                      </span>
+                      <button onClick={() => { setEditingBuyPrice(h.id); setEditBuyPriceVal(h.buy_price > 0 ? String(h.buy_price) : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit buy price"><Pencil size={10} /></button>
                     </>
                   )}
                 </div>
 
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{h.buy_price > 0 ? fmtCurrency(h.invested_amount || h.buy_price * h.quantity) : '0'}</div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 500 }}>{h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '0'}</div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}</div>
-                <div style={{ color: h.unrealised_pnl >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{h.current_price > 0 ? `${h.unrealised_pnl >= 0 ? '+' : ''}${fmtCurrency(h.unrealised_pnl)}` : '0'}</div>
-                <div>{h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>0%</span>}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{summary.currentValue > 0 ? (((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}</div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                  {h.buy_price > 0 ? fmtCurrency(h.invested_amount || h.buy_price * h.quantity) : '0'}
+                </div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                  {h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '0'}
+                </div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                  {h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}
+                </div>
+                <div style={{ color: h.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626', fontSize: 13, fontWeight: 500 }} className="tabular-nums">
+                  {h.current_price > 0 ? `${h.unrealised_pnl >= 0 ? '+' : ''}${fmtCurrency(h.unrealised_pnl)}` : '0'}
+                </div>
+                <div>
+                  {h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>0%</span>}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }} className="tabular-nums">
+                  {summary.currentValue > 0 ? (((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}
+                </div>
                 
                 {/* Holding Source */}
                 <div>
@@ -1462,7 +1484,7 @@ export function ClientPortfolioPage() {
                       <option value="Fresh">Fresh</option>
                     </select>
                   ) : (
-                    <span onClick={() => setEditingHoldingSource(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <span onClick={() => setEditingHoldingSource(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 11.5, color: 'var(--text-secondary)' }}>
                       {h.source || 'Existing'}
                     </span>
                   )}
@@ -1480,7 +1502,7 @@ export function ClientPortfolioPage() {
                       style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none', width: '100%' }}
                     />
                   ) : (
-                    <span onClick={() => setEditingHoldingDate(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <span onClick={() => setEditingHoldingDate(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 11.5, color: 'var(--text-secondary)' }}>
                       {h.purchase_date ? new Date(h.purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : 'Set Date'}
                     </span>
                   )}
