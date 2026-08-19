@@ -58,7 +58,7 @@ export function BulkOrderWizardModal({
   const [exactPrice, setExactPrice] = useState<string>('');
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
-  const [executionDate, setExecutionDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [executionDate, setExecutionDate] = useState<string>(new Date().toISOString().split('T')[0] || '');
   const [strategyBucket, setStrategyBucket] = useState<'Long-Term' | 'Momentum'>('Long-Term');
   
   const [isProcessing, setIsProcessing] = useState(false);
