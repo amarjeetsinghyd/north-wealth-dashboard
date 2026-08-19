@@ -13,6 +13,8 @@ export interface Client {
   asset_equity?: number;
   asset_mutual_funds?: number;
   asset_free_cash?: number;
+  aua_breach_reason?: string;
+  cash_difference_reason?: string;
   created_at: string;
 }
 

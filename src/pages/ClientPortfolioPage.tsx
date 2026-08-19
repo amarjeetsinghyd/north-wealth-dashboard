@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload, PlusCircle, Trash2 } from 'lucide-react';
@@ -66,6 +66,17 @@ export function ClientPortfolioPage() {
   const [allocationInputs, setAllocationInputs] = useState({ equity: '', mf: '', cash: '' });
   const [savingAllocation, setSavingAllocation] = useState(false);
   
+  // ── 4-Tab Portfolio & Transaction View States ────────────────────────────
+  const [portfolioTab, setPortfolioTab] = useState<'actual' | 'estimated' | 'fresh_tx' | 'cash'>('estimated');
+  const [txTab, setTxTab] = useState<'all' | 'buy' | 'sell'>('buy');
+  const [reconciliationReason, setReconciliationReason] = useState('');
+  const [isEditingReconReason, setIsEditingReconReason] = useState(false);
+  const [savingReconReason, setSavingReconReason] = useState(false);
+
+  const [auaBreachReason, setAuaBreachReason] = useState('');
+  const [isEditingAuaReason, setIsEditingAuaReason] = useState(false);
+  const [savingAuaReason, setSavingAuaReason] = useState(false);
+
   const [sortColumn, setSortColumn] = useState<SortColumn>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [stockSearch, setStockSearch] = useState('');
@@ -214,12 +225,69 @@ export function ClientPortfolioPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   }, [load]);
 
+  useEffect(() => {
+    if (client) {
+      setReconciliationReason((client as any).cash_difference_reason || '');
+      setAuaBreachReason((client as any).aua_breach_reason || '');
+    }
+  }, [client]);
+
+  const saveReconReason = async () => {
+    if (!id) return;
+    setSavingReconReason(true);
+    try {
+      await updateDoc(doc(db, 'clients', id), { cash_difference_reason: reconciliationReason });
+      setIsEditingReconReason(false);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save reason');
+    } finally {
+      setSavingReconReason(false);
+    }
+  };
+
+  const saveAuaReason = async () => {
+    if (!id) return;
+    setSavingAuaReason(true);
+    try {
+      await updateDoc(doc(db, 'clients', id), { aua_breach_reason: auaBreachReason });
+      setIsEditingAuaReason(false);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save reason');
+    } finally {
+      setSavingAuaReason(false);
+    }
+  };
+
+  const syncBaseCashToEstimated = async (newAmount: number) => {
+    if (!id) return;
+    if (!window.confirm(`Sync Base Free Cash to ₹${newAmount.toLocaleString('en-IN')}?`)) return;
+    try {
+      await updateDoc(doc(db, 'clients', id), { asset_free_cash: newAmount });
+      await load();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to sync cash');
+    }
+  };
+
+  const actualHoldings = useMemo(() => {
+    return holdings.filter((h: Holding) => h.source === 'Existing' || !h.source);
+  }, [holdings]);
+
+  const tabHoldings = useMemo(() => {
+    if (portfolioTab === 'actual') {
+      return actualHoldings;
+    }
+    return holdings;
+  }, [holdings, actualHoldings, portfolioTab]);
 
   const handleDownloadExcel = () => {
     import('xlsx').then((XLSX) => {
-      const dataToExport = getSortedHoldings().map((h, idx) => {
+      const dataToExport = getSortedHoldings().map((h: Holding, idx: number) => {
         const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
-        const summaryCurrentValue = holdings.reduce((sum, hold) => sum + (hold.current_value || hold.buy_price * hold.quantity), 0);
+        const summaryCurrentValue = holdings.reduce((sum: number, hold: Holding) => sum + (hold.current_value || hold.buy_price * hold.quantity), 0);
         return {
           'S.No.': idx + 1,
           'Asset': cleanSymbol(h),
@@ -245,22 +313,22 @@ export function ClientPortfolioPage() {
   };
 
   const getSortedHoldings = () => {
-    let filtered = holdings;
+    let filtered = tabHoldings;
     if (sectorFilter) {
-      filtered = filtered.filter(h => {
+      filtered = filtered.filter((h: Holding) => {
         const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
         return meta.sector === sectorFilter;
       });
     }
     if (mcapFilter) {
-      filtered = filtered.filter(h => {
+      filtered = filtered.filter((h: Holding) => {
         const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
         return meta.marketCap === mcapFilter;
       });
     }
     if (stockSearch) {
       const s = stockSearch.toLowerCase();
-      filtered = filtered.filter(h => 
+      filtered = filtered.filter((h: Holding) => 
         h.stock_symbol.toLowerCase().includes(s) || 
         (h.company_name && h.company_name.toLowerCase().includes(s)) ||
         (h.nse_symbol && h.nse_symbol.toLowerCase().includes(s))
@@ -343,6 +411,11 @@ export function ClientPortfolioPage() {
 
   const getSortedTransactions = () => {
     let filtered = transactions;
+    if (txTab === 'buy') {
+      filtered = filtered.filter(tx => tx.action === 'BUY');
+    } else if (txTab === 'sell') {
+      filtered = filtered.filter(tx => tx.action === 'SELL');
+    }
     if (txStockSearch) {
       const s = txStockSearch.toLowerCase();
       filtered = filtered.filter(tx => 
@@ -663,12 +736,16 @@ export function ClientPortfolioPage() {
     }
   };
 
-  const summary: PortfolioSummary = holdings.reduce(
-    (acc, h) => {
+  const activeSummaryHoldings = portfolioTab === 'actual' ? actualHoldings : holdings;
+
+  const summary: PortfolioSummary = activeSummaryHoldings.reduce(
+    (acc: PortfolioSummary, h: Holding) => {
       const hasPrice = h.current_price > 0;
+      const inv = h.invested_amount || (h.buy_price * h.quantity);
+      const val = hasPrice ? (h.current_value || h.buy_price * h.quantity) : inv;
       return {
-        totalInvested: acc.totalInvested + (h.invested_amount || h.buy_price * h.quantity),
-        currentValue: acc.currentValue + (hasPrice ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)),
+        totalInvested: acc.totalInvested + inv,
+        currentValue: acc.currentValue + val,
         unrealisedPnL: acc.unrealisedPnL + h.unrealised_pnl,
         realisedPnL: acc.realisedPnL + h.realised_pnl,
         unrealisedPnLPct: 0,
@@ -685,7 +762,7 @@ export function ClientPortfolioPage() {
   let calcMfVal = 0;
   let trackedMfInvested = 0;
   
-  holdings.forEach(h => {
+  holdings.forEach((h: Holding) => {
     const meta = getStockMeta(h.nse_symbol, h.company_name);
     const val = (h.current_value || h.buy_price * h.quantity);
     const inv = (h.invested_amount || h.buy_price * h.quantity);
@@ -694,13 +771,11 @@ export function ClientPortfolioPage() {
       trackedMfInvested += inv;
     }
     else {
-      // Both Equity and ETF are counted as Equity
       calcEquityVal += val;
     }
   });
 
   const untrackedMf = Math.max(0, mutualFunds - trackedMfInvested);
-  
   const calculatedMfCurrent = calcMfVal + untrackedMf; 
   const calculatedCashBalance = Math.max(0, totalCapital - summary.totalInvested - untrackedMf);
 
@@ -708,8 +783,44 @@ export function ClientPortfolioPage() {
   const equityVal = client?.asset_equity !== undefined && client.asset_equity !== null ? client.asset_equity : calcEquityVal;
   const totalMfCurrent = client?.asset_mutual_funds !== undefined && client.asset_mutual_funds !== null ? client.asset_mutual_funds : calculatedMfCurrent;
   const cashBalance = client?.asset_free_cash !== undefined && client.asset_free_cash !== null ? client.asset_free_cash : calculatedCashBalance;
-
   const totalPortfolioValue = equityVal + totalMfCurrent + cashBalance;
+
+  // ── Liquid ETFs, AUA Breach & Cash Position Engine ───────────────────────
+  const liquidHoldings = useMemo(() => {
+    return holdings.filter((h: Holding) => {
+      const sym = cleanSymbol(h).toUpperCase();
+      const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
+      return sym.includes('LIQUID') || sym.includes('LIQ') || meta.sector === 'Liquid Funds / Debt' || meta.sector === 'Debt';
+    });
+  }, [holdings]);
+
+  const liquidEtfTotalValue = useMemo(() => {
+    return liquidHoldings.reduce((sum: number, h: Holding) => sum + (h.current_value || h.buy_price * h.quantity), 0);
+  }, [liquidHoldings]);
+
+  const freshBuysTotal = useMemo(() => {
+    return transactions.filter((t: Transaction) => t.action === 'BUY').reduce((sum: number, t: Transaction) => sum + t.total_value, 0);
+  }, [transactions]);
+
+  const freshSellsTotal = useMemo(() => {
+    return transactions.filter((t: Transaction) => t.action === 'SELL').reduce((sum: number, t: Transaction) => sum + t.total_value, 0);
+  }, [transactions]);
+
+  const totalAua = totalCapital;
+  const allocatedAua = summary.totalInvested + totalMfCurrent + cashBalance;
+  const auaBuffer = totalAua - allocatedAua;
+  const isAuaBreached = totalAua > 0 && allocatedAua > totalAua;
+  const auaBreachAmount = Math.max(0, allocatedAua - totalAua);
+
+  // Dynamic estimated cash position
+  const baseCashBroughtIn = client?.asset_free_cash !== undefined && client?.asset_free_cash !== null ? client.asset_free_cash : calculatedCashBalance;
+  const dynamicEstimatedCash = Math.max(0, baseCashBroughtIn - freshBuysTotal + freshSellsTotal + liquidEtfTotalValue);
+  const cashDiscrepancy = Math.abs(dynamicEstimatedCash - cashBalance);
+
+  // Cash Strategy Buckets
+  const momentumCash = Math.round(cashBalance * 0.2);
+  const longTermCash = Math.max(0, cashBalance - momentumCash);
+  const freeCashRatio = totalPortfolioValue > 0 ? (cashBalance / totalPortfolioValue) * 100 : 0;
   // -------------------------------------
 
   if (loading) {
@@ -885,6 +996,66 @@ export function ClientPortfolioPage() {
         </div>
       </div>
 
+      {/* ── AUA Breached / Buffer Alert ────────────────────────────────── */}
+      {isAuaBreached && (
+        <div style={{
+          marginBottom: 'var(--space-6)', padding: '16px 20px', borderRadius: 12,
+          background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.35)',
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <AlertCircle size={22} style={{ color: '#ef4444', flexShrink: 0 }} />
+              <div>
+                <strong style={{ color: '#dc2626', fontSize: 14 }}>⚠️ AUA Capacity Breached / Over-Allocated</strong>
+                <div style={{ color: '#991b1b', fontSize: 12.5, marginTop: 2 }}>
+                  Total Deployed Assets (₹{allocatedAua.toLocaleString('en-IN', { maximumFractionDigits: 0 })}) exceed Total AUA (₹{totalAua.toLocaleString('en-IN', { maximumFractionDigits: 0 })}) by <strong style={{ color: '#dc2626' }}>₹{auaBreachAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong>.
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsEditingAuaReason(!isEditingAuaReason)}
+              className="btn-glass-light"
+              style={{ padding: '6px 14px', fontSize: 12, borderColor: 'rgba(239, 68, 68, 0.4)', color: '#dc2626' }}
+            >
+              {isEditingAuaReason ? 'Close Reason' : 'Log / Edit Reason'}
+            </button>
+          </div>
+
+          {(isEditingAuaReason || client?.aua_breach_reason) && (
+            <div style={{ background: 'rgba(255, 255, 255, 0.75)', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.25)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 6 }}>
+                Mandatory Reason for Exceeding AUA:
+              </div>
+              {isEditingAuaReason ? (
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input
+                    type="text"
+                    value={auaBreachReason}
+                    onChange={e => setAuaBreachReason(e.target.value)}
+                    placeholder="e.g. Additional capital commitment received from client pending bank transfer"
+                    className="glass-input"
+                    style={{ flex: 1, padding: '8px 12px', fontSize: 13 }}
+                  />
+                  <button
+                    onClick={saveAuaReason}
+                    disabled={savingAuaReason}
+                    className="btn-glass-gold"
+                    style={{ padding: '8px 16px', fontSize: 12 }}
+                  >
+                    {savingAuaReason ? 'Saving...' : 'Save Reason'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: '#333', fontStyle: 'italic' }}>
+                  "{client?.aua_breach_reason || 'No explanation logged yet.'}"
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         <SummaryCard title="Total Invested" value={fmtCurrencyKPI(summary.totalInvested)} icon={<IndianRupee size={16} />} accentColor="var(--color-primary-500)" />
@@ -904,6 +1075,11 @@ export function ClientPortfolioPage() {
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Asset Allocation</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
             <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Portfolio Value: </span>{fmtCurrency(totalPortfolioValue)}
+            {auaBuffer > 0 && (
+              <span style={{ marginLeft: 14, color: '#16a34a', fontWeight: 600, fontSize: 11, background: 'rgba(22,163,74,0.08)', padding: '2px 8px', borderRadius: 6, border: '1px solid rgba(22,163,74,0.2)' }}>
+                AUA Buffer Remaining: {fmtCurrency(auaBuffer)}
+              </span>
+            )}
           </div>
         </div>
         
@@ -977,596 +1153,897 @@ export function ClientPortfolioPage() {
         )}
       </div>
 
-      {/* ── Rebalancing Capital Panel ───────────────────────────────────── */}
-      {isRebalanceMode && (
-        <div className="animate-fade-in" style={{
-          marginBottom: 'var(--space-6)',
-          background: 'linear-gradient(135deg, rgba(17,17,17,0.95) 0%, rgba(26,22,12,0.95) 100%)',
-          border: '1px solid var(--gold-border)',
-          borderRadius: 'var(--radius-xl)',
-          padding: '24px 28px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}>
-          {/* Gold accent top bar */}
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-            background: 'linear-gradient(90deg, transparent, var(--gold), var(--gold-light), var(--gold), transparent)',
-            opacity: 0.7,
-          }} />
-          {/* Subtle glow */}
-          <div style={{
-            position: 'absolute', top: -40, right: -40, width: 160, height: 160,
-            background: 'radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%)',
-            pointerEvents: 'none',
-          }} />
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.25)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'var(--gold)',
-              }}>
-                <Landmark size={16} />
-              </div>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: '#EAE0C8', margin: 0, letterSpacing: '0.3px' }}>
-                Rebalancing Capital Overview
-              </h3>
-            </div>
-
-<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <button
-                  onClick={() => setShowBuyModal(true)}
-                  className="btn-glass-gold"
-                  style={{ padding: '7px 14px', fontSize: 12 }}
-                >
-                  <PlusCircle size={14} /> Add Scrip
-                </button>
-                <button
-                  onClick={() => refreshPrices()}
-                  disabled={refreshing}
-                  className="btn-glass-light"
-                  style={{ padding: '7px 14px', fontSize: 12, opacity: refreshing ? 0.6 : 1 }}
-                >
-                  <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                  {refreshing ? 'Refreshing...' : 'Refresh Prices'}
-                </button>
-              </div>
-              {priceAsOf && (
-                <span style={{ fontSize: 11, color: '#888', letterSpacing: '0.3px' }}>
-                  Prices as of: {priceAsOf}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
-            {/* Total Capital Input */}
-            <div style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 12,
-              padding: '16px 20px',
-              transition: 'border-color 0.2s',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Total Capital</span>
-                <div style={{
-                  width: 30, height: 30, borderRadius: 8,
-                  background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--gold)',
-                }}>
-                  <Wallet size={14} />
-                </div>
-              </div>
-              {editingCapital ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: 'var(--gold)', fontSize: 22, fontWeight: 800 }}>₹</span>
-                  <input
-                    type="number"
-                    value={totalCapitalInput}
-                    onChange={e => setTotalCapitalInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') saveCapital(); if (e.key === 'Escape') { setEditingCapital(false); setTotalCapitalInput(String(totalCapital)); } }}
-                    autoFocus
-                    style={{
-                      flex: 1, padding: '6px 10px', fontSize: 18, fontWeight: 800,
-                      background: 'rgba(201,168,76,0.06)', color: '#EAE0C8',
-                      border: '1px solid var(--gold-border)', borderRadius: 6, outline: 'none',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                  />
-                  <button onClick={saveCapital} disabled={savingCapital} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 4 }}><Check size={16} /></button>
-                  <button onClick={() => { setEditingCapital(false); setTotalCapitalInput(String(totalCapital)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 4 }}><XIcon size={16} /></button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold-light)', letterSpacing: '-0.5px' }}>
-                    {totalCapital > 0 ? fmtCurrency(totalCapital) : '₹0.00'}
-                  </span>
-                  <button
-                    onClick={() => { setEditingCapital(true); setTotalCapitalInput(String(totalCapital)); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, opacity: 0.6, display: 'flex', alignItems: 'center' }}
-                    title="Edit total capital"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                </div>
-              )}
-              <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Click to set the total capital deployed</div>
-            </div>
-
-            {/* Mutual Funds Input */}
-            <div style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 12,
-              padding: '16px 20px',
-              transition: 'border-color 0.2s',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Mutual Funds</span>
-                <div style={{
-                  width: 30, height: 30, borderRadius: 8,
-                  background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--gold)',
-                }}>
-                  <Wallet size={14} />
-                </div>
-              </div>
-              {editingMutualFunds ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: 'var(--gold)', fontSize: 22, fontWeight: 800 }}>₹</span>
-                  <input
-                    type="number"
-                    value={mutualFundsInput}
-                    onChange={e => setMutualFundsInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') saveMutualFunds(); if (e.key === 'Escape') { setEditingMutualFunds(false); setMutualFundsInput(String(mutualFunds)); } }}
-                    autoFocus
-                    style={{
-                      flex: 1, padding: '6px 10px', fontSize: 18, fontWeight: 800,
-                      background: 'rgba(201,168,76,0.06)', color: '#EAE0C8',
-                      border: '1px solid var(--gold-border)', borderRadius: 6, outline: 'none',
-                      fontFamily: 'var(--font-sans)',
-                    }}
-                  />
-                  <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 4 }}><Check size={16} /></button>
-                  <button onClick={() => { setEditingMutualFunds(false); setMutualFundsInput(String(mutualFunds)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 4 }}><XIcon size={16} /></button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold-light)', letterSpacing: '-0.5px' }}>
-                    {mutualFunds > 0 ? fmtCurrency(mutualFunds) : '₹0.00'}
-                  </span>
-                  <button
-                    onClick={() => { setEditingMutualFunds(true); setMutualFundsInput(String(mutualFunds)); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, opacity: 0.6, display: 'flex', alignItems: 'center' }}
-                    title="Edit mutual funds"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                </div>
-              )}
-              <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Amount invested in MFs</div>
-            </div>
-
-            {/* Total Investment (read-only) */}
-            <div style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 12,
-              padding: '16px 20px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Total Investment</span>
-                <div style={{
-                  width: 30, height: 30, borderRadius: 8,
-                  background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#3b82f6',
-                }}>
-                  <IndianRupee size={14} />
-                </div>
-              </div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: '#EAE0C8', letterSpacing: '-0.5px' }}>
-                {fmtCurrency(summary.totalInvested)}
-              </div>
-              <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Sum of all invested amounts</div>
-            </div>
-
-            {/* Cash Balance (dynamic) */}
-            <div style={{
-              background: cashBalance >= 0
-                ? 'linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(34,197,94,0.04) 100%)'
-                : 'linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(239,68,68,0.04) 100%)',
-              border: `1px solid ${cashBalance >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`,
-              borderRadius: 12,
-              padding: '16px 20px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Cash Balance</span>
-                <div style={{
-                  width: 30, height: 30, borderRadius: 8,
-                  background: cashBalance >= 0 ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                  border: `1px solid ${cashBalance >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: cashBalance >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)',
-                }}>
-                  {cashBalance >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                </div>
-              </div>
-              <div style={{
-                fontSize: 24, fontWeight: 800,
-                color: totalCapital <= 0 ? '#555' : cashBalance >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)',
-                letterSpacing: '-0.5px',
-              }}>
-                {totalCapital > 0 ? fmtCurrency(cashBalance) : '—'}
-              </div>
-              <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>
-                {totalCapital > 0
-                  ? `${cashBalance >= 0 ? 'Available' : 'Over-invested by'} ${totalCapital > 0 ? ((Math.abs(cashBalance) / totalCapital) * 100).toFixed(1) + '% of capital' : ''}`
-                  : 'Set total capital to calculate'
-                }
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Holdings Table */}
-      <section style={{ marginBottom: 'var(--space-10)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                Holdings &nbsp;
-                <span style={{ fontSize: 15, fontWeight: 400, color: '#555555' }}>
-                  ({holdings.length} positions)
-                </span>
-              </h2>
-              {holdings.some(h => h.last_price_update) && (
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
-                  Prices last updated: {new Date(Math.max(...holdings.filter(h => h.last_price_update).map(h => new Date(h.last_price_update!).getTime()))).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-            </div>
-            <div>
-              <input
-                type="text"
-                placeholder="Search stock..."
-                value={stockSearch}
-                onChange={e => setStockSearch(e.target.value)}
-                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}
-              />
-            </div>
-          </div>
-          
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            <select
-              value={sectorFilter}
-              onChange={(e) => setSectorFilter(e.target.value)}
-              style={{
-                padding: '8px 12px', borderRadius: 8, background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)', color: 'var(--text-primary)',
-                fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer'
-              }}
-            >
-              <option value="">All Sectors</option>
-              {uniqueSectors.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select
-              value={mcapFilter}
-              onChange={(e) => setMcapFilter(e.target.value)}
-              style={{
-                padding: '8px 12px', borderRadius: 8, background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)', color: 'var(--text-primary)',
-                fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer'
-              }}
-            >
-              <option value="">All M Cap</option>
-              {uniqueMCaps.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              {priceAsOf && (
-                <span style={{ position: 'absolute', top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
-                  As of: {priceAsOf}
-                </span>
-              )}
+      {/* ── 4-Tab Portfolio System Navigation Bar ────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 20, padding: '6px 8px', borderRadius: 14,
+        background: 'rgba(255, 255, 255, 0.75)', border: '1px solid rgba(229, 231, 235, 0.8)',
+        backdropFilter: 'blur(12px)',
+      }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {[
+            { key: 'estimated', label: 'Estimated Portfolio', badge: `${holdings.length} Working` },
+            { key: 'actual', label: 'Actual Portfolio', badge: `${actualHoldings.length} Initial` },
+            { key: 'fresh_tx', label: 'Fresh Transactions', badge: `${transactions.length} Orders` },
+            { key: 'cash', label: 'Cash Positions & Ledger', badge: fmtCurrencyKPI(cashBalance) },
+          ].map(t => {
+            const isActive = portfolioTab === t.key;
+            return (
               <button
-                onClick={() => refreshPrices()}
-                disabled={refreshing}
+                key={t.key}
+                type="button"
+                onClick={() => setPortfolioTab(t.key as any)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
-                  background: 'var(--bg-elevated)', border: '1px solid var(--gold-border)',
-                  color: 'var(--gold)', fontSize: 13, fontWeight: 600,
-                  cursor: refreshing ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                  opacity: refreshing ? 0.7 : 1,
+                  padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  border: isActive ? '1px solid var(--gold-border)' : '1px solid transparent',
+                  background: isActive ? 'rgba(201,168,76,0.14)' : 'transparent',
+                  color: isActive ? '#8c6314' : 'var(--text-secondary)',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                  transition: 'all 0.15s ease',
+                  boxShadow: isActive ? '0 2px 8px rgba(201,168,76,0.12)' : 'none',
                 }}
-                onMouseEnter={e => { if (!refreshing) (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.1)'; }}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
               >
-                <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-                {refreshing ? 'Refreshing...' : 'Refresh Prices'}
+                <span>{t.label}</span>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  background: isActive ? '#8c6314' : 'rgba(0,0,0,0.06)',
+                  color: isActive ? '#ffffff' : 'var(--text-muted)',
+                }}>
+                  {t.badge}
+                </span>
               </button>
-            </div>
-            <button
-              onClick={handleDownloadExcel}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
-                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600,
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
-            >
-              <Download size={15} /> Export
-            </button>
-          </div>
+            );
+          })}
         </div>
 
-        {holdings.length === 0 ? (
-          <div style={{ background: 'var(--bg-elevated)', border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-12)', textAlign: 'center' }}>
-            <BarChart3 size={40} style={{ color: 'var(--text-muted)', margin: '0 auto var(--space-4)', display: 'block', opacity: 0.4 }} />
-            <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>No holdings yet</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>Upload a broker statement or add holdings manually</p>
-          </div>
-        ) : (
-          <div className="glass-card" style={{ overflowX: 'auto', maxHeight: '75vh' }}>
-            <div style={{ minWidth: 1610 }}>
-              {/* Table Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: '12px 18px', borderBottom: '1px solid rgba(229, 231, 235, 0.8)', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</div>
-              <button onClick={() => handleSort('scrip')}
-                style={{
-                  fontSize: 11, color: sortColumn === 'scrip' ? '#8c6314' : 'var(--text-muted)',
-                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
-                }}
-              >
-                Scrip {sortColumn === 'scrip' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </button>
-              <button onClick={() => handleSort('sector')}
-                style={{
-                  fontSize: 11, color: sortColumn === 'sector' ? '#8c6314' : 'var(--text-muted)',
-                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
-                }}
-              >
-                Sector {sortColumn === 'sector' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </button>
-              <button onClick={() => handleSort('marketCap')}
-                style={{
-                  fontSize: 11, color: sortColumn === 'marketCap' ? '#8c6314' : 'var(--text-muted)',
-                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
-                }}
-              >
-                M Cap {sortColumn === 'marketCap' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </button>
-              {['qty:Qty', 'buy_price:Buy Price', 'invested_amount:Invested', 'current_price:Curr Price', 'current_value:Curr Value', 'unrealised_pnl:Unreal P&L', 'unrealised_pnl_pct:P&L %', 'alloc:Alloc %'].map(colStr => {
-                const [colKey, colName] = colStr.split(':');
-                return (
-                  <button key={colKey} onClick={() => handleSort(colKey as SortColumn)}
-                    style={{
-                      fontSize: 11, color: sortColumn === colKey ? '#8c6314' : 'var(--text-muted)',
-                      fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
-                      cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
-                    }}
-                  >
-                    {colName} {sortColumn === colKey && (sortOrder === 'asc' ? '↑' : '↓')}
-                  </button>
-                );
-              })}
-              <button onClick={() => handleSort('source')}
-                style={{
-                  fontSize: 11, color: sortColumn === 'source' ? '#8c6314' : 'var(--text-muted)',
-                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
-                }}
-              >
-                Source {sortColumn === 'source' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </button>
-              <button onClick={() => handleSort('purchase_date')}
-                style={{
-                  fontSize: 11, color: sortColumn === 'purchase_date' ? '#8c6314' : 'var(--text-muted)',
-                  fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
-                  cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
-                }}
-              >
-                Pur. Date {sortColumn === 'purchase_date' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </button>
-              {isRebalanceMode && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Action</span>}
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete</div>
-            </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', paddingRight: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+          <span>{portfolioTab === 'actual' ? 'Original Baseline View' : portfolioTab === 'cash' ? 'Dynamic Cash Reconciliation' : portfolioTab === 'fresh_tx' ? 'Executed CRM Orders' : 'Live Working Model (CMP Sync)'}</span>
+        </div>
+      </div>
 
-            {/* Table Rows */}
-            {getSortedHoldings().map((h, i) => {
-              const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
-              const displayCompanyName = meta.companyName || h.company_name;
-              return (
-              <div key={h.id} style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', alignItems: 'center', padding: '11px 18px', borderBottom: i < getSortedHoldings().length - 1 ? '1px solid rgba(229, 231, 235, 0.7)' : 'none', transition: 'background 0.15s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201, 168, 76, 0.03)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <div style={{ color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 500 }}>{i + 1}</div>
-                <div>
-                  {editingScrip === h.id ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input
-                        type="text"
-                        value={editScripVal}
-                        onChange={e => setEditScripVal(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') saveScrip(h.id); if (e.key === 'Escape') { setEditingScrip(null); setEditScripVal(''); } }}
-                        autoFocus
-                        style={{ width: 105, padding: '3px 6px', fontSize: 12.5, background: '#ffffff', color: 'var(--text-primary)', border: '1px solid var(--gold)', borderRadius: 4, outline: 'none' }}
-                      />
-                      <button onClick={() => saveScrip(h.id)} disabled={savingScrip} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', padding: 2 }}><Check size={14} /></button>
-                      <button onClick={() => { setEditingScrip(null); setEditScripVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2 }}><XIcon size={14} /></button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13.5, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
-                        <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
-                      </div>
-                      {displayCompanyName && (
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={displayCompanyName}>
-                          {displayCompanyName}
-                        </div>
-                      )}
-                    </>
-                  )}
+      {/* ── TAB 1 & TAB 2: Holdings Views (Estimated & Actual) ───────────── */}
+      {(portfolioTab === 'estimated' || portfolioTab === 'actual') && (
+        <>
+          {/* Rebalancing Capital Panel (only in Rebalance Mode on Estimated Tab) */}
+          {isRebalanceMode && portfolioTab === 'estimated' && (
+            <div className="animate-fade-in" style={{
+              marginBottom: 'var(--space-6)',
+              background: 'linear-gradient(135deg, rgba(17,17,17,0.95) 0%, rgba(26,22,12,0.95) 100%)',
+              border: '1px solid var(--gold-border)',
+              borderRadius: 'var(--radius-xl)',
+              padding: '24px 28px',
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                background: 'linear-gradient(90deg, transparent, var(--gold), var(--gold-light), var(--gold), transparent)',
+                opacity: 0.7,
+              }} />
+              <div style={{
+                position: 'absolute', top: -40, right: -40, width: 160, height: 160,
+                background: 'radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%)',
+                pointerEvents: 'none',
+              }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--gold)',
+                  }}>
+                    <Landmark size={16} />
+                  </div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: '#EAE0C8', margin: 0, letterSpacing: '0.3px' }}>
+                    Rebalancing Capital Overview
+                  </h3>
                 </div>
 
-                <div style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={meta.sector}>
-                  {meta.sector}
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
-                  {meta.marketCap}
-                </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
-                  {h.quantity.toLocaleString('en-IN')}
-                </div>
-                
-                {/* Buy Price with Edit options */}
-                <div style={{ color: 'var(--text-secondary)', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {editingBuyPrice === h.id ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input type="number" value={editBuyPriceVal} onChange={e => setEditBuyPriceVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveBuyPrice(h.id); if (e.key === 'Escape') { setEditingBuyPrice(null); setEditBuyPriceVal(''); } }} autoFocus style={{ width: 85, padding: '3px 6px', fontSize: 12.5, background: '#ffffff', color: 'var(--text-primary)', border: '1px solid var(--gold)', borderRadius: 4, outline: 'none' }} />
-                      <button onClick={() => saveBuyPrice(h.id)} disabled={savingBuyPrice} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', padding: 2 }}><Check size={14} /></button>
-                      <button onClick={() => { setEditingBuyPrice(null); setEditBuyPriceVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2 }}><XIcon size={14} /></button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="tabular-nums" style={{ fontWeight: 400 }}>
-                        {h.buy_price > 0 ? `₹${h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ color: 'var(--color-accent-400)', fontSize: 11.5, fontStyle: 'italic' }}>Not set</span>}
-                      </span>
-                      <button onClick={() => { setEditingBuyPrice(h.id); setEditBuyPriceVal(h.buy_price > 0 ? String(h.buy_price) : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit buy price"><Pencil size={11} /></button>
-                    </>
-                  )}
-                </div>
-
-                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
-                  {h.buy_price > 0 ? fmtCurrency(h.invested_amount || h.buy_price * h.quantity) : '0'}
-                </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
-                  {h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '0'}
-                </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
-                  {h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}
-                </div>
-                <div style={{ color: h.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626', fontSize: 13.5, fontWeight: 500 }} className="tabular-nums">
-                  {h.current_price > 0 ? `${h.unrealised_pnl >= 0 ? '+' : ''}${fmtCurrency(h.unrealised_pnl)}` : '0'}
-                </div>
-                <div>
-                  {h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>0%</span>}
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 400 }} className="tabular-nums">
-                  {summary.currentValue > 0 ? (((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}
-                </div>
-                
-                {/* Holding Source */}
-                <div>
-                  {editingHoldingSource === h.id ? (
-                    <select
-                      autoFocus
-                      value={h.source || 'Existing'}
-                      onChange={e => { updateHoldingField(h.id, 'source', e.target.value); setEditingHoldingSource(null); }}
-                      onBlur={() => setEditingHoldingSource(null)}
-                      style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none' }}
-                    >
-                      <option value="Existing">Existing</option>
-                      <option value="Fresh">Fresh</option>
-                    </select>
-                  ) : (
-                    <span onClick={() => setEditingHoldingSource(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                      {h.source || 'Existing'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Purchase Date */}
-                <div>
-                  {editingHoldingDate === h.id ? (
-                    <input
-                      type="date"
-                      autoFocus
-                      value={h.purchase_date || ''}
-                      onChange={e => { updateHoldingField(h.id, 'purchase_date', e.target.value); setEditingHoldingDate(null); }}
-                      onBlur={() => setEditingHoldingDate(null)}
-                      style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none', width: '100%' }}
-                    />
-                  ) : (
-                    <span onClick={() => setEditingHoldingDate(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                      {h.purchase_date ? new Date(h.purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : 'Set Date'}
-                    </span>
-                  )}
-                </div>
-                
-                {/* Inline Rebalance Sell Action */}
-                {isRebalanceMode && (
-                  <div style={{ textAlign: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <button
-                      onClick={() => setSellModalData({ holding: h, sellPrice: h.current_price.toString(), quantity: h.quantity.toString() })}
-                      style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.1)', color: 'var(--color-error-500)', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, transition: 'background 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'}
-                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'}
+                      onClick={() => setShowBuyModal(true)}
+                      className="btn-glass-gold"
+                      style={{ padding: '7px 14px', fontSize: 12 }}
                     >
-                      Sell
+                      <PlusCircle size={14} /> Add Scrip
+                    </button>
+                    <button
+                      onClick={() => refreshPrices()}
+                      disabled={refreshing}
+                      className="btn-glass-light"
+                      style={{ padding: '7px 14px', fontSize: 12, opacity: refreshing ? 0.6 : 1 }}
+                    >
+                      <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+                      {refreshing ? 'Refreshing...' : 'Refresh Prices'}
                     </button>
                   </div>
-                )}
-
-                {/* Delete Holding Button */}
-                <div style={{ textAlign: 'center' }}>
-                  <button
-                    onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--color-error-500)',
-                      padding: '4px 6px',
-                      borderRadius: 4,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: 0.7,
-                      transition: 'opacity 0.15s, background 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLElement).style.opacity = '1';
-                      (e.currentTarget as HTMLElement).style.background = 'rgba(239, 68, 68, 0.1)';
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.opacity = '0.7';
-                      (e.currentTarget as HTMLElement).style.background = 'none';
-                    }}
-                    title="Delete holding"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  {priceAsOf && (
+                    <span style={{ fontSize: 11, color: '#888', letterSpacing: '0.3px' }}>
+                      Prices as of: {priceAsOf}
+                    </span>
+                  )}
                 </div>
               </div>
-              );
-            })}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20 }}>
+                {/* Total Capital Input */}
+                <div style={{
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 12,
+                  padding: '16px 20px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Total Capital</span>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}>
+                      <Wallet size={14} />
+                    </div>
+                  </div>
+                  {editingCapital ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: 'var(--gold)', fontSize: 22, fontWeight: 800 }}>₹</span>
+                      <input
+                        type="number"
+                        value={totalCapitalInput}
+                        onChange={e => setTotalCapitalInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveCapital(); if (e.key === 'Escape') { setEditingCapital(false); setTotalCapitalInput(String(totalCapital)); } }}
+                        autoFocus
+                        style={{
+                          flex: 1, padding: '6px 10px', fontSize: 18, fontWeight: 800,
+                          background: 'rgba(201,168,76,0.06)', color: '#EAE0C8',
+                          border: '1px solid var(--gold-border)', borderRadius: 6, outline: 'none',
+                        }}
+                      />
+                      <button onClick={saveCapital} disabled={savingCapital} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 4 }}><Check size={16} /></button>
+                      <button onClick={() => { setEditingCapital(false); setTotalCapitalInput(String(totalCapital)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 4 }}><XIcon size={16} /></button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold-light)', letterSpacing: '-0.5px' }}>
+                        {totalCapital > 0 ? fmtCurrency(totalCapital) : '₹0.00'}
+                      </span>
+                      <button
+                        onClick={() => { setEditingCapital(true); setTotalCapitalInput(String(totalCapital)); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, opacity: 0.6, display: 'flex', alignItems: 'center' }}
+                        title="Edit total capital"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Click to set total deployed capital</div>
+                </div>
+
+                {/* Mutual Funds Input */}
+                <div style={{
+                  background: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 12,
+                  padding: '16px 20px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Mutual Funds</span>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}>
+                      <Wallet size={14} />
+                    </div>
+                  </div>
+                  {editingMutualFunds ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: 'var(--gold)', fontSize: 22, fontWeight: 800 }}>₹</span>
+                      <input
+                        type="number"
+                        value={mutualFundsInput}
+                        onChange={e => setMutualFundsInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveMutualFunds(); if (e.key === 'Escape') { setEditingMutualFunds(false); setMutualFundsInput(String(mutualFunds)); } }}
+                        autoFocus
+                        style={{
+                          flex: 1, padding: '6px 10px', fontSize: 18, fontWeight: 800,
+                          background: 'rgba(201,168,76,0.06)', color: '#EAE0C8',
+                          border: '1px solid var(--gold-border)', borderRadius: 6, outline: 'none',
+                        }}
+                      />
+                      <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 4 }}><Check size={16} /></button>
+                      <button onClick={() => { setEditingMutualFunds(false); setMutualFundsInput(String(mutualFunds)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 4 }}><XIcon size={16} /></button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--gold-light)', letterSpacing: '-0.5px' }}>
+                        {mutualFunds > 0 ? fmtCurrency(mutualFunds) : '₹0.00'}
+                      </span>
+                      <button
+                        onClick={() => { setEditingMutualFunds(true); setMutualFundsInput(String(mutualFunds)); }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, opacity: 0.6, display: 'flex', alignItems: 'center' }}
+                        title="Edit mutual funds"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Amount invested in MFs</div>
+                </div>
+
+                {/* Total Investment */}
+                <div style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Total Investment</span>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+                      <IndianRupee size={14} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#EAE0C8', letterSpacing: '-0.5px' }}>
+                    {fmtCurrency(summary.totalInvested)}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>Sum of all invested amounts</div>
+                </div>
+
+                {/* Cash Balance */}
+                <div style={{
+                  background: cashBalance >= 0 ? 'linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(34,197,94,0.04) 100%)' : 'linear-gradient(135deg, rgba(0,0,0,0.4) 0%, rgba(239,68,68,0.04) 100%)',
+                  border: `1px solid ${cashBalance >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`,
+                  borderRadius: 12, padding: '16px 20px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, color: '#666', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>Cash Balance</span>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: 8,
+                      background: cashBalance >= 0 ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                      border: `1px solid ${cashBalance >= 0 ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: cashBalance >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)',
+                    }}>
+                      {cashBalance >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: totalCapital <= 0 ? '#555' : cashBalance >= 0 ? 'var(--color-success-500)' : 'var(--color-error-500)', letterSpacing: '-0.5px' }}>
+                    {totalCapital > 0 ? fmtCurrency(cashBalance) : '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#555', marginTop: 8 }}>
+                    {totalCapital > 0 ? `${cashBalance >= 0 ? 'Available' : 'Over-invested'}` : 'Set total capital to calculate'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Holdings Table */}
+          <section style={{ marginBottom: 'var(--space-10)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                    {portfolioTab === 'actual' ? 'Actual Baseline Holdings' : 'Holdings & Working Portfolio'} &nbsp;
+                    <span style={{ fontSize: 15, fontWeight: 400, color: '#555555' }}>
+                      ({getSortedHoldings().length} positions)
+                    </span>
+                  </h2>
+                  {holdings.some(h => h.last_price_update) && (
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+                      Prices last updated: {new Date(Math.max(...holdings.filter(h => h.last_price_update).map(h => new Date(h.last_price_update!).getTime()))).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Search stock..."
+                    value={stockSearch}
+                    onChange={e => setStockSearch(e.target.value)}
+                    style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}
+                  />
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                <select
+                  value={sectorFilter}
+                  onChange={(e) => setSectorFilter(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="">All Sectors</option>
+                  {uniqueSectors.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <select
+                  value={mcapFilter}
+                  onChange={(e) => setMcapFilter(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer' }}
+                >
+                  <option value="">All M Cap</option>
+                  {uniqueMCaps.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  {priceAsOf && (
+                    <span style={{ position: 'absolute', top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                      As of: {priceAsOf}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => refreshPrices()}
+                    disabled={refreshing}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
+                      background: 'var(--bg-elevated)', border: '1px solid var(--gold-border)',
+                      color: 'var(--gold)', fontSize: 13, fontWeight: 600,
+                      cursor: refreshing ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
+                      opacity: refreshing ? 0.7 : 1,
+                    }}
+                    onMouseEnter={e => { if (!refreshing) (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.1)'; }}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
+                  >
+                    <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+                    {refreshing ? 'Refreshing...' : 'Refresh Prices'}
+                  </button>
+                </div>
+                <button
+                  onClick={handleDownloadExcel}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
+                >
+                  <Download size={15} /> Export
+                </button>
+              </div>
+            </div>
+
+            {getSortedHoldings().length === 0 ? (
+              <div style={{ background: 'var(--bg-elevated)', border: '2px dashed var(--border-default)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-12)', textAlign: 'center' }}>
+                <BarChart3 size={40} style={{ color: 'var(--text-muted)', margin: '0 auto var(--space-4)', display: 'block', opacity: 0.4 }} />
+                <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>No holdings in this view</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>
+                  {portfolioTab === 'actual' ? 'No existing holdings were imported during onboarding' : 'Upload a broker statement or add holdings'}
+                </p>
+              </div>
+            ) : (
+              <div className="glass-card" style={{ overflowX: 'auto', maxHeight: '75vh' }}>
+                <div style={{ minWidth: 1610 }}>
+                  {/* Table Header */}
+                  <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: '12px 18px', borderBottom: '1px solid rgba(229, 231, 235, 0.8)', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</div>
+                    <button onClick={() => handleSort('scrip')} style={{ fontSize: 11, color: sortColumn === 'scrip' ? '#8c6314' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                      Scrip {sortColumn === 'scrip' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </button>
+                    <button onClick={() => handleSort('sector')} style={{ fontSize: 11, color: sortColumn === 'sector' ? '#8c6314' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                      Sector {sortColumn === 'sector' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </button>
+                    <button onClick={() => handleSort('marketCap')} style={{ fontSize: 11, color: sortColumn === 'marketCap' ? '#8c6314' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                      M Cap {sortColumn === 'marketCap' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </button>
+                    {['qty:Qty', 'buy_price:Avg Buy Price', 'invested_amount:Invested', 'current_price:Curr Price', 'current_value:Curr Value', 'unrealised_pnl:Unreal P&L', 'unrealised_pnl_pct:P&L %', 'alloc:Alloc %'].map(colStr => {
+                      const [colKey, colName] = colStr.split(':');
+                      return (
+                        <button key={colKey} onClick={() => handleSort(colKey as SortColumn)} style={{ fontSize: 11, color: sortColumn === colKey ? '#8c6314' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                          {colName} {sortColumn === colKey && (sortOrder === 'asc' ? '↑' : '↓')}
+                        </button>
+                      );
+                    })}
+                    <button onClick={() => handleSort('source')} style={{ fontSize: 11, color: sortColumn === 'source' ? '#8c6314' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                      Source {sortColumn === 'source' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </button>
+                    <button onClick={() => handleSort('purchase_date')} style={{ fontSize: 11, color: sortColumn === 'purchase_date' ? '#8c6314' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'left' }}>
+                      Pur. Date {sortColumn === 'purchase_date' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </button>
+                    {isRebalanceMode && portfolioTab === 'estimated' && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Action</span>}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete</div>
+                  </div>
+
+                  {/* Table Rows */}
+                  {getSortedHoldings().map((h: Holding, i: number) => {
+                    const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
+                    const displayCompanyName = meta.companyName || h.company_name;
+                    return (
+                    <div key={h.id} style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', alignItems: 'center', padding: '11px 18px', borderBottom: i < getSortedHoldings().length - 1 ? '1px solid rgba(229, 231, 235, 0.7)' : 'none', transition: 'background 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201, 168, 76, 0.03)'}
+                      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                    >
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 500 }}>{i + 1}</div>
+                      <div>
+                        {editingScrip === h.id ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <input
+                              type="text"
+                              value={editScripVal}
+                              onChange={e => setEditScripVal(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveScrip(h.id); if (e.key === 'Escape') { setEditingScrip(null); setEditScripVal(''); } }}
+                              autoFocus
+                              style={{ width: 105, padding: '3px 6px', fontSize: 12.5, background: '#ffffff', color: 'var(--text-primary)', border: '1px solid var(--gold)', borderRadius: 4, outline: 'none' }}
+                            />
+                            <button onClick={() => saveScrip(h.id)} disabled={savingScrip} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', padding: 2 }}><Check size={14} /></button>
+                            <button onClick={() => { setEditingScrip(null); setEditScripVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2 }}><XIcon size={14} /></button>
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13.5, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
+                              <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
+                            </div>
+                            {displayCompanyName && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={displayCompanyName}>
+                                {displayCompanyName}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={meta.sector}>
+                        {meta.sector}
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
+                        {meta.marketCap}
+                      </div>
+                      <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
+                        {h.quantity.toLocaleString('en-IN')}
+                      </div>
+                      
+                      {/* Buy Price with Edit options */}
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {editingBuyPrice === h.id ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <input type="number" value={editBuyPriceVal} onChange={e => setEditBuyPriceVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveBuyPrice(h.id); if (e.key === 'Escape') { setEditingBuyPrice(null); setEditBuyPriceVal(''); } }} autoFocus style={{ width: 85, padding: '3px 6px', fontSize: 12.5, background: '#ffffff', color: 'var(--text-primary)', border: '1px solid var(--gold)', borderRadius: 4, outline: 'none' }} />
+                            <button onClick={() => saveBuyPrice(h.id)} disabled={savingBuyPrice} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', padding: 2 }}><Check size={14} /></button>
+                            <button onClick={() => { setEditingBuyPrice(null); setEditBuyPriceVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2 }}><XIcon size={14} /></button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="tabular-nums" style={{ fontWeight: 400 }}>
+                              {h.buy_price > 0 ? `₹${h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ color: 'var(--color-accent-400)', fontSize: 11.5, fontStyle: 'italic' }}>Not set</span>}
+                            </span>
+                            <button onClick={() => { setEditingBuyPrice(h.id); setEditBuyPriceVal(h.buy_price > 0 ? String(h.buy_price) : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit buy price"><Pencil size={11} /></button>
+                          </>
+                        )}
+                      </div>
+
+                      <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
+                        {h.buy_price > 0 ? fmtCurrency(h.invested_amount || h.buy_price * h.quantity) : '0'}
+                      </div>
+                      <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
+                        {h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '0'}
+                      </div>
+                      <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
+                        {h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}
+                      </div>
+                      <div style={{ color: h.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626', fontSize: 13.5, fontWeight: 500 }} className="tabular-nums">
+                        {h.current_price > 0 ? `${h.unrealised_pnl >= 0 ? '+' : ''}${fmtCurrency(h.unrealised_pnl)}` : '0'}
+                      </div>
+                      <div>
+                        {h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>0%</span>}
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 400 }} className="tabular-nums">
+                        {summary.currentValue > 0 ? (((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}
+                      </div>
+                      
+                      {/* Holding Source */}
+                      <div>
+                        {editingHoldingSource === h.id ? (
+                          <select
+                            autoFocus
+                            value={h.source || 'Existing'}
+                            onChange={e => { updateHoldingField(h.id, 'source', e.target.value); setEditingHoldingSource(null); }}
+                            onBlur={() => setEditingHoldingSource(null)}
+                            style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none' }}
+                          >
+                            <option value="Existing">Existing</option>
+                            <option value="Fresh">Fresh</option>
+                          </select>
+                        ) : (
+                          <span onClick={() => setEditingHoldingSource(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                            {h.source || 'Existing'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Purchase Date */}
+                      <div>
+                        {editingHoldingDate === h.id ? (
+                          <input
+                            type="date"
+                            autoFocus
+                            value={h.purchase_date || ''}
+                            onChange={e => { updateHoldingField(h.id, 'purchase_date', e.target.value); setEditingHoldingDate(null); }}
+                            onBlur={() => setEditingHoldingDate(null)}
+                            style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none', width: '100%' }}
+                          />
+                        ) : (
+                          <span onClick={() => setEditingHoldingDate(h.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                            {h.purchase_date ? new Date(h.purchase_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : 'Set Date'}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Inline Rebalance Sell Action */}
+                      {isRebalanceMode && portfolioTab === 'estimated' && (
+                        <div style={{ textAlign: 'center' }}>
+                          <button
+                            onClick={() => setSellModalData({ holding: h, sellPrice: h.current_price.toString(), quantity: h.quantity.toString() })}
+                            style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.1)', color: 'var(--color-error-500)', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, transition: 'background 0.15s' }}
+                            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.2)'}
+                            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'}
+                          >
+                            Sell
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Delete Holding Button */}
+                      <div style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)',
+                            padding: '4px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            opacity: 0.7, transition: 'opacity 0.15s, background 0.15s',
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.background = 'rgba(239, 68, 68, 0.1)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; (e.currentTarget as HTMLElement).style.background = 'none'; }}
+                          title="Delete holding"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+
+      {/* ── TAB 3: Fresh Transactions View ──────────────────────────────── */}
+      {portfolioTab === 'fresh_tx' && (
+        <section style={{ marginBottom: 'var(--space-10)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                Fresh Transactions & Execution Ledger &nbsp;
+                <span style={{ fontSize: 15, fontWeight: 400, color: '#555555' }}>
+                  ({getSortedTransactions().length} orders)
+                </span>
+              </h2>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+                All Buy and Sell trades executed post-onboarding with target strategy buckets and execution price bands.
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 6, background: 'var(--bg-elevated)', padding: 4, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                {[
+                  { key: 'buy', label: 'Buy Orders' },
+                  { key: 'sell', label: 'Sell Orders' },
+                  { key: 'all', label: 'All Orders' },
+                ].map(b => (
+                  <button
+                    key={b.key}
+                    type="button"
+                    onClick={() => setTxTab(b.key as any)}
+                    style={{
+                      padding: '5px 12px', fontSize: 12, fontWeight: 700, borderRadius: 6, border: 'none',
+                      background: txTab === b.key ? 'var(--gold)' : 'transparent',
+                      color: txTab === b.key ? '#000000' : 'var(--text-secondary)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="text"
+                placeholder="Search stock in orders..."
+                value={txStockSearch}
+                onChange={e => setTxStockSearch(e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}
+              />
+
+              <button
+                onClick={() => setShowBuyModal(true)}
+                className="btn-glass-gold"
+                style={{ padding: '7px 14px', fontSize: 12 }}
+              >
+                <PlusCircle size={14} /> Execute New Trade
+              </button>
             </div>
           </div>
-        )}
-      </section>
 
-      {/* Transaction Log */}
+          {getSortedTransactions().length === 0 ? (
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-12)', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <p style={{ fontWeight: 600, color: 'var(--text-primary)' }}>No fresh transactions found</p>
+              <p style={{ fontSize: 13, marginTop: 6 }}>Execute buy/sell trades via Rebalancing mode or the Bulk Order Wizard</p>
+            </div>
+          ) : (
+            <div className="glass-card" style={{ overflowX: 'auto', maxHeight: '70vh' }}>
+              <div style={{ minWidth: 1100 }}>
+                {/* Header */}
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 140px 180px 90px 100px 120px 130px 130px 140px', gap: 12, padding: '12px 18px', borderBottom: '1px solid rgba(229,231,235,0.8)', background: 'rgba(255,255,255,0.95)', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Execution Date</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Symbol</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Company</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Action</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Quantity</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price (₹)</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Value</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Strategy Bucket</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price Range</div>
+                </div>
+
+                {/* Rows */}
+                {getSortedTransactions().map((tx, i) => {
+                  const meta = getStockMeta(tx.stock_symbol, tx.company_name || '');
+                  return (
+                    <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '120px 140px 180px 90px 100px 120px 130px 130px 140px', gap: 12, alignItems: 'center', padding: '11px 18px', borderBottom: i < getSortedTransactions().length - 1 ? '1px solid rgba(229,231,235,0.7)' : 'none' }}>
+                      <div>
+                        {editingTxDate === tx.id ? (
+                          <input
+                            type="date"
+                            autoFocus
+                            value={tx.date || ''}
+                            onChange={e => { updateTxDate(tx.id, e.target.value); setEditingTxDate(null); }}
+                            onBlur={() => setEditingTxDate(null)}
+                            style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none', width: '100%' }}
+                          />
+                        ) : (
+                          <span onClick={() => setEditingTxDate(tx.id)} style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                            {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontWeight: 700, color: '#8c6314', fontSize: 13.5 }}>{cleanSymbol(tx)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {meta.companyName || tx.company_name || '—'}
+                      </div>
+                      <div>
+                        <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: tx.action === 'BUY' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', color: tx.action === 'BUY' ? '#16a34a' : '#dc2626' }}>
+                          {tx.action}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 500 }} className="tabular-nums">{tx.quantity.toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize: 13, fontWeight: 500 }} className="tabular-nums">₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }} className="tabular-nums">{fmtCurrency(tx.total_value)}</div>
+                      <div>
+                        <span style={{ fontSize: 11.5, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: ((tx as any).bucket || 'Long-Term') === 'Momentum' ? 'rgba(168,85,247,0.1)' : 'rgba(59,130,246,0.1)', color: ((tx as any).bucket || 'Long-Term') === 'Momentum' ? '#7e22ce' : '#1d4ed8' }}>
+                          {(tx as any).bucket || 'Long-Term Core'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                        {(tx as any).price_range || 'Exact Execution'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── TAB 4: Cash Positions & Reconciliation View ─────────────────── */}
+      {portfolioTab === 'cash' && (
+        <section style={{ marginBottom: 'var(--space-10)' }}>
+          <div style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+              Dynamic Cash Position Engine & Discrepancy Reconciliation
+            </h2>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', display: 'block', marginTop: 4 }}>
+              Arithmetic ledger tracing starting cash, fresh trade flows, Liquid BeES investments, and capital bucket allocations.
+            </span>
+          </div>
+
+          {/* Cash KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16, marginBottom: 24 }}>
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Starting Cash Brought In</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>{fmtCurrency(baseCashBroughtIn)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Onboarding cash capital</div>
+            </div>
+
+            <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 6 }}>Fresh Buys Deployed (-)</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626' }}>- {fmtCurrency(freshBuysTotal)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{transactions.filter(t => t.action === 'BUY').length} buy orders executed</div>
+            </div>
+
+            <div style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', marginBottom: 6 }}>Fresh Sells Inflow (+)</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a' }}>+ {fmtCurrency(freshSellsTotal)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{transactions.filter(t => t.action === 'SELL').length} sell orders executed</div>
+            </div>
+
+            <div style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', marginBottom: 6 }}>Liquid BeES Parked Cash</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#2563eb' }}>{fmtCurrency(liquidEtfTotalValue)}</div>
+              <div style={{ fontSize: 11, color: '#2563eb', marginTop: 4 }}>Yield: ~5.5-6.5% p.a.</div>
+            </div>
+
+            <div style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 12, padding: '16px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', marginBottom: 6 }}>Estimated Available Cash</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#8c6314' }}>{fmtCurrency(dynamicEstimatedCash)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Live free capital</div>
+            </div>
+          </div>
+
+          {/* Strategy Buckets & Reconciliation Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
+            {/* Strategy Cash Buckets */}
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: '20px 22px' }}>
+              <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>Strategy Capital Buckets</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(59,130,246,0.06)', borderRadius: 8 }}>
+                  <div>
+                    <strong style={{ color: '#1d4ed8', fontSize: 13 }}>Long-Term Core Strategy Cash (80%)</strong>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Reserved for high-conviction staggered dips</div>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#1d4ed8' }}>{fmtCurrency(longTermCash)}</div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(168,85,247,0.06)', borderRadius: 8 }}>
+                  <div>
+                    <strong style={{ color: '#7e22ce', fontSize: 13 }}>Momentum Strategy Tactical Cash (20%)</strong>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Swing and breakout swing trades</div>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#7e22ce' }}>{fmtCurrency(momentumCash)}</div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: freeCashRatio < 10 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', borderRadius: 8 }}>
+                  <div>
+                    <strong style={{ color: freeCashRatio < 10 ? '#dc2626' : '#16a34a', fontSize: 13 }}>Free Cash / Portfolio Ratio</strong>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{freeCashRatio < 10 ? '⚠️ Low cash buffer warning (< 10%)' : 'Healthy liquidity buffer'}</div>
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a' }}>{freeCashRatio.toFixed(1)}%</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Reconciliation Engine */}
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 14, padding: '20px 22px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Cash Discrepancy & Reconciliation</h3>
+                {cashDiscrepancy > 100 && (
+                  <button
+                    onClick={() => syncBaseCashToEstimated(dynamicEstimatedCash)}
+                    className="btn-glass-gold"
+                    style={{ padding: '5px 12px', fontSize: 11 }}
+                  >
+                    Sync Base Cash
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Calculated Estimated Cash:</span>
+                  <strong>{fmtCurrency(dynamicEstimatedCash)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Client Master Base Cash:</span>
+                  <strong>{fmtCurrency(cashBalance)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Variance / Discrepancy:</span>
+                  <strong style={{ color: cashDiscrepancy > 100 ? '#dc2626' : '#16a34a' }}>
+                    {cashDiscrepancy > 100 ? `₹${cashDiscrepancy.toLocaleString('en-IN')} discrepancy` : 'Fully Reconciled (₹0)'}
+                  </strong>
+                </div>
+
+                <div style={{ marginTop: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Reason for Variance / Audit Trail:</span>
+                    <button
+                      onClick={() => setIsEditingReconReason(!isEditingReconReason)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#8c6314', fontWeight: 600 }}
+                    >
+                      {isEditingReconReason ? 'Cancel' : 'Edit Note'}
+                    </button>
+                  </div>
+                  {isEditingReconReason ? (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        value={reconciliationReason}
+                        onChange={e => setReconciliationReason(e.target.value)}
+                        placeholder="e.g. Dividend payout received in demat account"
+                        className="glass-input"
+                        style={{ flex: 1, padding: '6px 10px', fontSize: 12 }}
+                      />
+                      <button onClick={saveReconReason} disabled={savingReconReason} className="btn-glass-gold" style={{ padding: '6px 12px', fontSize: 11 }}>
+                        {savingReconReason ? 'Saving...' : 'Save'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '8px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                      "{reconciliationReason || 'No variance explanation logged yet.'}"
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Liquid BeES Holdings Table */}
+          {liquidHoldings.length > 0 && (
+            <div className="glass-card" style={{ padding: 18, borderRadius: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12 }}>
+                Parked Liquid ETF Holdings ({liquidHoldings.length} scrips)
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '160px 140px 140px 140px 140px', gap: 12, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                <div>Scrip</div>
+                <div>Quantity</div>
+                <div>Avg Buy Price</div>
+                <div>Current Value</div>
+                <div>Unrealised P&L</div>
+              </div>
+              {liquidHoldings.map((lh: Holding) => (
+                <div key={lh.id} style={{ display: 'grid', gridTemplateColumns: '160px 140px 140px 140px 140px', gap: 12, alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.05)', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(lh)}</div>
+                  <div>{lh.quantity.toLocaleString('en-IN')}</div>
+                  <div>₹{lh.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                  <div style={{ fontWeight: 600 }}>{fmtCurrency(lh.current_value || lh.buy_price * lh.quantity)}</div>
+                  <div style={{ color: lh.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                    {lh.unrealised_pnl >= 0 ? '+' : ''}{fmtCurrency(lh.unrealised_pnl)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Transaction History Ledger (Always available at bottom) ──────── */}
       <section>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-          <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-            Transaction Log &nbsp;
-            <span style={{ fontSize: 'var(--text-base)', fontWeight: 400, color: 'var(--text-muted)' }}>({transactions.length} transactions)</span>
-          </h2>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)', flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+              Transaction Log &nbsp;
+              <span style={{ fontSize: 'var(--text-base)', fontWeight: 400, color: 'var(--text-muted)' }}>({getSortedTransactions().length} records)</span>
+            </h2>
+            <div style={{ display: 'flex', gap: 6, background: 'var(--bg-elevated)', padding: 3, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+              <button
+                type="button"
+                onClick={() => setTxTab('buy')}
+                style={{
+                  padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
+                  background: txTab === 'buy' ? 'rgba(34,197,94,0.15)' : 'transparent',
+                  color: txTab === 'buy' ? '#16a34a' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                Buy Orders ({transactions.filter(t => t.action === 'BUY').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTxTab('sell')}
+                style={{
+                  padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
+                  background: txTab === 'sell' ? 'rgba(239,68,68,0.15)' : 'transparent',
+                  color: txTab === 'sell' ? '#dc2626' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                Sell Orders ({transactions.filter(t => t.action === 'SELL').length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTxTab('all')}
+                style={{
+                  padding: '4px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
+                  background: txTab === 'all' ? 'var(--gold)' : 'transparent',
+                  color: txTab === 'all' ? '#000000' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                }}
+              >
+                All Orders ({transactions.length})
+              </button>
+            </div>
+          </div>
           <div>
             <input
               type="text"
@@ -1577,58 +2054,101 @@ export function ClientPortfolioPage() {
             />
           </div>
         </div>
-        {transactions.length === 0 ? (
+
+        {getSortedTransactions().length === 0 ? (
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
-            No transactions recorded yet
+            No {txTab === 'sell' ? 'sell' : txTab === 'buy' ? 'buy' : ''} transactions recorded yet
           </div>
         ) : (
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflowY: 'auto', maxHeight: '60vh' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
-              {[
-                { col: 'date', label: 'Date' },
-                { col: 'stock_symbol', label: 'Symbol' },
-                { col: 'action', label: 'Action' },
-                { col: 'quantity', label: 'Quantity' },
-                { col: 'price', label: 'Price' },
-                { col: 'total_value', label: 'Total' }
-              ].map(({ col, label }) => (
-                <button key={col} onClick={() => handleTxSort(col as TxSortColumn)} style={{ fontSize: 'var(--text-xs)', color: txSortColumn === col ? 'var(--color-primary-400)' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
-                  {label} {txSortColumn === col ? (txSortOrder === 'asc' ? '↑' : '↓') : ''}
-                </button>
-              ))}
-            </div>
-            {getSortedTransactions().map((tx, i) => (
-              <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderBottom: i < getSortedTransactions().length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background 0.15s' }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <div>
-                  {editingTxDate === tx.id ? (
-                    <input
-                      type="date"
-                      autoFocus
-                      value={tx.date || ''}
-                      onChange={e => { updateTxDate(tx.id, e.target.value); setEditingTxDate(null); }}
-                      onBlur={() => setEditingTxDate(null)}
-                      style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none' }}
-                    />
-                  ) : (
-                    <div onClick={() => setEditingTxDate(tx.id)} style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', cursor: 'pointer', borderBottom: '1px dashed #ccc', display: 'inline-block' }}>
-                      {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {txTab === 'sell' ? (
+              /* Sell Ledger View */
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 160px 100px 120px 120px 130px 110px', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Date</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Stock Name</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Qty Sold</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Avg Buy Price</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sales Price</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Realised P&L (₹)</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>P&L (%)</div>
+                </div>
+                {getSortedTransactions().map((tx, i) => {
+                  const pnl = (tx as any).realised_pnl || 0;
+                  const buyPr = tx.price > 0 && tx.quantity > 0 ? (tx.price - (pnl / tx.quantity)) : 0;
+                  const pnlPct = buyPr > 0 ? ((tx.price - buyPr) / buyPr) * 100 : 0;
+                  return (
+                    <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '120px 160px 100px 120px 120px 130px 110px', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderBottom: i < getSortedTransactions().length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                        {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </div>
+                      <div style={{ fontWeight: 700, color: '#8c6314', fontSize: 13.5 }}>{cleanSymbol(tx)}</div>
+                      <div style={{ fontSize: 13 }} className="tabular-nums">{tx.quantity.toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }} className="tabular-nums">
+                        {buyPr > 0 ? `₹${buyPr.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }} className="tabular-nums">₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: pnl >= 0 ? '#16a34a' : '#dc2626' }} className="tabular-nums">
+                        {pnl >= 0 ? '+' : ''}{fmtCurrency(pnl)}
+                      </div>
+                      <div>
+                        <PnLBadge value={pnlPct} suffix="%" />
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div style={{ fontWeight: 600, color: 'var(--color-primary-400)', fontSize: 'var(--text-sm)' }}>{cleanSymbol(tx)}</div>
-                <div>
-                  <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 'var(--radius-full)', fontSize: 'var(--text-xs)', fontWeight: 700, background: tx.action === 'BUY' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: tx.action === 'BUY' ? 'var(--color-success-500)' : 'var(--color-error-500)' }}>
-                    {tx.action}
-                  </span>
-                </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)' }}>{tx.quantity.toLocaleString('en-IN')}</div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{fmtCurrency(tx.total_value)}</div>
+                  );
+                })}
               </div>
-            ))}
+            ) : (
+              /* Standard / Buy Orders View */
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
+                  {[
+                    { col: 'date', label: 'Date' },
+                    { col: 'stock_symbol', label: 'Symbol' },
+                    { col: 'action', label: 'Action' },
+                    { col: 'quantity', label: 'Quantity' },
+                    { col: 'price', label: 'Price' },
+                    { col: 'total_value', label: 'Total' }
+                  ].map(({ col, label }) => (
+                    <button key={col} onClick={() => handleTxSort(col as TxSortColumn)} style={{ fontSize: 'var(--text-xs)', color: txSortColumn === col ? 'var(--color-primary-400)' : 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+                      {label} {txSortColumn === col ? (txSortOrder === 'asc' ? '↑' : '↓') : ''}
+                    </button>
+                  ))}
+                </div>
+                {getSortedTransactions().map((tx, i) => (
+                  <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 0.6fr 0.8fr 1fr 1fr', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderBottom: i < getSortedTransactions().length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                  >
+                    <div>
+                      {editingTxDate === tx.id ? (
+                        <input
+                          type="date"
+                          autoFocus
+                          value={tx.date || ''}
+                          onChange={e => { updateTxDate(tx.id, e.target.value); setEditingTxDate(null); }}
+                          onBlur={() => setEditingTxDate(null)}
+                          style={{ padding: '2px 4px', fontSize: 11, borderRadius: 4, outline: 'none' }}
+                        />
+                      ) : (
+                        <div onClick={() => setEditingTxDate(tx.id)} style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', cursor: 'pointer', borderBottom: '1px dashed #ccc', display: 'inline-block' }}>
+                          {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontWeight: 600, color: '#8c6314', fontSize: 'var(--text-sm)' }}>{cleanSymbol(tx)}</div>
+                    <div>
+                      <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 'var(--radius-full)', fontSize: 'var(--text-xs)', fontWeight: 700, background: tx.action === 'BUY' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', color: tx.action === 'BUY' ? 'var(--color-success-500)' : 'var(--color-error-500)' }}>
+                        {tx.action}
+                      </span>
+                    </div>
+                    <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-sm)' }}>{tx.quantity.toLocaleString('en-IN')}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>{fmtCurrency(tx.total_value)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>
