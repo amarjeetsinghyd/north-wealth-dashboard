@@ -733,8 +733,8 @@ export function ClientPortfolioPage() {
   }
 
   const gridCols = isRebalanceMode
-    ? '38px 160px 155px 75px 65px 105px 115px 105px 115px 120px 85px 70px 80px 95px 80px 50px'
-    : '38px 160px 155px 75px 65px 105px 115px 105px 115px 120px 85px 70px 80px 95px 50px';
+    ? '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 105px 80px 50px'
+    : '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 105px 50px';
 
   const updateHoldingField = async (holdingId: string, field: string, val: string) => {
     try {
@@ -1317,13 +1317,13 @@ export function ClientPortfolioPage() {
           </div>
         ) : (
           <div className="glass-card" style={{ overflowX: 'auto', maxHeight: '75vh' }}>
-            <div style={{ minWidth: 1420 }}>
+            <div style={{ minWidth: 1610 }}>
               {/* Table Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid rgba(229, 231, 235, 0.8)', background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</div>
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: '12px 18px', borderBottom: '1px solid rgba(229, 231, 235, 0.8)', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</div>
               <button onClick={() => handleSort('scrip')}
                 style={{
-                  fontSize: 'var(--text-xs)', color: sortColumn === 'scrip' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontSize: 11, color: sortColumn === 'scrip' ? '#8c6314' : 'var(--text-muted)',
                   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
                   cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
                 }}
@@ -1332,7 +1332,7 @@ export function ClientPortfolioPage() {
               </button>
               <button onClick={() => handleSort('sector')}
                 style={{
-                  fontSize: 'var(--text-xs)', color: sortColumn === 'sector' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontSize: 11, color: sortColumn === 'sector' ? '#8c6314' : 'var(--text-muted)',
                   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
                   cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
                 }}
@@ -1341,7 +1341,7 @@ export function ClientPortfolioPage() {
               </button>
               <button onClick={() => handleSort('marketCap')}
                 style={{
-                  fontSize: 'var(--text-xs)', color: sortColumn === 'marketCap' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontSize: 11, color: sortColumn === 'marketCap' ? '#8c6314' : 'var(--text-muted)',
                   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
                   cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
                 }}
@@ -1353,7 +1353,7 @@ export function ClientPortfolioPage() {
                 return (
                   <button key={colKey} onClick={() => handleSort(colKey as SortColumn)}
                     style={{
-                      fontSize: 'var(--text-xs)', color: sortColumn === colKey ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                      fontSize: 11, color: sortColumn === colKey ? '#8c6314' : 'var(--text-muted)',
                       fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
                       cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
                     }}
@@ -1364,7 +1364,7 @@ export function ClientPortfolioPage() {
               })}
               <button onClick={() => handleSort('source')}
                 style={{
-                  fontSize: 'var(--text-xs)', color: sortColumn === 'source' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontSize: 11, color: sortColumn === 'source' ? '#8c6314' : 'var(--text-muted)',
                   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
                   cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
                 }}
@@ -1373,15 +1373,15 @@ export function ClientPortfolioPage() {
               </button>
               <button onClick={() => handleSort('purchase_date')}
                 style={{
-                  fontSize: 'var(--text-xs)', color: sortColumn === 'purchase_date' ? 'var(--color-primary-400)' : 'var(--text-muted)',
+                  fontSize: 11, color: sortColumn === 'purchase_date' ? '#8c6314' : 'var(--text-muted)',
                   fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', background: 'none', border: 'none',
                   cursor: 'pointer', padding: 0, textAlign: 'left', transition: 'color 0.15s',
                 }}
               >
                 Pur. Date {sortColumn === 'purchase_date' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
-              {isRebalanceMode && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Action</span>}
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete</div>
+              {isRebalanceMode && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Action</span>}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete</div>
             </div>
 
             {/* Table Rows */}
@@ -1389,11 +1389,11 @@ export function ClientPortfolioPage() {
               const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
               const displayCompanyName = meta.companyName || h.company_name;
               return (
-              <div key={h.id} style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', alignItems: 'center', padding: '10px 18px', borderBottom: i < getSortedHoldings().length - 1 ? '1px solid rgba(229, 231, 235, 0.7)' : 'none', transition: 'background 0.15s' }}
+              <div key={h.id} style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', alignItems: 'center', padding: '11px 18px', borderBottom: i < getSortedHoldings().length - 1 ? '1px solid rgba(229, 231, 235, 0.7)' : 'none', transition: 'background 0.15s' }}
                 onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(201, 168, 76, 0.03)'}
                 onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
               >
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>{i + 1}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 500 }}>{i + 1}</div>
                 <div>
                   {editingScrip === h.id ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1403,19 +1403,19 @@ export function ClientPortfolioPage() {
                         onChange={e => setEditScripVal(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') saveScrip(h.id); if (e.key === 'Escape') { setEditingScrip(null); setEditScripVal(''); } }}
                         autoFocus
-                        style={{ width: 100, padding: '2px 6px', fontSize: 12, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--color-primary-500)', borderRadius: 4, outline: 'none' }}
+                        style={{ width: 105, padding: '3px 6px', fontSize: 12.5, background: '#ffffff', color: 'var(--text-primary)', border: '1px solid var(--gold)', borderRadius: 4, outline: 'none' }}
                       />
-                      <button onClick={() => saveScrip(h.id)} disabled={savingScrip} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 2 }}><Check size={13} /></button>
-                      <button onClick={() => { setEditingScrip(null); setEditScripVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 2 }}><XIcon size={13} /></button>
+                      <button onClick={() => saveScrip(h.id)} disabled={savingScrip} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', padding: 2 }}><Check size={14} /></button>
+                      <button onClick={() => { setEditingScrip(null); setEditScripVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2 }}><XIcon size={14} /></button>
                     </div>
                   ) : (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
-                        <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={10} /></button>
+                        <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13.5, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
+                        <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
                       </div>
                       {displayCompanyName && (
-                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 400, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 155 }} title={displayCompanyName}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }} title={displayCompanyName}>
                           {displayCompanyName}
                         </div>
                       )}
@@ -1423,50 +1423,50 @@ export function ClientPortfolioPage() {
                   )}
                 </div>
 
-                <div style={{ color: 'var(--text-secondary)', fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={meta.sector}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }} title={meta.sector}>
                   {meta.sector}
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 500 }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 500 }}>
                   {meta.marketCap}
                 </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
                   {h.quantity.toLocaleString('en-IN')}
                 </div>
                 
                 {/* Buy Price with Edit options */}
-                <div style={{ color: 'var(--text-secondary)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
                   {editingBuyPrice === h.id ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input type="number" value={editBuyPriceVal} onChange={e => setEditBuyPriceVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveBuyPrice(h.id); if (e.key === 'Escape') { setEditingBuyPrice(null); setEditBuyPriceVal(''); } }} autoFocus style={{ width: 80, padding: '2px 6px', fontSize: 12, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--color-primary-500)', borderRadius: 4, outline: 'none' }} />
-                      <button onClick={() => saveBuyPrice(h.id)} disabled={savingBuyPrice} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 2 }}><Check size={13} /></button>
-                      <button onClick={() => { setEditingBuyPrice(null); setEditBuyPriceVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 2 }}><XIcon size={13} /></button>
+                      <input type="number" value={editBuyPriceVal} onChange={e => setEditBuyPriceVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveBuyPrice(h.id); if (e.key === 'Escape') { setEditingBuyPrice(null); setEditBuyPriceVal(''); } }} autoFocus style={{ width: 85, padding: '3px 6px', fontSize: 12.5, background: '#ffffff', color: 'var(--text-primary)', border: '1px solid var(--gold)', borderRadius: 4, outline: 'none' }} />
+                      <button onClick={() => saveBuyPrice(h.id)} disabled={savingBuyPrice} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', padding: 2 }}><Check size={14} /></button>
+                      <button onClick={() => { setEditingBuyPrice(null); setEditBuyPriceVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2 }}><XIcon size={14} /></button>
                     </div>
                   ) : (
                     <>
                       <span className="tabular-nums" style={{ fontWeight: 400 }}>
-                        {h.buy_price > 0 ? `₹${h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ color: 'var(--color-accent-400)', fontSize: 11, fontStyle: 'italic' }}>Not set</span>}
+                        {h.buy_price > 0 ? `₹${h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : <span style={{ color: 'var(--color-accent-400)', fontSize: 11.5, fontStyle: 'italic' }}>Not set</span>}
                       </span>
-                      <button onClick={() => { setEditingBuyPrice(h.id); setEditBuyPriceVal(h.buy_price > 0 ? String(h.buy_price) : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit buy price"><Pencil size={10} /></button>
+                      <button onClick={() => { setEditingBuyPrice(h.id); setEditBuyPriceVal(h.buy_price > 0 ? String(h.buy_price) : ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit buy price"><Pencil size={11} /></button>
                     </>
                   )}
                 </div>
 
-                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
                   {h.buy_price > 0 ? fmtCurrency(h.invested_amount || h.buy_price * h.quantity) : '0'}
                 </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
                   {h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '0'}
                 </div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 400 }} className="tabular-nums">
+                <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
                   {h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}
                 </div>
-                <div style={{ color: h.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626', fontSize: 13, fontWeight: 500 }} className="tabular-nums">
+                <div style={{ color: h.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626', fontSize: 13.5, fontWeight: 500 }} className="tabular-nums">
                   {h.current_price > 0 ? `${h.unrealised_pnl >= 0 ? '+' : ''}${fmtCurrency(h.unrealised_pnl)}` : '0'}
                 </div>
                 <div>
-                  {h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>0%</span>}
+                  {h.current_price > 0 ? <PnLBadge value={h.unrealised_pnl_pct} suffix="%" /> : <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>0%</span>}
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }} className="tabular-nums">
+                <div style={{ color: 'var(--text-muted)', fontSize: 12.5, fontWeight: 400 }} className="tabular-nums">
                   {summary.currentValue > 0 ? (((h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity)) / summary.currentValue) * 100).toFixed(1) + '%' : '0%'}
                 </div>
                 

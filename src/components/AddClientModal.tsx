@@ -329,82 +329,81 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="glass-modal animate-scale-up" style={{
-        width: '100%', maxWidth: 540,
+        width: '100%', maxWidth: 760,
         maxHeight: '90vh',
         display: 'flex', flexDirection: 'column',
       }}>
         {/* Header */}
         <div style={{
-          padding: '18px 24px',
-          borderBottom: '1px solid rgba(229, 231, 235, 0.6)',
+          padding: '20px 28px',
+          borderBottom: '1px solid rgba(229, 231, 235, 0.7)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: 'rgba(255, 255, 255, 0.65)',
-          backdropFilter: 'blur(8px)',
+          background: 'rgba(255, 255, 255, 0.75)',
+          backdropFilter: 'blur(10px)',
         }}>
           <div>
-            <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-              {step === 'missing_prices' ? 'Enter Missing Buy Prices' : existingClient ? 'Edit Client Details' : 'Add New Client'}
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.2px' }}>
+              {step === 'missing_prices' ? 'Enter Missing Buy Prices' : existingClient ? 'Edit Client Details' : 'Add New Client Profile'}
             </h2>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+            <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
               {step === 'missing_prices'
                 ? `${missingPrices.length} scrip${missingPrices.length > 1 ? 's' : ''} found without buy price in document`
-                : existingClient ? 'Update client details or upload a new statement' : 'Upload a broker statement (CSV, Excel, PDF) to auto-extract holdings'}
+                : existingClient ? 'Update client details or upload a new portfolio statement' : 'Enter client KYC details, capital allocation, and upload broker statements'}
             </p>
           </div>
           <button onClick={onClose} style={{
-            width: 32, height: 32, borderRadius: '50%',
+            width: 34, height: 34, borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--text-muted)', background: 'rgba(0,0,0,0.04)', border: 'none', cursor: 'pointer',
-          }}>
-            <X size={16} />
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.08)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.04)'}
+          >
+            <X size={18} />
           </button>
         </div>
 
         {/* Body */}
-        <div style={{ padding: 'var(--space-6)', overflowY: 'auto' }}>
+        <div style={{ padding: '24px 28px', overflowY: 'auto' }}>
 
           {/* Extracting */}
           {step === 'extracting' && (
-            <div style={{ textAlign: 'center', padding: 'var(--space-10) 0' }}>
-              <Loader2 size={48} style={{ color: 'var(--color-primary-500)', margin: '0 auto var(--space-4)', animation: 'spin 1s linear infinite', display: 'block' }} />
-              <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 'var(--text-lg)' }}>
-                {files.length > 1 ? 'Processing Files' : 'Processing Document'}
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <Loader2 size={48} style={{ color: 'var(--color-primary-500)', margin: '0 auto 16px', animation: 'spin 1s linear infinite', display: 'block' }} />
+              <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 18 }}>
+                {files.length > 1 ? 'Processing Multiple Statements' : 'Processing Document'}
               </p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
                 {files.length > 1
                   ? `Processing file ${processingProgress.current} of ${processingProgress.total}…`
-                  : 'Extracting data layout...'}
+                  : 'Extracting holdings, ISINs, quantities, and buy prices...'}
               </p>
             </div>
           )}
 
           {/* Done */}
           {step === 'done' && (
-            <div style={{ textAlign: 'center', padding: 'var(--space-10) 0' }}>
-              <CheckCircle size={48} style={{ color: 'var(--color-success-500)', margin: '0 auto var(--space-4)', display: 'block' }} />
-              <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 'var(--text-lg)' }}>Client Added Successfully!</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <CheckCircle size={48} style={{ color: 'var(--color-success-500)', margin: '0 auto 16px', display: 'block' }} />
+              <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 18 }}>Client Profile Saved Successfully!</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
                 {extractedCount > 0
                   ? `${files.length > 1 ? files.length + ' files processed · ' : ''}${extractedCount} holdings extracted and saved.`
-                  : 'Client created successfully.'}
+                  : 'Client profile created successfully.'}
               </p>
             </div>
           )}
 
           {/* Error */}
           {step === 'error' && (
-            <div style={{ textAlign: 'center', padding: 'var(--space-6) 0' }}>
-              <AlertCircle size={40} style={{ color: 'var(--color-error-500)', margin: '0 auto var(--space-4)', display: 'block' }} />
-              <p style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Extraction Failed</p>
-              <p style={{ color: 'var(--color-error-400)', fontSize: 'var(--text-sm)', marginTop: 8, marginBottom: 'var(--space-6)' }}>
+            <div style={{ textAlign: 'center', padding: '30px 0' }}>
+              <AlertCircle size={44} style={{ color: 'var(--color-error-500)', margin: '0 auto 16px', display: 'block' }} />
+              <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 16 }}>Extraction Failed</p>
+              <p style={{ color: 'var(--color-error-400)', fontSize: 13, marginTop: 8, marginBottom: 20 }}>
                 {errorMsg}
               </p>
-              <button onClick={() => setStep('form')} style={{
-                padding: '8px 20px', borderRadius: 'var(--radius-md)',
-                background: 'var(--bg-surface)', color: 'var(--text-primary)',
-                fontSize: 'var(--text-sm)', fontWeight: 500,
-                border: '1px solid var(--border-default)', cursor: 'pointer',
-              }}>Try Again</button>
+              <button onClick={() => setStep('form')} className="btn-glass-light" style={{ padding: '8px 24px' }}>Try Again</button>
             </div>
           )}
 
@@ -412,37 +411,35 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
           {step === 'missing_prices' && (
             <div>
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
-                padding: '10px 14px',
+                display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
+                padding: '12px 16px',
                 background: 'rgba(245,166,35,0.08)',
                 border: '1px solid rgba(245,166,35,0.3)',
-                borderRadius: 8,
+                borderRadius: 10,
               }}>
                 <span style={{ fontSize: 20 }}>⚠️</span>
-                <p style={{ color: '#F5A623', fontWeight: 600, fontSize: 13, margin: 0 }}>
+                <p style={{ color: '#b48518', fontWeight: 600, fontSize: 13, margin: 0 }}>
                   Buy price not found in document for these scrips. Enter manually or skip.
                 </p>
               </div>
 
-              <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {missingPrices.map((m, i) => (
                   <div key={m.id} style={{
-                    display: 'grid', gridTemplateColumns: '1fr 110px', alignItems: 'center', gap: 12,
-                    padding: '10px 14px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 8,
+                    display: 'grid', gridTemplateColumns: '1fr 140px', alignItems: 'center', gap: 14,
+                    padding: '12px 16px', background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(229, 231, 235, 0.8)', borderRadius: 10,
                   }}>
                     <div>
-                      <span style={{ fontWeight: 700, color: 'var(--color-primary-400)', fontSize: 14 }}>{m.symbol}</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 8 }}>Qty: {m.qty}</span>
+                      <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 14 }}>{m.symbol}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 12.5, marginLeft: 10 }}>Qty: {m.qty}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: 'var(--text-muted)', fontSize: 13, flexShrink: 0 }}>₹</span>
                       <input
                         type="number" placeholder="Avg price" value={m.tempPrice}
                         onChange={e => setMissingPrices(prev => prev.map((p, pi) => pi === i ? { ...p, tempPrice: e.target.value } : p))}
-                        style={{
-                          width: '100%', padding: '6px 8px', background: 'var(--bg-elevated)', border: '1px solid var(--border-default)',
-                          borderRadius: 6, color: 'var(--text-primary)', fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                        }}
+                        className="glass-input"
+                        style={{ padding: '6px 10px', fontSize: 13 }}
                       />
                     </div>
                   </div>
@@ -453,157 +450,177 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
 
           {/* Form */}
           {step === 'form' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-            {/* Client Info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              
+              {/* SECTION 1: Client Information */}
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Client Name</label>
-                <input 
-                  autoFocus type="text" placeholder="E.g. Amarjeet Singh" value={name} onChange={e => setName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Phone Number</label>
-                <input 
-                  type="text" placeholder="E.g. +91 9876543210" value={phone} onChange={e => setPhone(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Email ID</label>
-                <input 
-                  type="email" placeholder="client@example.com" value={email} onChange={e => setEmail(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                />
-              </div>
-            </div>
+                <div className="form-section-title">Client Information</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+                  <div>
+                    <label className="form-label">Client Name *</label>
+                    <input 
+                      autoFocus type="text" placeholder="E.g. Amarjeet Singh" value={name} onChange={e => setName(e.target.value)}
+                      className="glass-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Phone Number</label>
+                    <input 
+                      type="text" placeholder="+91 9876543210" value={phone} onChange={e => setPhone(e.target.value)}
+                      className="glass-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Email Address</label>
+                    <input 
+                      type="email" placeholder="client@example.com" value={email} onChange={e => setEmail(e.target.value)}
+                      className="glass-input"
+                    />
+                  </div>
+                </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Relationship Manager</label>
-                <select 
-                  value={rmName} onChange={e => setRmName(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                >
-                  <option value="">Select RM...</option>
-                  {rmList.map(rm => <option key={rm} value={rm}>{rm}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Onboarding Date</label>
-                <input 
-                  type="date" value={onboardingDate} onChange={e => setOnboardingDate(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Risk Profile</label>
-                <select 
-                  value={riskProfile} onChange={e => setRiskProfile(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                >
-                  <option value="Aggressive">Aggressive</option>
-                  <option value="Moderate">Moderate</option>
-                  <option value="Conservative">Conservative</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Capital Info */}
-            {!existingClient && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Equity Holdings (₹)</label>
-                  <input 
-                    type="number"
-                    placeholder="E.g. 1000000"
-                    value={holdingsValue}
-                    onChange={e => setHoldingsValue(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Mutual Funds (₹)</label>
-                  <input 
-                    type="number"
-                    placeholder="E.g. 1500000"
-                    value={mutualFunds}
-                    onChange={e => setMutualFunds(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Cash Brought In (₹)</label>
-                  <input 
-                    type="number"
-                    placeholder="E.g. 500000"
-                    value={cashBalance}
-                    onChange={e => setCashBalance(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Total AUA (₹)</label>
-                  <div style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--gold-border)', background: 'rgba(201,168,76,0.05)', fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--gold)', outline: 'none', boxSizing: 'border-box' }}>
-                    ₹{((parseFloat(holdingsValue) || 0) + (parseFloat(mutualFunds) || 0) + (parseFloat(cashBalance) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="form-label">Relationship Manager</label>
+                    <select 
+                      value={rmName} onChange={e => setRmName(e.target.value)}
+                      className="glass-input"
+                    >
+                      <option value="">Select RM...</option>
+                      {rmList.map(rm => <option key={rm} value={rm}>{rm}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label">Onboarding Date</label>
+                    <input 
+                      type="date" value={onboardingDate} onChange={e => setOnboardingDate(e.target.value)}
+                      className="glass-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Risk Profile</label>
+                    <select 
+                      value={riskProfile} onChange={e => setRiskProfile(e.target.value)}
+                      className="glass-input"
+                    >
+                      <option value="Aggressive">Aggressive</option>
+                      <option value="Moderate">Moderate</option>
+                      <option value="Conservative">Conservative</option>
+                    </select>
                   </div>
                 </div>
               </div>
-            )}
-            {existingClient && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
-                <div style={{ maxWidth: 300 }}>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Mutual Funds (₹)</label>
-                  <input 
-                    type="number"
-                    placeholder="E.g. 1500000"
-                    value={mutualFunds}
-                    onChange={e => setMutualFunds(e.target.value)}
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
+
+              {/* SECTION 2: Capital Allocation */}
+              <div>
+                <div className="form-section-title">Capital Allocation (₹)</div>
+                {!existingClient ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.1fr', gap: 14 }}>
+                    <div>
+                      <label className="form-label">Equity Holdings (₹)</label>
+                      <input 
+                        type="number"
+                        placeholder="E.g. 1000000"
+                        value={holdingsValue}
+                        onChange={e => setHoldingsValue(e.target.value)}
+                        className="glass-input tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Mutual Funds (₹)</label>
+                      <input 
+                        type="number"
+                        placeholder="E.g. 1500000"
+                        value={mutualFunds}
+                        onChange={e => setMutualFunds(e.target.value)}
+                        className="glass-input tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Cash Brought In (₹)</label>
+                      <input 
+                        type="number"
+                        placeholder="E.g. 500000"
+                        value={cashBalance}
+                        onChange={e => setCashBalance(e.target.value)}
+                        className="glass-input tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Total AUA (₹)</label>
+                      <div style={{
+                        padding: '10px 14px', borderRadius: 8,
+                        border: '1px solid rgba(201, 168, 76, 0.45)',
+                        background: 'rgba(201, 168, 76, 0.08)',
+                        fontSize: 14, fontWeight: 700, color: '#8c6314',
+                        boxSizing: 'border-box', height: 42, display: 'flex', alignItems: 'center'
+                      }} className="tabular-nums">
+                        ₹{((parseFloat(holdingsValue) || 0) + (parseFloat(mutualFunds) || 0) + (parseFloat(cashBalance) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div>
+                      <label className="form-label">Mutual Funds (₹)</label>
+                      <input 
+                        type="number"
+                        placeholder="E.g. 1500000"
+                        value={mutualFunds}
+                        onChange={e => setMutualFunds(e.target.value)}
+                        className="glass-input tabular-nums"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 3: Commercials & Billing */}
+              <div>
+                <div className="form-section-title">Commercials & Billing (₹)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                  <div>
+                    <label className="form-label">Billed Amount (₹)</label>
+                    <input 
+                      type="number" placeholder="E.g. 50000" value={billedAmount} onChange={e => setBilledAmount(e.target.value)}
+                      className="glass-input tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Amount Paid (₹)</label>
+                    <input 
+                      type="number" placeholder="E.g. 20000" value={amountPaid} onChange={e => setAmountPaid(e.target.value)}
+                      className="glass-input tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Balance Due (₹)</label>
+                    <div style={{
+                      padding: '10px 14px', borderRadius: 8,
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      background: 'rgba(239, 68, 68, 0.05)',
+                      fontSize: 14, fontWeight: 700, color: '#dc2626',
+                      boxSizing: 'border-box', height: 42, display: 'flex', alignItems: 'center'
+                    }} className="tabular-nums">
+                      ₹{((parseFloat(billedAmount) || 0) - (parseFloat(amountPaid) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Billing Info */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+              {/* SECTION 4: Broker Statements */}
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Billed Amount (₹)</label>
-                <input 
-                  type="number" placeholder="E.g. 50000" value={billedAmount} onChange={e => setBilledAmount(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Amount Paid (₹)</label>
-                <input 
-                  type="number" placeholder="E.g. 20000" value={amountPaid} onChange={e => setAmountPaid(e.target.value)}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 'var(--space-2)' }}>Balance Due (₹)</label>
-                <div style={{ width: '100%', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.05)', fontSize: 'var(--text-sm)', fontWeight: 700, color: '#ef4444', outline: 'none', boxSizing: 'border-box' }}>
-                  ₹{((parseFloat(billedAmount) || 0) - (parseFloat(amountPaid) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-            </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  Broker Statements <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(PDF, CSV, Excel — Multiple Supported)</span>
-                </label>
+                <div className="form-section-title">Broker Statements & Portfolio Files</div>
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   onDragOver={e => { e.preventDefault(); setDragging(true); }}
                   onDragLeave={() => setDragging(false)}
                   onDrop={handleDrop}
                   style={{
-                    border: `2px dashed ${dragging ? 'var(--color-primary-500)' : files.length > 0 ? 'var(--color-success-500)' : 'var(--border-default)'}`,
-                    borderRadius: 'var(--radius-lg)', padding: 'var(--space-8)',
+                    border: `2px dashed ${dragging ? 'var(--gold)' : files.length > 0 ? '#22c55e' : 'rgba(209, 213, 219, 0.8)'}`,
+                    borderRadius: 12, padding: '24px 20px',
                     textAlign: 'center', cursor: 'pointer',
-                    background: dragging ? 'rgba(59,130,246,0.05)' : files.length > 0 ? 'rgba(34,197,94,0.05)' : 'var(--bg-surface)',
+                    background: dragging ? 'rgba(201, 168, 76, 0.06)' : files.length > 0 ? 'rgba(34, 197, 94, 0.04)' : 'rgba(255, 255, 255, 0.6)',
                     transition: 'all 0.2s ease',
                   }}
                 >
@@ -612,28 +629,28 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
                     style={{ display: 'none' }} />
                   {files.length > 0 ? (
                     <>
-                      <FileText size={28} style={{ color: 'var(--color-success-500)', margin: '0 auto 8px', display: 'block' }} />
-                      <p style={{ color: 'var(--color-success-500)', fontWeight: 600, fontSize: 'var(--text-sm)' }}>
-                        {files.length} {files.length === 1 ? 'file' : 'files'} selected
+                      <FileText size={32} style={{ color: '#16a34a', margin: '0 auto 8px', display: 'block' }} />
+                      <p style={{ color: '#15803d', fontWeight: 600, fontSize: 13.5 }}>
+                        {files.length} {files.length === 1 ? 'file' : 'files'} selected for auto-extraction
                       </p>
-                      <div style={{ marginTop: 8 }}>
+                      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
                         {files.map((f, fi) => (
-                          <div key={f.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                          <div key={f.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6, background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.25)', fontSize: 12, color: '#15803d' }}>
                             <span>{f.name}</span>
                             <button
                               onClick={e => { e.stopPropagation(); setFiles(prev => prev.filter((_, idx) => idx !== fi)); }}
-                              style={{ background: 'transparent', border: 'none', color: 'var(--color-error-500)', cursor: 'pointer', padding: '2px 6px', fontSize: 12 }}
-                            >Remove</button>
+                              style={{ background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                            ><X size={12} /></button>
                           </div>
                         ))}
                       </div>
-                      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', marginTop: 8 }}>Click to add more files</p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: 11.5, marginTop: 10 }}>Click or drag more files to append</p>
                     </>
                   ) : (
                     <>
-                      <Upload size={28} style={{ color: 'var(--text-muted)', margin: '0 auto 8px', display: 'block' }} />
-                      <p style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: 'var(--text-sm)' }}>Drag & drop or click to upload</p>
-                      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', marginTop: 4 }}>Zerodha Excel · Trustline PDF · Any CSV</p>
+                      <Upload size={32} style={{ color: 'var(--gold-dark)', margin: '0 auto 8px', display: 'block', opacity: 0.8 }} />
+                      <p style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 13.5 }}>Drag & drop statement files here, or <span style={{ color: '#8c6314', textDecoration: 'underline' }}>Browse</span></p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Supports Zerodha / Groww / Angel One Excel, Trustline PDF, CAMS CAS, & CSV statements</p>
                     </>
                   )}
                 </div>
