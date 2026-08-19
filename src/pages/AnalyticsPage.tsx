@@ -10,7 +10,7 @@ import { Spinner } from '../components/Spinner';
 import { getStockMeta, cleanSymbol } from '../lib/sectorMap';
 import {
   TrendingUp, TrendingDown, Users, Briefcase, Award, BarChart2, PieChart as PieIcon, Activity,
-  Search, ShieldCheck, ChevronRight, X as XIcon, Building2
+  Search, ShieldCheck, ChevronRight, X as XIcon, Building2, PlusCircle
 } from 'lucide-react';
 
 import { BulkOrderWizardModal } from '../components/BulkOrderWizardModal';
@@ -118,7 +118,16 @@ export function AnalyticsPage() {
           getDocs(collection(db, 'clients'))
         ]);
 
-        const clientMap: Record<string, { name: string; totalCapital: number; mutual_funds: number; rm: string }> = {};
+        const clientMap: Record<string, { 
+          name: string; 
+          totalCapital: number; 
+          mutual_funds: number; 
+          rm: string;
+          asset_equity?: number;
+          asset_mutual_funds?: number;
+          asset_free_cash?: number;
+          risk_profile?: string;
+        }> = {};
         
         clientSnap.docs.forEach(d => {
           const cdata = d.data();
@@ -126,7 +135,11 @@ export function AnalyticsPage() {
             name: cdata.name ?? 'Unknown',
             totalCapital: cdata.total_capital ?? 0,
             mutual_funds: cdata.mutual_funds ?? 0,
-            rm: cdata.rm_name ?? 'Unassigned'
+            rm: cdata.rm_name ?? 'Unassigned',
+            asset_equity: cdata.asset_equity,
+            asset_mutual_funds: cdata.asset_mutual_funds,
+            asset_free_cash: cdata.asset_free_cash,
+            risk_profile: cdata.risk_profile,
           };
         });
 
@@ -162,9 +175,15 @@ export function AnalyticsPage() {
               pnl: 0,
               stockCount: 0,
               etfCount: 0,
+              total_capital: clientMap[h.client_id]?.totalCapital ?? 0,
               totalCapital: clientMap[h.client_id]?.totalCapital ?? 0,
               mutual_funds: clientMap[h.client_id]?.mutual_funds ?? 0,
-              rm: clientMap[h.client_id]?.rm ?? 'Unassigned'
+              rm_name: clientMap[h.client_id]?.rm ?? 'Unassigned',
+              rm: clientMap[h.client_id]?.rm ?? 'Unassigned',
+              asset_equity: clientMap[h.client_id]?.asset_equity,
+              asset_mutual_funds: clientMap[h.client_id]?.asset_mutual_funds,
+              asset_free_cash: clientMap[h.client_id]?.asset_free_cash,
+              risk_profile: clientMap[h.client_id]?.risk_profile,
             };
           }
           const val = h.current_value || h.buy_price * h.quantity;
@@ -193,9 +212,15 @@ export function AnalyticsPage() {
               pnl: 0,
               stockCount: 0,
               etfCount: 0,
+              total_capital: d.data().total_capital ?? 0,
               totalCapital: d.data().total_capital ?? 0,
               mutual_funds: d.data().mutual_funds ?? 0,
-              rm: d.data().rm_name ?? 'Unassigned'
+              rm_name: d.data().rm_name ?? 'Unassigned',
+              rm: d.data().rm_name ?? 'Unassigned',
+              asset_equity: d.data().asset_equity,
+              asset_mutual_funds: d.data().asset_mutual_funds,
+              asset_free_cash: d.data().asset_free_cash,
+              risk_profile: d.data().risk_profile,
             };
           }
         });
@@ -740,16 +765,72 @@ export function AnalyticsPage() {
             </div>
             
             {stockQuery && stockSearchResults.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                No existing holdings found for <strong style={{ color: '#C9A84C' }}>"{stockQuery}"</strong>
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: 13, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div>No existing holdings found for <strong style={{ color: '#C9A84C' }}>"{stockQuery}"</strong> across client portfolios.</div>
+                <button
+                  onClick={() => setBulkWizard({ mode: 'buy', symbol: stockQuery, selectedClientIds: [] })}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '8px 18px', background: 'var(--color-primary-600)', color: '#fff',
+                    borderRadius: 8, border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  <PlusCircle size={15} /> Buy "{stockQuery.toUpperCase()}" for Clients in Bulk
+                </button>
               </div>
             )}
             
             {stockSearchResults.length > 0 && (
               <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                     <strong style={{ color: '#C9A84C' }}>{stockSearchResults.length}</strong> client holding{stockSearchResults.length !== 1 ? 's' : ''} matching <strong style={{ color: 'var(--text-primary)' }}>"{stockQuery}"</strong>
+                    {selectedStockRows.size > 0 && (
+                      <span style={{ marginLeft: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(201,168,76,0.12)', color: '#C9A84C', fontWeight: 600, fontSize: 12 }}>
+                        {selectedStockRows.size} selected
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {selectedStockRows.size > 0 ? (
+                      <>
+                        <button
+                          onClick={() => setBulkWizard({ mode: 'buy', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows), holdingsData: stockSearchResults })}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '7px 14px', borderRadius: 6, background: '#16a34a', color: '#fff',
+                            border: 'none', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(22,163,74,0.2)'
+                          }}
+                        >
+                          <TrendingUp size={14} /> Add More Quantity ({selectedStockRows.size})
+                        </button>
+                        <button
+                          onClick={() => setBulkWizard({ mode: 'sell', symbol: stockQuery, selectedClientIds: Array.from(selectedStockRows), holdingsData: stockSearchResults })}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            padding: '7px 14px', borderRadius: 6, background: '#ef4444', color: '#fff',
+                            border: 'none', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(239,68,68,0.2)'
+                          }}
+                        >
+                          <TrendingDown size={14} /> Bulk Sell ({selectedStockRows.size})
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setBulkWizard({ mode: 'buy', symbol: stockQuery, selectedClientIds: [] })}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          padding: '7px 14px', borderRadius: 6, background: 'var(--bg-surface)',
+                          border: '1px solid var(--border-default)', color: 'var(--text-primary)',
+                          fontWeight: 500, fontSize: 12, cursor: 'pointer',
+                        }}
+                      >
+                        <PlusCircle size={14} /> Bulk Buy for Other Clients
+                      </button>
+                    )}
                   </div>
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
