@@ -380,11 +380,35 @@ export function BulkOrderWizardModal({
                   onChange={e => setSymbol(e.target.value.toUpperCase())}
                   className="glass-input"
                   style={{ width: '100%', padding: '12px 16px', boxSizing: 'border-box', fontSize: 14 }}
+                  autoFocus
                 />
+                
+                {/* Quick Pick Chips */}
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Quick Pick:</span>
+                  {['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'ITC', 'NIFTYBEES', 'GOLDBEES'].map(sym => (
+                    <button
+                      key={sym}
+                      type="button"
+                      onClick={() => setSymbol(sym)}
+                      style={{
+                        padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                        background: cleanSym === sym ? 'rgba(201, 168, 76, 0.22)' : 'rgba(0, 0, 0, 0.04)',
+                        border: cleanSym === sym ? '1px solid rgba(201, 168, 76, 0.5)' : '1px solid rgba(0, 0, 0, 0.08)',
+                        color: cleanSym === sym ? '#8c6314' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                    >
+                      {sym}
+                    </button>
+                  ))}
+                </div>
+
                 {meta.companyName && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className="glass-pill" style={{ color: 'var(--text-primary)' }}>Recognized: <strong>{meta.companyName}</strong></span>
-                    <span className="glass-pill" style={{ color: 'var(--gold-dark)' }}>Sector: <strong>{meta.sector}</strong></span>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span className="glass-pill-green" style={{ fontSize: 11 }}>✓ Recognized: <strong style={{ marginLeft: 2 }}>{meta.companyName}</strong></span>
+                    <span className="glass-pill-gold" style={{ fontSize: 11 }}>Sector: <strong style={{ marginLeft: 2 }}>{meta.sector}</strong></span>
+                    <span className="glass-pill" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>M.Cap: <strong style={{ marginLeft: 2 }}>{meta.marketCap}</strong></span>
                   </div>
                 )}
               </div>

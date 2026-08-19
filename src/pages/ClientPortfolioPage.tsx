@@ -732,7 +732,9 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const gridCols = isRebalanceMode ? '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 80px 60px' : '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 60px';
+  const gridCols = isRebalanceMode
+    ? '44px 160px 140px 85px 75px 110px 120px 110px 120px 130px 85px 75px 85px 105px 80px 60px'
+    : '44px 160px 140px 85px 75px 110px 120px 110px 120px 130px 85px 75px 85px 105px 60px';
 
   const updateHoldingField = async (holdingId: string, field: string, val: string) => {
     try {
@@ -1314,9 +1316,10 @@ export function ClientPortfolioPage() {
             <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 8 }}>Upload a broker statement or add holdings manually</p>
           </div>
         ) : (
-          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-xl)', overflowY: 'auto', maxHeight: '75vh' }}>
-            {/* Table Header */}
-            <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', position: 'sticky', top: 0, zIndex: 10 }}>
+          <div className="glass-card" style={{ overflowX: 'auto', maxHeight: '75vh' }}>
+            <div style={{ minWidth: 1420 }}>
+              {/* Table Header */}
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 'var(--space-3)', padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid rgba(229, 231, 235, 0.8)', background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', position: 'sticky', top: 0, zIndex: 10 }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>#</div>
               <button onClick={() => handleSort('scrip')}
                 style={{
@@ -1530,6 +1533,7 @@ export function ClientPortfolioPage() {
               </div>
               );
             })}
+            </div>
           </div>
         )}
       </section>

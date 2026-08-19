@@ -770,11 +770,14 @@ export function AnalyticsPage() {
                 key={tab.key}
                 onClick={() => setSearchMode(tab.key)}
                 style={{
-                  padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                  padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
                   fontSize: 12, fontWeight: searchMode === tab.key ? 600 : 500, display: 'flex', alignItems: 'center',
-                  background: searchMode === tab.key ? 'linear-gradient(135deg, rgba(201,168,76,0.95), rgba(160,124,45,0.95))' : 'transparent',
-                  color: searchMode === tab.key ? '#ffffff' : 'var(--text-secondary)',
-                  boxShadow: searchMode === tab.key ? '0 2px 8px rgba(201,168,76,0.35), inset 0 1px 0 rgba(255,255,255,0.4)' : 'none',
+                  background: searchMode === tab.key ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.20), rgba(160, 124, 45, 0.12))' : 'transparent',
+                  border: searchMode === tab.key ? '1px solid rgba(201, 168, 76, 0.45)' : '1px solid transparent',
+                  color: searchMode === tab.key ? '#8c6314' : 'var(--text-secondary)',
+                  boxShadow: searchMode === tab.key ? 'inset 0 1px 1px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(201, 168, 76, 0.12)' : 'none',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -969,7 +972,19 @@ export function AnalyticsPage() {
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Min Free Cash:</span>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {[0, 100000, 500000, 1000000, 5000000].map(v => (
-                  <button key={v} onClick={() => setCashMinFilter(v)} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid', cursor: 'pointer', fontSize: 12, fontWeight: 700, transition: 'all 0.15s', borderColor: cashMinFilter === v ? '#C9A84C' : 'rgba(0,0,0,0.10)', background: cashMinFilter === v ? 'rgba(201,168,76,0.12)' : 'transparent', color: cashMinFilter === v ? '#C9A84C' : '#777' }}>
+                  <button
+                    key={v}
+                    onClick={() => setCashMinFilter(v)}
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+                      borderColor: cashMinFilter === v ? 'rgba(201, 168, 76, 0.45)' : 'rgba(229, 231, 235, 0.8)',
+                      background: cashMinFilter === v ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.20), rgba(160, 124, 45, 0.12))' : 'rgba(255, 255, 255, 0.6)',
+                      color: cashMinFilter === v ? '#8c6314' : 'var(--text-secondary)',
+                      boxShadow: cashMinFilter === v ? 'inset 0 1px 1px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(201, 168, 76, 0.10)' : 'none',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid',
+                    }}
+                  >
                     {v === 0 ? 'All' : v >= 1000000 ? `≥₹${(v / 100000).toFixed(0)}L` : `≥₹${(v / 100000).toFixed(1)}L`}
                   </button>
                 ))}
