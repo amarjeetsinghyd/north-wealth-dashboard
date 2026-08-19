@@ -66,11 +66,12 @@ export interface ExtractedHolding {
   buy_price: number;
   confidence: number;
   flags: string[];
-  candidates?: SymbolCandidate[];
+  candidates?: SymbolCandidate[] | undefined;
+  purchase_date?: string | undefined;
   // Optional reference fields (not for DB storage)
-  current_price?: number;
-  invested_value?: number;
-  current_value?: number;
+  current_price?: number | undefined;
+  invested_value?: number | undefined;
+  current_value?: number | undefined;
 }
 
 export interface PortfolioSummary {

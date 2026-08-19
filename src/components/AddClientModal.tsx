@@ -200,44 +200,97 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
 
 
       if (holdingsToSave.length > 0) {
-        const { error: insertError } = { error: null };
-        await Promise.all(
-          holdingsToSave.map(h =>
-            addDoc(collection(db, 'holdings'), {
+        const existingHoldingsSnap = await getDocs(
+          query(collection(db, 'holdings'), where('client_id', '==', clientId))
+        );
+        const existingMap = new Map<string, { id: string; data: any }>();
+        existingHoldingsSnap.docs.forEach(d => {
+          const hdata = d.data();
+          const k = (hdata.nse_symbol || hdata.stock_symbol || '')
+            .trim()
+            .toUpperCase()
+            .replace(/\.NS$/, '')
+            .replace(/\.BO$/, '');
+          if (k) existingMap.set(k, { id: d.id, data: hdata });
+        });
+
+        const todayDate = new Date().toISOString().split('T')[0];
+        const nowIso = new Date().toISOString();
+
+        for (const h of holdingsToSave) {
+          const symKey = (h.nse_symbol || h.stock_symbol || '')
+            .trim()
+            .toUpperCase()
+            .replace(/\.NS$/, '')
+            .replace(/\.BO$/, '');
+          
+          const ex = symKey ? existingMap.get(symKey) : undefined;
+
+          if (ex) {
+            // Merge with existing holding
+            const exData = ex.data;
+            const exQty = exData.quantity || 0;
+            const totalQty = exQty + h.quantity;
+            const exInv = exData.invested_amount || (exData.buy_price * exQty);
+            const incomingInv = h.invested_value || (h.buy_price * h.quantity);
+            const totalInv = exInv + incomingInv;
+            const avgBuyPrice = totalQty > 0 ? totalInv / totalQty : (h.buy_price || exData.buy_price);
+            const currPrice = (exData.current_price > 0 ? exData.current_price : (h.current_price || 0));
+            const currVal = currPrice > 0 ? totalQty * currPrice : (exData.current_value || 0);
+            const unrealPnl = currVal > 0 ? currVal - totalInv : 0;
+            const unrealPnlPct = (totalInv > 0 && currVal > 0) ? (unrealPnl / totalInv) * 100 : 0;
+
+            await updateDoc(doc(db, 'holdings', ex.id), {
+              quantity: totalQty,
+              buy_price: avgBuyPrice,
+              invested_amount: totalInv,
+              current_price: currPrice,
+              current_value: currVal,
+              unrealised_pnl: unrealPnl,
+              unrealised_pnl_pct: unrealPnlPct,
+              purchase_date: exData.purchase_date || h.purchase_date || null,
+              updated_at: nowIso,
+            });
+          } else {
+            // New holding
+            const incomingInv = h.invested_value || (h.buy_price * h.quantity);
+            const currPrice = h.current_price || 0;
+            const currVal = currPrice > 0 ? h.quantity * currPrice : 0;
+            const unrealPnl = currVal > 0 ? currVal - incomingInv : 0;
+            const unrealPnlPct = (incomingInv > 0 && currVal > 0) ? (unrealPnl / incomingInv) * 100 : 0;
+
+            await addDoc(collection(db, 'holdings'), {
               client_id: clientId,
               stock_symbol: h.stock_symbol,
               nse_symbol: h.nse_symbol,
               company_name: h.company_name,
               buy_price: h.buy_price,
               quantity: h.quantity,
-              invested_amount: h.invested_value,
-              current_price: 0,
-              current_value: 0,
-              unrealised_pnl: 0,
-              unrealised_pnl_pct: 0,
+              invested_amount: incomingInv,
+              current_price: currPrice,
+              current_value: currVal,
+              unrealised_pnl: unrealPnl,
+              unrealised_pnl_pct: unrealPnlPct,
               realised_pnl: 0,
-              source: 'Existing',
-              created_at: new Date().toISOString(),
-            })
-          )
-        );
-        if (insertError) throw insertError;
+              purchase_date: h.purchase_date || null,
+              source: existingClient ? 'Fresh' : 'Existing',
+              created_at: nowIso,
+            });
+          }
 
-        await Promise.all(
-          holdingsToSave.map(h =>
-            addDoc(collection(db, 'transactions'), {
-              client_id: clientId,
-              date: new Date().toISOString().split('T')[0],
-              action: 'BUY',
-              stock_symbol: h.stock_symbol,
-              company_name: h.company_name,
-              quantity: h.quantity,
-              price: h.buy_price,
-              total_value: h.invested_value,
-              created_at: new Date().toISOString(),
-            })
-          )
-        );
+          // Record Transaction Log
+          await addDoc(collection(db, 'transactions'), {
+            client_id: clientId,
+            date: h.purchase_date || todayDate,
+            action: 'BUY',
+            stock_symbol: h.nse_symbol || h.stock_symbol,
+            company_name: h.company_name,
+            quantity: h.quantity,
+            price: h.buy_price,
+            total_value: h.invested_value || (h.buy_price * h.quantity),
+            created_at: nowIso,
+          });
+        }
       }
 
       setExtractedCount(holdingsToSave.length);

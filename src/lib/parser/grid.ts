@@ -65,6 +65,23 @@ export function processRow(row: unknown[], colMap: Record<string, number | undef
   const finalBuyPrice = isValidPrice(buy_price) ? (buy_price ?? 0) : 0;
   const finalCurrentPrice = isValidPrice(current_price) ? (current_price ?? 0) : 0;
 
+  const rawDate = cellText(row, colMap.purchase_date);
+  let purchaseDate: string | undefined = undefined;
+  if (rawDate) {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1990 && d.getFullYear() < 2100) {
+      purchaseDate = d.toISOString().split('T')[0];
+    } else {
+      const parts = rawDate.split(/[-/.]/);
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        if (parts[2].length === 4) {
+          const d2 = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+          if (!isNaN(d2.getTime())) purchaseDate = d2.toISOString().split('T')[0];
+        }
+      }
+    }
+  }
+
   return {
     stock_symbol: (resolved.symbol || rawSymbol || '').toUpperCase().trim(),
     nse_symbol: (resolved.symbol || '').toUpperCase().trim(),
@@ -78,5 +95,6 @@ export function processRow(row: unknown[], colMap: Record<string, number | undef
     confidence: resolved.confidence,
     flags,
     candidates: resolved.candidates,
+    purchase_date: purchaseDate,
   };
 }

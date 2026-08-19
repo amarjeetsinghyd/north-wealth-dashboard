@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Cell, PieChart, Pie,
   CartesianGrid
 } from 'recharts';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Spinner } from '../components/Spinner';
 import { getStockMeta, cleanSymbol } from '../lib/sectorMap';
@@ -593,31 +593,72 @@ export function AnalyticsPage() {
     try {
       const meta = getStockMeta(sym);
       const company_name = meta.companyName || '';
-      await addDoc(collection(db, 'holdings'), {
-        client_id: buyModalData.clientId,
-        stock_symbol: sym,
-        nse_symbol: sym,
-        company_name,
-        buy_price: price,
-        quantity: qty,
-        invested_amount: qty * price,
-        current_price: 0,
-        current_value: 0,
-        unrealised_pnl: 0,
-        unrealised_pnl_pct: 0,
-        realised_pnl: 0,
-        created_at: new Date().toISOString(),
+      const cleanSym = sym.replace(/\.NS$/, '').replace(/\.BO$/, '');
+      const nowIso = new Date().toISOString();
+      const todayDate = nowIso.split('T')[0];
+
+      // Check existing holding for client
+      const qSnap = await getDocs(
+        query(
+          collection(db, 'holdings'),
+          where('client_id', '==', buyModalData.clientId)
+        )
+      );
+      const existing = qSnap.docs.find(d => {
+        const hdata = d.data() as any;
+        const hSym = (hdata.nse_symbol || hdata.stock_symbol || '').toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+        return hSym === cleanSym;
       });
+
+      if (existing) {
+        const eh = existing.data() as HoldingWithClient;
+        const newQty = (eh.quantity || 0) + qty;
+        const prevInvested = eh.invested_amount || ((eh.buy_price || 0) * (eh.quantity || 0));
+        const newInvested = prevInvested + (qty * price);
+        const newAvgBuy = newQty > 0 ? newInvested / newQty : price;
+        const currPrice = eh.current_price > 0 ? eh.current_price : 0;
+        const newCurrentVal = currPrice > 0 ? newQty * currPrice : 0;
+        const unrealPnl = newCurrentVal > 0 ? newCurrentVal - newInvested : 0;
+        const unrealPnlPct = (newInvested > 0 && newCurrentVal > 0) ? (unrealPnl / newInvested) * 100 : 0;
+
+        await updateDoc(doc(db, 'holdings', existing.id), {
+          quantity: newQty,
+          buy_price: newAvgBuy,
+          invested_amount: newInvested,
+          current_value: newCurrentVal,
+          unrealised_pnl: unrealPnl,
+          unrealised_pnl_pct: unrealPnlPct,
+          updated_at: nowIso,
+        });
+      } else {
+        await addDoc(collection(db, 'holdings'), {
+          client_id: buyModalData.clientId,
+          stock_symbol: sym,
+          nse_symbol: sym,
+          company_name,
+          buy_price: price,
+          quantity: qty,
+          invested_amount: qty * price,
+          current_price: 0,
+          current_value: 0,
+          unrealised_pnl: 0,
+          unrealised_pnl_pct: 0,
+          realised_pnl: 0,
+          source: 'Fresh',
+          created_at: nowIso,
+        });
+      }
+
       await addDoc(collection(db, 'transactions'), {
         client_id: buyModalData.clientId,
-        date: new Date().toISOString().split('T')[0],
+        date: todayDate,
         action: 'BUY',
         stock_symbol: sym,
         company_name,
         quantity: qty,
         price,
         total_value: qty * price,
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
       });
       setBuyModalData(null);
       setBuySymbol(''); setBuyPrice(''); setBuyQty(''); setDeployPct(50);

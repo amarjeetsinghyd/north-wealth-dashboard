@@ -44,8 +44,12 @@ function mergeCandidates(existing: SymbolCandidate[] | undefined, incoming: Symb
 export function dedupeHoldings(holdings: ExtractedHolding[]): ExtractedHolding[] {
   const map = new Map<string, ExtractedHolding>();
   for (const h of holdings) {
-    // Use nse_symbol if available, otherwise stock_symbol for deduplication key
-    const key = (h.nse_symbol || h.stock_symbol).toUpperCase();
+    // Normalize symbol for clean deduplication
+    const key = (h.nse_symbol || h.stock_symbol || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.NS$/, '')
+      .replace(/\.BO$/, '');
     if (!key) continue;
     
     if (!map.has(key)) {
@@ -56,23 +60,31 @@ export function dedupeHoldings(holdings: ExtractedHolding[]): ExtractedHolding[]
     const ex = map.get(key)!;
     const totalQty = ex.quantity + h.quantity;
 
+    const exInv = ex.invested_value || (ex.buy_price * ex.quantity);
+    const hInv = h.invested_value || (h.buy_price * h.quantity);
+    const totalInv = exInv + hInv;
+
     let mergedBuy = 0;
-    const exHasPrice = ex.buy_price > 0;
-    const hHasPrice = h.buy_price > 0;
-    if (exHasPrice && hHasPrice && totalQty > 0) {
-      mergedBuy = (ex.quantity * ex.buy_price + h.quantity * h.buy_price) / totalQty;
-    } else if (exHasPrice) {
+    if (totalQty > 0 && totalInv > 0) {
+      mergedBuy = totalInv / totalQty;
+    } else if (ex.buy_price > 0) {
       mergedBuy = ex.buy_price;
-    } else if (hHasPrice) {
+    } else if (h.buy_price > 0) {
       mergedBuy = h.buy_price;
     }
 
     ex.quantity = totalQty;
     ex.buy_price = mergedBuy;
     ex.invested_value = totalQty * mergedBuy;
+    ex.current_price = (h.current_price && h.current_price > 0) ? h.current_price : ex.current_price;
+    ex.current_value = (ex.current_price && ex.current_price > 0) ? totalQty * ex.current_price : ex.current_value;
     ex.confidence = Math.min(ex.confidence, h.confidence);
     ex.flags = Array.from(new Set([...ex.flags, ...h.flags]));
     ex.candidates = mergeCandidates(ex.candidates, h.candidates);
+    ex.purchase_date = ex.purchase_date || h.purchase_date;
+    if (h.company_name && h.company_name.length > (ex.company_name || '').length) {
+      ex.company_name = h.company_name;
+    }
     if (!ex.buy_price) ex.flags.push('MISSING_BUY_PRICE');
     
     map.set(key, ex);

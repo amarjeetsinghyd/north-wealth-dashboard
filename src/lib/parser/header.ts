@@ -1,6 +1,6 @@
 import {
   SYMBOL_SYNONYMS, NAME_SYNONYMS, QTY_SYNONYMS, PRICE_SYNONYMS, ISIN_SYNONYMS,
-  VALUE_SYNONYMS, LTP_SYNONYMS, CURRVAL_SYNONYMS, PNL_SYNONYMS,
+  VALUE_SYNONYMS, LTP_SYNONYMS, CURRVAL_SYNONYMS, PNL_SYNONYMS, DATE_SYNONYMS
 } from './dictionaries';
 import { fuzzyScore } from './fuzzy';
 
@@ -73,7 +73,7 @@ export function mapColumns(headerRow: unknown[], nextRow?: unknown[]) {
   const claimed = new Set<number>();
   const result: Record<string, number | undefined> = {
     isin: undefined, symbol: undefined, company_name: undefined, quantity: undefined, buy_price: undefined,
-    current_price: undefined, invested_value: undefined, current_value: undefined, pnl: undefined,
+    current_price: undefined, invested_value: undefined, current_value: undefined, pnl: undefined, purchase_date: undefined,
   };
 
   const roleDefs = [
@@ -86,6 +86,7 @@ export function mapColumns(headerRow: unknown[], nextRow?: unknown[]) {
     { role: 'invested_value', test: (v: string) => VALUE_SYNONYMS.some(s => matchHeader(v, s)) && !LTP_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'current_value',  test: (v: string) => CURRVAL_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'pnl',            test: (v: string) => PNL_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'purchase_date',  test: (v: string) => DATE_SYNONYMS.some(s => matchHeader(v, s)) },
   ];
 
   for (const { role, test } of roleDefs) {

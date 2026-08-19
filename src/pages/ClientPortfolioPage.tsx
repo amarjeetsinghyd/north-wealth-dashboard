@@ -577,34 +577,66 @@ export function ClientPortfolioPage() {
       const price = parseFloat(buyPrice);
       const cleanSymbol = nseSymbol.trim().toUpperCase();
       const meta = getStockMeta(cleanSymbol);
-      const company_name = meta.companyName || '';
-
-      await addDoc(collection(db, 'holdings'), {
-        client_id: id,
-        stock_symbol: cleanSymbol,
-        nse_symbol: cleanSymbol,
-        company_name,
-        buy_price: price,
-        quantity: qty,
-        invested_amount: qty * price,
-        current_price: 0,
-        current_value: 0,
-        unrealised_pnl: 0,
-        unrealised_pnl_pct: 0,
-        realised_pnl: 0,
-        created_at: new Date().toISOString(),
+      const company_name = meta.companyName || cleanSymbol;
+      const normClean = cleanSymbol.replace(/\.NS$/, '').replace(/\.BO$/, '');
+      const existingHolding = holdings.find(h => {
+        const hSym = (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+        return hSym === normClean;
       });
+
+      const nowIso = new Date().toISOString();
+      const todayDate = nowIso.split('T')[0];
+
+      if (existingHolding) {
+        const exQty = existingHolding.quantity || 0;
+        const totalQty = exQty + qty;
+        const exInv = existingHolding.invested_amount || ((existingHolding.buy_price || 0) * exQty);
+        const incomingInv = qty * price;
+        const totalInv = exInv + incomingInv;
+        const avgBuy = totalQty > 0 ? totalInv / totalQty : price;
+        const currPrice = existingHolding.current_price > 0 ? existingHolding.current_price : 0;
+        const currVal = currPrice > 0 ? totalQty * currPrice : 0;
+        const unrealPnl = currVal > 0 ? currVal - totalInv : 0;
+        const unrealPnlPct = (totalInv > 0 && currVal > 0) ? (unrealPnl / totalInv) * 100 : 0;
+
+        await updateDoc(doc(db, 'holdings', existingHolding.id), {
+          quantity: totalQty,
+          buy_price: avgBuy,
+          invested_amount: totalInv,
+          current_value: currVal,
+          unrealised_pnl: unrealPnl,
+          unrealised_pnl_pct: unrealPnlPct,
+          updated_at: nowIso,
+        });
+      } else {
+        await addDoc(collection(db, 'holdings'), {
+          client_id: id,
+          stock_symbol: cleanSymbol,
+          nse_symbol: cleanSymbol,
+          company_name,
+          buy_price: price,
+          quantity: qty,
+          invested_amount: qty * price,
+          current_price: 0,
+          current_value: 0,
+          unrealised_pnl: 0,
+          unrealised_pnl_pct: 0,
+          realised_pnl: 0,
+          source: 'Fresh',
+          created_at: nowIso,
+        });
+      }
 
       await addDoc(collection(db, 'transactions'), {
         client_id: id,
-        date: new Date().toISOString().split('T')[0],
+        date: todayDate,
         action: 'BUY',
         stock_symbol: cleanSymbol,
         company_name,
         quantity: qty,
         price,
         total_value: qty * price,
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
       });
 
       setShowBuyModal(false);

@@ -41,6 +41,10 @@ export const PNL_SYNONYMS = [
   'unrealised p&l', 'p&l amount', 'net p&l', 'profit/loss',
 ];
 
+export const DATE_SYNONYMS = [
+  'date', 'purchase date', 'buy date', 'trade date', 'tx date', 'txn date', 'holding date', 'trans date', 'acquisition date'
+];
+
 export const SECTION_KEYWORDS = [
   'equity', 'mutual fund', 'mutual funds', 'debt', 'fixed deposit', 'fd', 'gold',
   'cash', 'summary', 'bonds', 'etf', 'derivative', 'futures', 'options', 'commodity',
