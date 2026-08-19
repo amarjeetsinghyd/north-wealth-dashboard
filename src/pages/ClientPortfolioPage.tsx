@@ -760,46 +760,63 @@ export function ClientPortfolioPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
             <div style={{
-              width: 52, height: 52, borderRadius: 'var(--radius-full)',
-              background: `hsl(${(client.name.charCodeAt(0) * 37) % 360}, 60%, 25%)`,
+              width: 48, height: 48, borderRadius: 'var(--radius-full)',
+              background: '#18181b', border: '1px solid rgba(212, 175, 55, 0.25)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 700, fontSize: 'var(--text-xl)',
-              color: `hsl(${(client.name.charCodeAt(0) * 37) % 360}, 80%, 70%)`,
+              fontWeight: 600, fontSize: 18,
+              color: '#d4af37',
             }}>
               {client.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h1 style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.5px', margin: 0 }}>
+              <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: 0 }}>
                 {client.name}
               </h1>
-              <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', marginTop: 4 }}>
-                {client.risk_profile && <span style={{ color: '#ef4444', fontWeight: 700 }}>Risk: {client.risk_profile} &nbsp;&bull;&nbsp; </span>}
-                {client.rm_name && <span style={{ color: '#C9A84C', fontWeight: 700 }}>RM: {client.rm_name} &nbsp;&bull;&nbsp; </span>}
-                Onboarded: {editingDate ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ padding: '2px 6px', fontSize: 12, borderRadius: 4, border: '1px solid #ccc' }} />
-                    <button onClick={saveOnboardingDate} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a' }}><Check size={14} /></button>
-                    <button onClick={() => setEditingDate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><XIcon size={14} /></button>
-                  </span>
-                ) : (
-                  <span style={{ cursor: 'pointer', borderBottom: '1px dashed #ccc' }} onClick={() => { setNewDate(client.onboarding_date || ''); setEditingDate(true); }}>
-                    {client.onboarding_date ? new Date(client.onboarding_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Set Date'}
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', color: 'var(--text-muted)', fontSize: '13px', marginTop: 4 }}>
+                {client.risk_profile && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Risk:</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{client.risk_profile}</span>
+                    <span style={{ opacity: 0.3, marginLeft: 4 }}>•</span>
                   </span>
                 )}
-              </p>
+                {client.rm_name && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>RM:</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{client.rm_name}</span>
+                    <span style={{ opacity: 0.3, marginLeft: 4 }}>•</span>
+                  </span>
+                )}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Onboarded:</span>
+                  {editingDate ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={{ padding: '2px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                      <button onClick={saveOnboardingDate} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a' }}><Check size={14} /></button>
+                      <button onClick={() => setEditingDate(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><XIcon size={14} /></button>
+                    </span>
+                  ) : (
+                    <span style={{ cursor: 'pointer', borderBottom: '1px dashed var(--border-default)', color: 'var(--text-primary)', fontWeight: 500 }} onClick={() => { setNewDate(client.onboarding_date || ''); setEditingDate(true); }}>
+                      {client.onboarding_date ? new Date(client.onboarding_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Set Date'}
+                    </span>
+                  )}
+                </span>
+              </div>
               
-              <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12 }}>
-                <div style={{ background: 'rgba(0,0,0,0.03)', padding: '4px 10px', borderRadius: 6 }}>
-                  <span style={{ color: '#666', fontWeight: 600 }}>Billed: </span>
-                  <span style={{ fontWeight: 800 }}>{fmtCurrency(client.billed_amount || 0)}</span>
+              <div style={{ display: 'flex', gap: 10, marginTop: 10, fontSize: 12 }}>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '4px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Billed:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{fmtCurrency(client.billed_amount || 0)}</span>
                 </div>
-                <div style={{ background: 'rgba(34,197,94,0.05)', padding: '4px 10px', borderRadius: 6, color: '#16a34a' }}>
-                  <span style={{ fontWeight: 600 }}>Paid: </span>
-                  <span style={{ fontWeight: 800 }}>{fmtCurrency(client.amount_paid || 0)}</span>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '4px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Paid:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--color-success-500, #16a34a)' }}>{fmtCurrency(client.amount_paid || 0)}</span>
                 </div>
-                <div style={{ background: 'rgba(239,68,68,0.05)', padding: '4px 10px', borderRadius: 6, color: '#ef4444' }}>
-                  <span style={{ fontWeight: 600 }}>Balance: </span>
-                  <span style={{ fontWeight: 800 }}>{fmtCurrency((client.billed_amount || 0) - (client.amount_paid || 0))}</span>
+                <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '4px 10px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Balance:</span>
+                  <span style={{ fontWeight: 600, color: ((client.billed_amount || 0) - (client.amount_paid || 0)) > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
+                    {fmtCurrency((client.billed_amount || 0) - (client.amount_paid || 0))}
+                  </span>
                 </div>
               </div>
             </div>
@@ -811,54 +828,49 @@ export function ClientPortfolioPage() {
                 onClick={() => setIsRebalanceMode(!isRebalanceMode)}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
-                  padding: '9px 16px', background: isRebalanceMode ? '#ffffff' : '#8b5cf6',
-                  border: isRebalanceMode ? '1px solid #ddd' : 'none', borderRadius: 8, cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 13, color: isRebalanceMode ? '#0a0804' : '#fff',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'background 0.2s',
+                  padding: '8px 15px', background: isRebalanceMode ? 'var(--bg-surface)' : 'rgba(139, 92, 246, 0.12)',
+                  border: isRebalanceMode ? '1px solid var(--border-default)' : '1px solid rgba(139, 92, 246, 0.3)',
+                  borderRadius: 8, cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)', fontWeight: 600, fontSize: 13,
+                  color: isRebalanceMode ? 'var(--text-primary)' : '#a78bfa',
+                  transition: 'all 0.2s',
                 }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? '#f0f0f0' : '#7c3aed'}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? '#ffffff' : '#8b5cf6'}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? 'var(--bg-hover)' : 'rgba(139, 92, 246, 0.2)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = isRebalanceMode ? 'var(--bg-surface)' : 'rgba(139, 92, 246, 0.12)'}
               >
-                <TrendingUp size={16} /> {isRebalanceMode ? 'Close Rebalance' : 'Rebalance Portfolio'}
+                <TrendingUp size={15} /> {isRebalanceMode ? 'Close Rebalance' : 'Rebalance Portfolio'}
               </button>
               
               <button
                 onClick={() => navigate(`/client/${id}/dashboard`)}
                 style={{
-                  position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8,
-                  padding: '9px 20px', background: 'linear-gradient(135deg, #D4AF37 0%, #F5D078 40%, #C9A84C 70%, #D4AF37 100%)',
+                  position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 18px', background: 'linear-gradient(135deg, #D4AF37 0%, #F5D078 40%, #C9A84C 70%, #D4AF37 100%)',
                   backgroundSize: '200% auto', border: 'none', borderRadius: 999, cursor: 'pointer',
-                  fontFamily: 'var(--font-sans)', fontWeight: 800, fontSize: 11, color: '#0a0804',
-                  letterSpacing: '1.2px', textTransform: 'uppercase',
-                  boxShadow: '0 0 16px rgba(212,175,55,0.3), 0 4px 16px rgba(0,0,0,0.3)',
-                  animation: 'goldGlow 2.5s ease-in-out infinite', transition: 'transform 0.2s ease, box-shadow 0.2s ease, background-position 0.4s ease',
+                  fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 11, color: '#0a0804',
+                  letterSpacing: '1px', textTransform: 'uppercase',
+                  boxShadow: '0 2px 10px rgba(212,175,55,0.25)',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                   overflow: 'hidden',
                 }}
                 onMouseEnter={e => {
                   const el = e.currentTarget as HTMLElement;
-                  el.style.transform = 'scale(1.05) translateY(-1px)';
-                  el.style.backgroundPosition = 'right center';
-                  el.style.boxShadow = '0 0 24px rgba(212,175,55,0.6), 0 6px 24px rgba(0,0,0,0.4)';
+                  el.style.transform = 'scale(1.03) translateY(-1px)';
+                  el.style.boxShadow = '0 4px 16px rgba(212,175,55,0.4)';
                 }}
                 onMouseLeave={e => {
                   const el = e.currentTarget as HTMLElement;
                   el.style.transform = 'scale(1) translateY(0)';
-                  el.style.backgroundPosition = 'left center';
-                  el.style.boxShadow = '0 0 16px rgba(212,175,55,0.3), 0 4px 16px rgba(0,0,0,0.3)';
+                  el.style.boxShadow = '0 2px 10px rgba(212,175,55,0.25)';
                 }}
               >
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.35) 50%, transparent 60%)',
-                  backgroundSize: '200% auto', animation: 'shimmer 2s linear infinite', borderRadius: 999, pointerEvents: 'none',
-                }} />
-                <span style={{ fontSize: 14 }}>✦</span>
+                <span>✦</span>
                 <span>Portfolio Intelligence</span>
-                <span style={{ fontSize: 14 }}>✦</span>
+                <span>✦</span>
               </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#16a34a', fontWeight: 400, marginTop: 4, opacity: 0.8 }}>
-              <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#16a34a', boxShadow: '0 0 6px #16a34a' }}></span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-muted)', fontWeight: 400, marginTop: 4 }}>
+              <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#16a34a' }}></span>
               Prices auto-updated daily between 7:45 PM and 10:45 PM IST
             </div>
           </div>
@@ -876,17 +888,19 @@ export function ClientPortfolioPage() {
 
       {/* Asset Allocation Bar */}
       <div style={{ 
-        background: 'rgba(0,0,0,0.02)', borderRadius: 12, padding: '16px 20px', 
-        border: '1px solid rgba(0,0,0,0.06)', marginBottom: 'var(--space-8)',
+        background: 'var(--bg-elevated)', borderRadius: 12, padding: '16px 20px', 
+        border: '1px solid var(--border-subtle)', marginBottom: 'var(--space-8)',
         display: 'flex', flexDirection: 'column', gap: 12
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Asset Allocation</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#C9A84C' }}>Portfolio Value: {fmtCurrency(totalPortfolioValue)}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px' }}>Asset Allocation</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>Portfolio Value: </span>{fmtCurrency(totalPortfolioValue)}
+          </div>
         </div>
         
         {/* Progress Bar */}
-        <div style={{ width: '100%', height: 8, borderRadius: 999, display: 'flex', overflow: 'hidden', background: 'rgba(0,0,0,0.05)' }}>
+        <div style={{ width: '100%', height: 6, borderRadius: 999, display: 'flex', overflow: 'hidden', background: 'var(--border-subtle)' }}>
           {totalPortfolioValue > 0 && (
             <>
               <div style={{ width: `${(equityVal / totalPortfolioValue) * 100}%`, background: '#3b82f6', transition: 'width 0.5s' }} title="Equity" />
@@ -897,16 +911,16 @@ export function ClientPortfolioPage() {
         </div>
         
         {/* Legends */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', gap: 24, fontSize: 12, fontWeight: 600, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3b82f6' }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#3b82f6' }} /> Equity: {fmtCurrency(equityVal)} ({(equityVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 20, fontSize: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <div style={{ width: 7, height: 7, borderRadius: 2, background: '#3b82f6' }} /> Equity: <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{fmtCurrency(equityVal)} ({(equityVal / totalPortfolioValue * 100 || 0).toFixed(1)}%)</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#f59e0b' }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b' }} /> Mutual Funds: {fmtCurrency(totalMfCurrent)} ({(totalMfCurrent / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <div style={{ width: 7, height: 7, borderRadius: 2, background: '#f59e0b' }} /> Mutual Funds: <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{fmtCurrency(totalMfCurrent)} ({(totalMfCurrent / totalPortfolioValue * 100 || 0).toFixed(1)}%)</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#10b981' }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: '#10b981' }} /> Free Cash: {fmtCurrency(cashBalance)} ({(cashBalance / totalPortfolioValue * 100 || 0).toFixed(1)}%)
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+              <div style={{ width: 7, height: 7, borderRadius: 2, background: '#10b981' }} /> Free Cash: <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{fmtCurrency(cashBalance)} ({(cashBalance / totalPortfolioValue * 100 || 0).toFixed(1)}%)</span>
             </div>
           </div>
 
@@ -918,11 +932,11 @@ export function ClientPortfolioPage() {
               });
               setIsEditingAllocation(!isEditingAllocation);
             }} 
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#888', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', padding: 0 }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#3b82f6'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#888'}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.2s', padding: 0 }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-primary)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
           >
-            <Pencil size={12} /> {isEditingAllocation ? 'Close' : 'Update'}
+            <Pencil size={11} /> {isEditingAllocation ? 'Close' : 'Update'}
           </button>
         </div>
 
