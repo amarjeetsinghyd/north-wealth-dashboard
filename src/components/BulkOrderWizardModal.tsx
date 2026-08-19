@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ShieldAlert, TrendingUp, TrendingDown } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, addDoc, updateDoc, doc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
@@ -279,8 +280,11 @@ export function BulkOrderWizardModal({
     else setSelectedClients(new Set(targetClients.map(c => c.id)));
   };
 
-  return (
-    <div className="glass-modal-backdrop">
+  return createPortal(
+    <div
+      className="glass-modal-backdrop"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="glass-modal animate-scale-up" style={{ width: '100%', maxWidth: 760, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
         
         {/* Header */}
@@ -842,6 +846,7 @@ export function BulkOrderWizardModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

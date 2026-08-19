@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, addDoc, setDoc, doc, getDocs, getDoc, query, where, updateDoc } from 'firebase/firestore';
@@ -322,7 +323,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
     }
   };
 
-  return (
+  return createPortal(
     <div
       className="glass-modal-backdrop"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
@@ -664,6 +665,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

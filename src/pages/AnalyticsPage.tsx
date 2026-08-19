@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Cell, PieChart, Pie,
@@ -1322,9 +1323,9 @@ export function AnalyticsPage() {
       </div>
 
       {/* ── Buy Modal ─────────────────────────────────────────────────────────── */}
-      {buyModalData && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw' }}>
+      {buyModalData && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, backdropFilter: 'blur(14px)', padding: 20, boxSizing: 'border-box' }} onClick={e => { if (e.target === e.currentTarget) setBuyModalData(null); }}>
+          <div className="glass-modal animate-scale-up" style={{ background: '#ffffff', border: '1px solid rgba(229, 231, 235, 0.9)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
                 <div style={{ fontWeight: 900, fontSize: 18, color: 'var(--text-primary)' }}>Buy Stock</div>
@@ -1354,7 +1355,7 @@ export function AnalyticsPage() {
             {buyPrice && parseFloat(buyPrice) > 0 && (
               <div style={{ marginBottom: 14 }}>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Deploy % of Free Cash: <span style={{ color: '#C9A84C' }}>{deployPct}%</span></label>
-                <input type="range" min={10} max={100} step={5} value={deployPct} onChange={e => { setDeployPct(Number(e.target.value)); setDeployPct(Number(e.target.value)); }}
+                <input type="range" min={10} max={100} step={5} value={deployPct} onChange={e => { setDeployPct(Number(e.target.value)); }}
                   style={{ width: '100%', accentColor: '#C9A84C' }} />
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                   Suggested qty: <strong style={{ color: '#C9A84C' }}>{suggestedBuyQty.toLocaleString('en-IN')}</strong> shares @ ₹{parseFloat(buyPrice).toLocaleString('en-IN')} = <strong style={{ color: 'var(--text-primary)' }}>{fmtCurrency(suggestedBuyQty * parseFloat(buyPrice))}</strong>
@@ -1383,13 +1384,14 @@ export function AnalyticsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Sell Modal ─────────────────────────────────────────────────────────── */}
-      {sellModalData && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw' }}>
+      {sellModalData && createPortal(
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, backdropFilter: 'blur(14px)', padding: 20, boxSizing: 'border-box' }} onClick={e => { if (e.target === e.currentTarget) setSellModalData(null); }}>
+          <div className="glass-modal animate-scale-up" style={{ background: '#ffffff', border: '1px solid rgba(229, 231, 235, 0.9)', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw', boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.3)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
                 <div style={{ fontWeight: 900, fontSize: 18, color: 'var(--text-primary)' }}>Sell Holding</div>
@@ -1439,7 +1441,8 @@ export function AnalyticsPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {bulkWizard && (
