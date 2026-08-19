@@ -4,7 +4,9 @@ import { db } from '../lib/firebase';
 import { collection, addDoc, setDoc, doc, getDocs, getDoc, query, where, updateDoc } from 'firebase/firestore';
 import * as XLSX from 'xlsx';
 import { pdfToGrid } from '../lib/pdfGrid';
+import type { PdfGridResult } from '../lib/pdfGrid';
 import { parseGrid, dedupeHoldings } from '../lib/parser/documentParser';
+import type { ExtractedHolding } from '../types';
 
 import type { Client } from '../types';
 
@@ -16,11 +18,12 @@ interface AddClientModalProps {
 
 type Step = 'form' | 'extracting' | 'missing_prices' | 'done' | 'error';
 
-async function extractRawRows(file: File): Promise<string[][]> {
+async function extractRawRows(file: File): Promise<PdfGridResult> {
   const fileName = file.name.toLowerCase();
   if (fileName.endsWith('.csv')) {
     const text = await file.text();
-    return text.split(/\r?\n/).filter(l => l.trim()).map(line => line.split(',').map(c => c.trim().replace(/['"]/g, '')));
+    const rows = text.split(/\r?\n/).filter(l => l.trim()).map(line => line.split(',').map(c => c.trim().replace(/['"]/g, '')));
+    return { rows, metadata: { pageCount: 1, hasMultiPageHeaders: false, columnBoundaries: [] } };
   } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -29,9 +32,17 @@ async function extractRawRows(file: File): Promise<string[][]> {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames.find(n => /equity/i.test(n)) || workbook.SheetNames[0];
+          if (!sheetName) {
+            reject(new Error('No sheets found in workbook'));
+            return;
+          }
           const ws = workbook.Sheets[sheetName];
+          if (!ws) {
+            reject(new Error('Sheet not found'));
+            return;
+          }
           const rows: (string | number | null)[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-          resolve(rows.map(r => r.map(c => String(c ?? '').trim())));
+          resolve({ rows: rows.map(r => r.map(c => String(c ?? '').trim())), metadata: { pageCount: 1, hasMultiPageHeaders: false, columnBoundaries: [] } });
         } catch (err) { reject(err); }
       };
       reader.onerror = () => reject(new Error('Failed to read file'));
@@ -40,7 +51,7 @@ async function extractRawRows(file: File): Promise<string[][]> {
   } else if (fileName.endsWith('.pdf')) {
     return pdfToGrid(file);
   }
-  return [];
+  return { rows: [], metadata: { pageCount: 0, hasMultiPageHeaders: false, columnBoundaries: [] } };
 }
 
 export function AddClientModal({ onClose, onSuccess, existingClient }: AddClientModalProps) {
@@ -165,14 +176,15 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
         return;
       }
 
-      const allHoldings: any[] = [];
+      const allHoldings: ExtractedHolding[] = [];
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        if (!file) continue;
         setProcessingProgress({ current: i + 1, total: files.length });
         
-        const grid = await extractRawRows(file);
-        const parsed = parseGrid(grid);
+        const result = await extractRawRows(file);
+        const parsed = parseGrid(result.rows);
         allHoldings.push(...parsed);
       }
 
@@ -182,10 +194,15 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
 
       const uniqueHoldings = dedupeHoldings(allHoldings);
 
-      if (uniqueHoldings.length > 0) {
+            // Use all holdings as-is; validation and correction can be done later via holdings table
+      const holdingsToSave = uniqueHoldings;
+
+
+
+      if (holdingsToSave.length > 0) {
         const { error: insertError } = { error: null };
         await Promise.all(
-          uniqueHoldings.map(h =>
+          holdingsToSave.map(h =>
             addDoc(collection(db, 'holdings'), {
               client_id: clientId,
               stock_symbol: h.stock_symbol,
@@ -207,7 +224,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
         if (insertError) throw insertError;
 
         await Promise.all(
-          uniqueHoldings.map(h =>
+          holdingsToSave.map(h =>
             addDoc(collection(db, 'transactions'), {
               client_id: clientId,
               date: new Date().toISOString().split('T')[0],
@@ -223,7 +240,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
         );
       }
 
-      setExtractedCount(uniqueHoldings.length);
+      setExtractedCount(holdingsToSave.length);
 
       const missingQ = query(
         collection(db, 'holdings'),
@@ -231,13 +248,13 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
         where('buy_price', '==', 0),
       );
       const missingSnap = await getDocs(missingQ);
-      const savedHoldings = missingSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const savedHoldings = missingSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Record<string, unknown>[];
 
       if (savedHoldings && savedHoldings.length > 0) {
-        setMissingPrices(savedHoldings.map((h: any) => ({
-          id: h.id,
-          symbol: h.stock_symbol,
-          qty: h.quantity,
+        setMissingPrices(savedHoldings.map((h: Record<string, unknown>) => ({
+          id: h.id as string,
+          symbol: h.stock_symbol as string,
+          qty: h.quantity as number,
           tempPrice: '',
         })));
         setStep('missing_prices');

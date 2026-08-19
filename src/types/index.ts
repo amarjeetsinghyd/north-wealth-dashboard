@@ -50,11 +50,27 @@ export interface Transaction {
   created_at: string;
 }
 
+export interface SymbolCandidate {
+  symbol: string;
+  companyName: string;
+  score: number;
+  source: 'company_master' | 'etf_master' | 'alias' | 'fuzzy';
+}
+
 export interface ExtractedHolding {
   stock_symbol: string;
+  nse_symbol: string;
   company_name: string;
-  buy_price: number;
+  raw_isin: string | null;
   quantity: number;
+  buy_price: number;
+  confidence: number;
+  flags: string[];
+  candidates?: SymbolCandidate[];
+  // Optional reference fields (not for DB storage)
+  current_price?: number;
+  invested_value?: number;
+  current_value?: number;
 }
 
 export interface PortfolioSummary {

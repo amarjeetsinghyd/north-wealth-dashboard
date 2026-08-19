@@ -21,7 +21,7 @@ export function isCacheFresh(lastUpdatedStr?: string): boolean {
   const nowDate = nowIST.getUTCDate();
   
   // Expected EOD timestamp for today in IST is 4:00 PM (16:00)
-  let expectedEODIST = new Date(Date.UTC(nowYear, nowMonth, nowDate, 16, 0, 0));
+  const expectedEODIST = new Date(Date.UTC(nowYear, nowMonth, nowDate, 16, 0, 0));
   
   if (nowIST.getTime() < expectedEODIST.getTime()) {
     // If it is before 4:00 PM IST today, the expected EOD was yesterday's 4:00 PM IST
@@ -68,16 +68,16 @@ export interface StockMarketData {
 import etfMaster from './etfMaster.json';
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const cache = new Map<string, { timestamp: number; data: any }>();
+const cache = new Map<string, { timestamp: number; data: unknown }>();
 
 function isLocalEnv() {
   return import.meta.env.DEV;
 }
 
-let cmotsCache: any[] | null = null;
+let cmotsCache: unknown[] | null = null;
 let cmotsCacheTime = 0;
 
-export async function fetchCMOTSData(): Promise<any[]> {
+export async function fetchCMOTSData(): Promise<unknown[]> {
   if (cmotsCache && cmotsCache.length > 0 && Date.now() - cmotsCacheTime < CACHE_TTL) {
     return cmotsCache;
   }
@@ -186,8 +186,10 @@ export function getYahooUrl(symbol: string, range: string = '1y', interval: stri
 export function calculateReturns(prices: number[]): number[] {
   const returns = [];
   for (let i = 1; i < prices.length; i++) {
-    if (prices[i-1] > 0) {
-      returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+    const prev = prices[i - 1];
+    const curr = prices[i];
+    if (prev !== undefined && curr !== undefined && prev > 0) {
+      returns.push((curr - prev) / prev);
     } else {
       returns.push(0);
     }
@@ -210,7 +212,9 @@ export function calculateCovariance(arr1: number[], arr2: number[], mean1: numbe
   if (len === 0) return 0;
   let cov = 0;
   for (let i = 0; i < len; i++) {
-    cov += (arr1[i] - mean1) * (arr2[i] - mean2);
+    const v1 = arr1[i] ?? 0;
+    const v2 = arr2[i] ?? 0;
+    cov += (v1 - mean1) * (v2 - mean2);
   }
   return cov / len;
 }
@@ -224,7 +228,9 @@ export function getPeriodIndex(timestamps: number[], monthsAgo: number): number 
   let bestIdx = 0;
   let minDiff = Infinity;
   for (let i = 0; i < timestamps.length; i++) {
-    const diff = Math.abs(timestamps[i] - targetTime);
+    const ts = timestamps[i];
+    if (ts === undefined) continue;
+    const diff = Math.abs(ts - targetTime);
     if (diff < minDiff) {
       minDiff = diff;
       bestIdx = i;
@@ -239,7 +245,8 @@ export function getYTDIndex(timestamps: number[]): number {
   
   // Find first trading day of the year
   for (let i = 0; i < timestamps.length; i++) {
-    if (timestamps[i] >= startOfYear) {
+    const ts = timestamps[i];
+    if (ts !== undefined && ts >= startOfYear) {
       return i;
     }
   }
@@ -277,7 +284,7 @@ export async function fetchStockMarketData(nseSymbols: string[]): Promise<StockM
   if (validSymbols.length === 0) return results;
 
   const resolveQuerySymbol = (symbol: string) => {
-    let sym = symbol.trim();
+    const sym = symbol.trim();
     if (!sym.includes('.') && !sym.startsWith('^') && !sym.includes('=')) {
       return `${sym}.NS`;
     }
@@ -438,7 +445,7 @@ function parseBhavcopyCSV(csvText: string): Map<string, number> {
   if (lines.length < 2) return priceMap;
 
   // Header: SYMBOL, SERIES, DATE1, PREV_CLOSE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, LAST_PRICE, CLOSE_PRICE, ...
-  const header = lines[0].split(',').map(h => h.trim());
+  const header = lines[0]?.split(',').map(h => h.trim()) ?? [];
   const symbolIdx = header.indexOf('SYMBOL');
   const seriesIdx = header.indexOf('SERIES');
   const closeIdx  = header.indexOf('CLOSE_PRICE');
@@ -446,10 +453,10 @@ function parseBhavcopyCSV(csvText: string): Map<string, number> {
   if (symbolIdx < 0 || closeIdx < 0) return priceMap;
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',').map(c => c.trim());
+    const cols = lines[i]?.split(',').map(c => c.trim()) ?? [];
     const symbol = cols[symbolIdx]?.toUpperCase();
     const series = cols[seriesIdx]?.trim().toUpperCase() || '';
-    const close  = parseFloat(cols[closeIdx]);
+    const close  = parseFloat(cols[closeIdx] ?? '');
 
     if (symbol && !isNaN(close) && close > 0 && ALLOWED_SERIES.has(series)) {
       priceMap.set(symbol, close);

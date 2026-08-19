@@ -15,17 +15,19 @@ import {
   collection, doc, getDocs, getDoc, addDoc,
   updateDoc, deleteDoc, query, where, orderBy,
   Timestamp, setDoc,
+  DocumentSnapshot,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Client, Holding, Transaction } from '../types';
+import type { MarketDataCacheEntry, BenchmarkDataPoint } from './marketDataTypes';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Convert a Firestore doc snapshot to a typed object with `id`. */
-function fromDoc<T>(snap: any): T {
-  const data = snap.data();
+function fromDoc<T>(snap: DocumentSnapshot): T {
+  const data = snap.data() || {};
   // Convert Timestamps → ISO strings for compatibility with existing UI
-  const converted: any = { id: snap.id };
+  const converted: Record<string, unknown> = { id: snap.id };
   for (const [key, val] of Object.entries(data)) {
     if (val instanceof Timestamp) {
       converted[key] = val.toDate().toISOString();
@@ -132,17 +134,17 @@ export async function insertTransaction(
 
 // ─── Market Data Cache ───────────────────────────────────────────────────────
 
-export async function fetchMarketDataCache(): Promise<any[]> {
+export async function fetchMarketDataCache(): Promise<MarketDataCacheEntry[]> {
   try {
     const snap = await getDocs(collection(db, 'market_data'));
-    return snap.docs.map(d => ({ symbol: d.id, ...d.data() }));
+    return snap.docs.map(d => ({ symbol: d.id, ...d.data() } as MarketDataCacheEntry));
   } catch (err) {
     console.warn('Failed to fetch market data cache from Firestore', err);
     return [];
   }
 }
 
-export async function saveMarketDataCache(symbol: string, data: any): Promise<void> {
+export async function saveMarketDataCache(symbol: string, data: MarketDataCacheEntry): Promise<void> {
   try {
     const docRef = doc(db, 'market_data', symbol);
     await setDoc(docRef, {
@@ -154,7 +156,7 @@ export async function saveMarketDataCache(symbol: string, data: any): Promise<vo
   }
 }
 
-export async function saveBenchmarkCache(benchmarkData: any[]): Promise<void> {
+export async function saveBenchmarkCache(benchmarkData: BenchmarkDataPoint[]): Promise<void> {
   try {
     const docRef = doc(db, 'market_data', 'benchmark_^CRSLDX');
     await setDoc(docRef, {

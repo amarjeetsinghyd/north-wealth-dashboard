@@ -1,4 +1,4 @@
-export function parseNumber(raw: any): number | null {
+export function parseNumber(raw: unknown): number | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw === 'number') return isFinite(raw) ? raw : null;
 
@@ -21,10 +21,10 @@ export function parseNumber(raw: any): number | null {
   // Lakh / crore suffixes
   let multiplier = 1;
   let m = s.match(/^(\d+(?:\.\d+)?)(L|Lakh|Lakhs)$/i);
-  if (m) { multiplier = 100000; s = m[1]; }
+  if (m && m[1]) { multiplier = 100000; s = m[1]; }
   else {
     m = s.match(/^(\d+(?:\.\d+)?)(Cr|Crore|Crores)$/i);
-    if (m) { multiplier = 10000000; s = m[1]; }
+    if (m && m[1]) { multiplier = 10000000; s = m[1]; }
   }
 
   if (!/^\d+(\.\d+)?$/.test(s)) return null;
@@ -33,10 +33,10 @@ export function parseNumber(raw: any): number | null {
   return isFinite(num) ? num : null;
 }
 
-export function isValidQty(n: any): boolean {
+export function isValidQty(n: unknown): boolean {
   return typeof n === 'number' && isFinite(n) && n > 0;
 }
 
-export function isValidPrice(n: any): boolean {
+export function isValidPrice(n: unknown): boolean {
   return typeof n === 'number' && isFinite(n) && n >= 0;
 }

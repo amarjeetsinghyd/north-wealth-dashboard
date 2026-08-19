@@ -2,19 +2,22 @@ import {
   SYMBOL_SYNONYMS, NAME_SYNONYMS, QTY_SYNONYMS, PRICE_SYNONYMS, ISIN_SYNONYMS,
   VALUE_SYNONYMS, LTP_SYNONYMS, CURRVAL_SYNONYMS, PNL_SYNONYMS,
 } from './dictionaries';
+import { fuzzyScore } from './fuzzy';
 
-function normHeader(cell: any) {
+function normHeader(cell: unknown): string {
   return String(cell ?? '').trim().toLowerCase();
 }
 
-function matchHeader(cellVal: string, synonym: string) {
+function matchHeader(cellVal: string | undefined, synonym: string): boolean {
   if (!cellVal) return false;
   if (cellVal === synonym) return true;
   if (cellVal.includes(synonym) && synonym.length >= 3) return true;
+  // Fuzzy match for better header detection
+  if (fuzzyScore(cellVal, synonym) > 0.7) return true;
   return false;
 }
 
-export function scoreHeaderRow(row: any[]) {
+export function scoreHeaderRow(row: unknown[]) {
   let score = 0, hasSymbol = false, hasQty = false;
   for (const cell of row) {
     const v = normHeader(cell);
@@ -30,11 +33,13 @@ export function scoreHeaderRow(row: any[]) {
   return { score, hasSymbol, hasQty };
 }
 
-export function detectHeaderRow(grid: any[][]) {
+export function detectHeaderRow(grid: unknown[][]): number {
   let bestIdx = -1, bestScore = 0;
   const maxScan = Math.min(grid.length, 40);
   for (let i = 0; i < maxScan; i++) {
-    const { score, hasSymbol, hasQty } = scoreHeaderRow(grid[i]);
+    const row = grid[i];
+    if (!row) continue;
+    const { score, hasSymbol, hasQty } = scoreHeaderRow(row);
     if (score >= 4 && hasSymbol && hasQty && score > bestScore) {
       bestScore = score; bestIdx = i;
     }
@@ -42,12 +47,33 @@ export function detectHeaderRow(grid: any[][]) {
   return bestIdx;
 }
 
-export function mapColumns(headerRow: any[]) {
-  const cols = headerRow.map(normHeader);
-  const claimed = new Set();
-  const result: Record<string, number> = {
-    isin: -1, symbol: -1, company_name: -1, quantity: -1, buy_price: -1,
-    current_price: -1, invested_value: -1, current_value: -1, pnl: -1,
+function mergeHeaderRows(row1: unknown[], row2: unknown[]): string[] {
+  // Merge two header rows (e.g., main header + units row)
+  return row1.map((cell, i) => {
+    const v1 = normHeader(cell);
+    const v2 = normHeader(row2[i]);
+    if (!v1) return v2;
+    if (!v2) return v1;
+    // If row2 looks like units (contains parentheses, %, etc.), append it
+    if (/[()%]/.test(v2)) return `${v1} ${v2}`;
+    return v1;
+  });
+}
+
+export function mapColumns(headerRow: unknown[], nextRow?: unknown[]) {
+  // If nextRow looks like a units/sub-header row, merge them
+  let cols: string[];
+  if (nextRow && nextRow.length === headerRow.length) {
+    const merged = mergeHeaderRows(headerRow, nextRow);
+    cols = merged;
+  } else {
+    cols = headerRow.map(normHeader);
+  }
+  
+  const claimed = new Set<number>();
+  const result: Record<string, number | undefined> = {
+    isin: undefined, symbol: undefined, company_name: undefined, quantity: undefined, buy_price: undefined,
+    current_price: undefined, invested_value: undefined, current_value: undefined, pnl: undefined,
   };
 
   const roleDefs = [
@@ -65,7 +91,8 @@ export function mapColumns(headerRow: any[]) {
   for (const { role, test } of roleDefs) {
     for (let i = 0; i < cols.length; i++) {
       if (claimed.has(i)) continue;
-      if (test(cols[i])) { result[role] = i; claimed.add(i); break; }
+      const col = cols[i];
+      if (col && test(col)) { result[role] = i; claimed.add(i); break; }
     }
   }
   return result;

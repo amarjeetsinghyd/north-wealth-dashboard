@@ -14,7 +14,7 @@ export function AddHoldingModal({ clientId, onClose, onSuccess }: AddHoldingModa
   const [buyPrice, setBuyPrice] = useState('');
   const [quantity, setQuantity] = useState('');
   const [action, setAction] = useState<'BUY' | 'SELL'>('BUY');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState<string>(() => new Date().toISOString().split('T')[0] ?? '');
   const [source, setSource] = useState<'Existing' | 'Fresh'>('Fresh');
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);

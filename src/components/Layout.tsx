@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Users, BarChart2, LogOut } from 'lucide-react';
-import { useAuth } from '../lib/authContext';
+import { useAuth } from '../lib/useAuth';
 import NorthWealthLogo from '../assets/North_Wealth_Logo_Transparent.png';
 
 interface LayoutProps { children: React.ReactNode; }

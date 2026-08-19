@@ -87,6 +87,10 @@ export function ClientPortfolioPage() {
   const uniqueMCaps = Array.from(new Set(holdings.map(h => getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '').marketCap))).filter(Boolean).sort();
   const [savingBuyPrice, setSavingBuyPrice] = useState(false);
 
+  const [editingScrip, setEditingScrip] = useState<string | null>(null);
+  const [editScripVal, setEditScripVal] = useState('');
+  const [savingScrip, setSavingScrip] = useState(false);
+
 
   // ── Refresh prices from NSE Bhavcopy price cache ───────────────────────────
   // The NSE Bhavcopy is downloaded by the Python script (scripts/sync_bhavcopy.py)
@@ -103,7 +107,7 @@ export function ClientPortfolioPage() {
         .map(h => cleanSymbol(h))
         .filter(Boolean)));
 
-      console.log(`[RefreshPrices] Reading ${syms.length} prices from Firebase price_cache...`);
+      console.warn(`[RefreshPrices] Reading ${syms.length} prices from Firebase price_cache...`);
 
       // Read each symbol's doc from price_cache
       const snapshots = await Promise.all(
@@ -114,10 +118,11 @@ export function ClientPortfolioPage() {
       snapshots.forEach((snap, i) => {
         if (snap.exists()) {
           const data = snap.data();
-          if (data.close > 0) priceMap.set(syms[i], data.close);
+          const sym = syms[i];
+          if (sym && data.close > 0) priceMap.set(sym, data.close);
         }
       });
-      console.log(`[RefreshPrices] price_cache: ${priceMap.size}/${syms.length} symbols matched`);
+      console.warn(`[RefreshPrices] price_cache: ${priceMap.size}/${syms.length} symbols matched`);
 
       // Also fetch sync metadata to show "Prices as of" date
       const metaSnap = await getDoc(doc(db, 'price_cache', 'sync_meta'));
@@ -154,7 +159,7 @@ export function ClientPortfolioPage() {
               last_price_update: new Date().toISOString(),
             });
             updatedCount++;
-            console.log(`✓ ${sym}: ₹${price}`);
+            console.warn(`✓ ${sym}: ₹${price}`);
           } else {
             console.warn(`✗ ${sym}: not in price_cache (keeping existing price)`);
           }
@@ -163,15 +168,15 @@ export function ClientPortfolioPage() {
         }
       }
 
-      console.log(`[RefreshPrices] Updated ${updatedCount}/${activeHoldings.length} holdings`);
+      console.warn(`[RefreshPrices] Updated ${updatedCount}/${activeHoldings.length} holdings`);
 
       // 3. Reload UI
       const fresh = await fetchHoldings(id);
       setHoldings(fresh);
 
-    } catch (err: any) {
-      console.error('Refresh error:', err);
-      alert('Price refresh failed: ' + (err.message || 'Please try again.'));
+    } catch (err) {
+      console.warn('Refresh error:', err);
+      alert('Price refresh failed: ' + ((err as Error).message || 'Please try again.'));
     } finally {
       setRefreshing(false);
     }
@@ -196,15 +201,18 @@ export function ClientPortfolioPage() {
         if (metaSnap.exists() && metaSnap.data().bhavcopyDate) {
           setPriceAsOf(metaSnap.data().bhavcopyDate);
         }
-      } catch (_) { /* ignore */ }
+      } catch { /* ignore */ }
     } catch (err) {
-      console.error('Error loading portfolio data:', err);
+      console.warn('Error loading portfolio data:', err);
     } finally {
       setLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  }, [load]);
 
 
   const handleDownloadExcel = () => {
@@ -344,10 +352,10 @@ export function ClientPortfolioPage() {
     }
     if (!txSortColumn) return filtered;
     return [...filtered].sort((a, b) => {
-      let aVal: any = a[txSortColumn];
-      let bVal: any = b[txSortColumn];
+      const aVal = a[txSortColumn];
+      const bVal = b[txSortColumn];
       if (txSortColumn === 'date' || txSortColumn === 'stock_symbol' || txSortColumn === 'action') {
-        return txSortOrder === 'asc' ? String(aVal || '').localeCompare(String(bVal || '')) : String(bVal || '').localeCompare(String(aVal || ''));
+        return txSortOrder === 'asc' ? String(aVal ?? '').localeCompare(String(bVal ?? '')) : String(bVal ?? '').localeCompare(String(aVal ?? ''));
       }
       return txSortOrder === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
     });
@@ -366,7 +374,7 @@ export function ClientPortfolioPage() {
     if (!id || !client) return;
     setSavingAllocation(true);
     try {
-      const updates: any = {};
+      const updates: Record<string, number | null> = {};
       if (allocationInputs.equity.trim() !== '') updates.asset_equity = parseFloat(allocationInputs.equity);
       else updates.asset_equity = null;
       
@@ -421,6 +429,36 @@ export function ClientPortfolioPage() {
     }
   };
 
+
+  const saveScrip = async (holdingId: string) => {
+    const newSymbol = editScripVal.trim().toUpperCase();
+    if (!newSymbol) {
+      setSavingScrip(false);
+      return;
+    }
+    const meta = getStockMeta(newSymbol, '');
+    // Allow saving even if symbol not in master database - user can refresh prices after
+    const companyName = meta.companyName || newSymbol;
+    setSavingScrip(true);
+    try {
+      const holding = holdings.find(h => h.id === holdingId);
+      if (!holding) { setSavingScrip(false); return; }
+      await updateDoc(doc(db, 'holdings', holdingId), {
+        stock_symbol: newSymbol,
+        nse_symbol: newSymbol,
+        company_name: companyName,
+      });
+      setEditingScrip(null);
+      setEditScripVal('');
+      await load();
+    } catch (err) {
+      console.warn('Error saving scrip:', err);
+    } finally {
+      setSavingScrip(false);
+    }
+  };
+
+
   const saveCapital = async () => {
     if (!id) return;
     const val = parseFloat(totalCapitalInput);
@@ -434,7 +472,7 @@ export function ClientPortfolioPage() {
       setTotalCapital(val);
       setEditingCapital(false);
     } catch (err) {
-      console.error('Error saving total capital:', err);
+      console.warn('Error saving total capital:', err);
       alert('Failed to save total capital');
     } finally {
       setSavingCapital(false);
@@ -649,7 +687,7 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const gridCols = isRebalanceMode ? '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 80px' : '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr';
+  const gridCols = isRebalanceMode ? '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 80px 60px' : '0.4fr 1.2fr 0.9fr 0.7fr 0.8fr 1fr 1fr 1fr 1fr 1.2fr 0.8fr 0.8fr 0.8fr 0.9fr 60px';
 
   const updateHoldingField = async (holdingId: string, field: string, val: string) => {
     try {
@@ -1319,6 +1357,7 @@ export function ClientPortfolioPage() {
                 Pur. Date {sortColumn === 'purchase_date' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
               {isRebalanceMode && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Action</span>}
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Delete</div>
             </div>
 
             {/* Table Rows */}
@@ -1332,12 +1371,31 @@ export function ClientPortfolioPage() {
               >
                 <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', fontWeight: 600 }}>{i + 1}</div>
                 <div>
-                  <div style={{ fontWeight: 700, color: 'var(--color-primary-400)', fontSize: 'var(--text-sm)', letterSpacing: '0.3px' }}>{cleanSymbol(h)}</div>
-                  {displayCompanyName && (
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
-                      {displayCompanyName}
+                  {editingScrip === h.id ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <input
+                        type="text"
+                        value={editScripVal}
+                        onChange={e => setEditScripVal(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveScrip(h.id); if (e.key === 'Escape') { setEditingScrip(null); setEditScripVal(''); } }}
+                        autoFocus
+                        style={{ width: 100, padding: '2px 6px', fontSize: 12, background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--color-primary-500)', borderRadius: 4, outline: 'none' }}
+                      />
+                      <button onClick={() => saveScrip(h.id)} disabled={savingScrip} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-success-500)', padding: 2 }}><Check size={13} /></button>
+                      <button onClick={() => { setEditingScrip(null); setEditScripVal(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-error-500)', padding: 2 }}><XIcon size={13} /></button>
                     </div>
+                  ) : (
+                    <>
+                      <div style={{ fontWeight: 700, color: 'var(--color-primary-400)', fontSize: 'var(--text-sm)', letterSpacing: '0.3px' }}>{cleanSymbol(h)}</div>
+                      <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
+                      {displayCompanyName && (
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500, marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+                          {displayCompanyName}
+                        </div>
+                      )}
+                    </>
                   )}
+
                 </div>
                 <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{meta.sector}</div>
                 <div style={{ color: 'var(--text-primary)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{meta.marketCap}</div>

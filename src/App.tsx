@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './lib/authContext';
+import { AuthProvider } from './lib/AuthContext';
+import { useAuth } from './lib/useAuth';
 import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { ClientsPage } from './pages/ClientsPage';

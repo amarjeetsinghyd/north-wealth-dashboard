@@ -1,6 +1,17 @@
 import companyMaster from './companyMaster.json';
 import etfMaster from './etfMaster.json';
 
+export type CompanyTuple = (string | number | null)[];
+
+export interface CompanyMaster {
+  nse: Record<string, number>;
+  bse: Record<string, number>;
+  isin: Record<string, number>;
+  companies: CompanyTuple[];
+}
+
+export { companyMaster, etfMaster };
+
 export type MarketCap = 'Large' | 'Mid' | 'Small';
 export type AssetClass = 'Equity' | 'Commodity' | 'Debt' | 'ETF' | 'Mutual Fund';
 
@@ -335,7 +346,7 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
   // 1. Check custom overrides SECTOR_MAP first (holds specialised ETF metadata)
   const customMeta = SECTOR_MAP[upper];
   
-  let meta: StockMeta;
+  let meta: StockMeta = DEFAULT_META;
   
   if (customMeta) {
     meta = customMeta;
@@ -348,16 +359,18 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
     
     if (etfIdx !== undefined) {
       const etf = etfMaster.etfs[etfIdx];
-      const etfName = etf[0] as string;
-      const etfCategory = etf[1] as string;
-      const { sector, assetClass } = standardizeEtfCategory(etfCategory, etfName);
-      meta = {
-        sector,
-        marketCap: 'Large',
-        assetClass,
-        industry: etfName,
-        companyName: etfName
-      };
+      if (etf && etf[0] && etf[1]) {
+        const etfName = etf[0] as string;
+        const etfCategory = etf[1] as string;
+        const { sector, assetClass } = standardizeEtfCategory(etfCategory, etfName);
+        meta = {
+          sector,
+          marketCap: 'Large',
+          assetClass,
+          industry: etfName,
+          companyName: etfName
+        };
+      }
     } else {
       // 3. Query the comprehensive CMOTS Company Master database
       let companyIdx = (companyMaster.nse as Record<string, number>)[upper];
@@ -366,26 +379,28 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
       }
       
       if (companyIdx !== undefined) {
-        const company = companyMaster.companies[companyIdx];
-        const rawSector = company[1] as string;
-        const mcapType = company[2] as MarketCap;
-        const mcapVal = company[3] as number;
-        const industryname = company[4] as string;
-        
-        const nseStatus = (company[8] as string || '').trim().toLowerCase();
-        const bseStatus = (company[9] as string || '').trim().toLowerCase();
-        const isInactive = nseStatus === 'delisted' || bseStatus === 'delisted' ||
-                           nseStatus === 'suspended' || bseStatus === 'suspended' ||
-                           nseStatus === 'not listed' || bseStatus === 'not listed';
-                           
-        meta = {
-          sector: isInactive ? 'Inactive' : standardizeSector(rawSector),
-          marketCap: mcapType,
-          assetClass: 'Equity',
-          industry: industryname,
-          mcap: mcapVal,
-          companyName: company[0] as string
-        };
+        const company = companyMaster.companies[companyIdx] as CompanyTuple;
+        if (company && company[0] && company[1] && company[2] && company[3] && company[4]) {
+          const rawSector = company[1] as string;
+          const mcapType = company[2] as MarketCap;
+          const mcapVal = company[3] as number;
+          const industryname = company[4] as string;
+          
+          const nseStatus = (company[8] as string || '').trim().toLowerCase();
+          const bseStatus = (company[9] as string || '').trim().toLowerCase();
+          const isInactive = nseStatus === 'delisted' || bseStatus === 'delisted' ||
+                             nseStatus === 'suspended' || bseStatus === 'suspended' ||
+                             nseStatus === 'not listed' || bseStatus === 'not listed';
+                             
+          meta = {
+            sector: isInactive ? 'Inactive' : standardizeSector(rawSector),
+            marketCap: mcapType,
+            assetClass: 'Equity',
+            industry: industryname,
+            mcap: mcapVal,
+            companyName: company[0] as string
+          };
+        }
       } else {
         // 4. Fallback to Mutual Fund (assuming unknown entries in statements are Mutual Funds)
         meta = {
@@ -437,7 +452,7 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
   };
 
   const override = stockOverrides[upper];
-  const defaults = sectorDefaults[meta.sector] ?? sectorDefaults['Others'];
+  const defaults = sectorDefaults[meta.sector] ?? sectorDefaults['Others'] ?? { pe: 20.0, pb: 2.5, divYield: 1.0 };
   
   return {
     ...meta,
@@ -468,53 +483,58 @@ export function resolvePriceTicker(
   const candidates: string[] = [`${symbol}.NS`, `${symbol}.BO`];
 
   // 1. Check in companyMaster
-  let companyIdx: number | undefined = (companyMaster as any).nse[symbol];
+  let companyIdx: number | undefined = (companyMaster as CompanyMaster).nse[symbol];
   
   // If not found by exact NSE symbol, search by company name or symbol in companyMaster
   if (companyIdx === undefined && companyName) {
     const cleanName = companyName.toLowerCase().trim();
-    companyIdx = (companyMaster as any).companies.findIndex((c: any) => 
-      c[0].toLowerCase().includes(cleanName) || 
-      (c[7] && c[7].toLowerCase().includes(cleanName))
-    );
+    companyIdx = (companyMaster as CompanyMaster).companies.findIndex((c: CompanyTuple) => {
+      if (!c) return false;
+      const c0 = String(c[0] || '').toLowerCase();
+      const c7 = String(c[7] || '').toLowerCase();
+      return c0.includes(cleanName) || (c7 !== '' && c7.includes(cleanName));
+    });
     if (companyIdx === -1) companyIdx = undefined;
   }
 
   // If still not found, check by shortname/similar symbol (Fuzzy search)
   if (companyIdx === undefined) {
     const symbolLower = symbol.toLowerCase();
-    companyIdx = (companyMaster as any).companies.findIndex((c: any) => {
-      const shortName = c[7] ? c[7].toLowerCase().replace(/\s/g, '') : '';
-      const compName = c[0] ? c[0].toLowerCase().replace(/\s/g, '') : '';
+    companyIdx = (companyMaster as CompanyMaster).companies.findIndex((c: CompanyTuple) => {
+      if (!c) return false;
+      const shortName = c[7] ? String(c[7]).toLowerCase().replace(/\s/g, '') : '';
+      const compName = c[0] ? String(c[0]).toLowerCase().replace(/\s/g, '') : '';
       return (
-        shortName.includes(symbolLower) || 
-        symbolLower.includes(shortName) || 
-        compName.includes(symbolLower)
+        (shortName !== '' && shortName.includes(symbolLower)) || 
+        (shortName !== '' && symbolLower.includes(shortName)) || 
+        (compName !== '' && compName.includes(symbolLower))
       );
     });
     if (companyIdx === -1) companyIdx = undefined;
   }
 
   if (companyIdx !== undefined) {
-    const company = (companyMaster as any).companies[companyIdx];
-    const nseStatus = company[8] as string;
-    
-    // Find BSE Code for this company index
-    let bseCode = '';
-    for (const [k, v] of Object.entries((companyMaster as any).bse)) {
-      if (v === companyIdx) {
-        bseCode = k;
-        break;
+    const company = (companyMaster as CompanyMaster).companies[companyIdx];
+    if (company) {
+      const nseStatus = String(company[8] || '');
+      
+      // Find BSE Code for this company index
+      let bseCode = '';
+      for (const [k, v] of Object.entries((companyMaster as CompanyMaster).bse)) {
+        if (v === companyIdx) {
+          bseCode = k;
+          break;
+        }
       }
-    }
 
-    if (bseCode) {
-      if (nseStatus === 'Not Listed' || nseStatus === 'Delisted' || nseStatus === 'Suspended') {
-        // BSE is the active market! Put BSE candidate first!
-        candidates.unshift(`${bseCode}.BO`);
-      } else {
-        // BSE as secondary fallback
-        candidates.push(`${bseCode}.BO`);
+      if (bseCode) {
+        if (nseStatus === 'Not Listed' || nseStatus === 'Delisted' || nseStatus === 'Suspended') {
+          // BSE is the active market! Put BSE candidate first!
+          candidates.unshift(`${bseCode}.BO`);
+        } else {
+          // BSE as secondary fallback
+          candidates.push(`${bseCode}.BO`);
+        }
       }
     }
   }
@@ -589,6 +609,7 @@ export function resolveCompanyNameToNSE(companyName: string): string | null {
 
   for (let i = 0; i < companyMaster.companies.length; i++) {
     const comp = companyMaster.companies[i];
+    if (!comp) continue;
     const name = comp[0] as string;
     if (name && normalizeCompanyName(name) === target) {
       const nseMap = getReverseNseMap();
@@ -608,7 +629,7 @@ export function cleanSymbol(
 ): string {
   if (!symbolOrObj) return '';
 
-  let sym = '';
+  let sym: string;
   let companyName = '';
 
   if (typeof symbolOrObj === 'object') {
@@ -633,12 +654,14 @@ export function cleanSymbol(
     const companyIdx = (companyMaster.bse as Record<string, number>)[clean];
     if (companyIdx !== undefined) {
       const company = companyMaster.companies[companyIdx];
-      const shortName = company[7] as string;
-      const compName = company[0] as string;
-      // Strip spaces and uppercase
-      const targetName = (shortName || compName || '').replace(/\s/g, '').toUpperCase();
-      if (targetName && !/^\d+$/.test(targetName)) {
-        return targetName;
+      if (company) {
+        const shortName = company[7] as string;
+        const compName = company[0] as string;
+        // Strip spaces and uppercase
+        const targetName = (shortName || compName || '').replace(/\s/g, '').toUpperCase();
+        if (targetName && !/^\d+$/.test(targetName)) {
+          return targetName;
+        }
       }
     }
   }

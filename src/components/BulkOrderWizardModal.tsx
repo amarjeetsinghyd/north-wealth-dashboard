@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, ShieldAlert } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
-import type { Client } from '../types';
+import type { Client, Holding } from '../types';
 
 interface BulkOrderWizardModalProps {
   onClose: () => void;
@@ -11,7 +11,7 @@ interface BulkOrderWizardModalProps {
   initialMode: 'buy' | 'sell';
   initialSymbol?: string;
   initialSelectedClientIds?: string[];
-  holdingsData?: any[]; // The holdings to sell from if selling
+  holdingsData?: Holding[]; // The holdings to sell from if selling
 }
 
 type Step = 'action' | 'clients' | 'price' | 'confirm';
@@ -19,7 +19,7 @@ type Step = 'action' | 'clients' | 'price' | 'confirm';
 export function BulkOrderWizardModal({ onClose, onSuccess, clients, initialMode, initialSymbol, initialSelectedClientIds, holdingsData }: BulkOrderWizardModalProps) {
   const [step, setStep] = useState<Step>(initialSymbol ? 'clients' : 'action');
   const [mode, setMode] = useState<'buy' | 'sell'>(initialMode);
-  const [symbol, setSymbol] = useState(initialSymbol || '');
+  const [symbol, setSymbol] = useState<string>(initialSymbol ?? '');
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set(initialSelectedClientIds || []));
   const [allocationPct, setAllocationPct] = useState<string>('10');
   const [priceMode, setPriceMode] = useState<'exact' | 'band'>('exact');
@@ -36,15 +36,24 @@ export function BulkOrderWizardModal({ onClose, onSuccess, clients, initialMode,
     return clients;
   }, [clients, mode, holdingsData]);
 
-  const calculatedOrders = useMemo(() => {
-    const orders: any[] = [];
+  interface CalculatedOrder {
+  client: Client;
+  qty: number;
+  price: number;
+  budget?: number;
+  mode: 'buy' | 'sell';
+  holdingId?: string; // Required for sell orders
+}
+
+const calculatedOrders = useMemo(() => {
+    const orders: CalculatedOrder[] = [];
     const p = priceMode === 'exact' ? parseFloat(exactPrice) : (parseFloat(minPrice) + parseFloat(maxPrice)) / 2;
     if (!p || p <= 0) return orders;
 
     targetClients.forEach(c => {
       if (!selectedClients.has(c.id)) return;
       if (mode === 'buy') {
-        const cash = Math.max(0, ((c as any).totalCapital || 0) - ((c as any).invested || 0));
+        const cash = Math.max(0, ((c as Client & { totalCapital?: number; invested?: number }).totalCapital || 0) - ((c as Client & { totalCapital?: number; invested?: number }).invested || 0));
         const alloc = parseFloat(allocationPct) || 0;
         const budget = cash * (alloc / 100);
         const qty = Math.floor(budget / p);
@@ -53,7 +62,7 @@ export function BulkOrderWizardModal({ onClose, onSuccess, clients, initialMode,
         }
       } else {
         const h = holdingsData?.find(x => x.client_id === c.id);
-        if (h && h.quantity > 0) {
+        if (h && h.quantity > 0 && h.id) {
           orders.push({ client: c, qty: h.quantity, price: p, mode: 'sell', holdingId: h.id });
         }
       }
@@ -100,6 +109,7 @@ export function BulkOrderWizardModal({ onClose, onSuccess, clients, initialMode,
           });
         } else {
           // Sell logic
+          if (!order.holdingId) continue;
           const val = order.qty * p;
           await updateDoc(doc(db, 'holdings', order.holdingId), {
             quantity: 0,
@@ -121,8 +131,8 @@ export function BulkOrderWizardModal({ onClose, onSuccess, clients, initialMode,
         }
       }
       onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Execution failed');
+    } catch (err) {
+      setError((err as Error).message || 'Execution failed');
       setIsProcessing(false);
     }
   };
@@ -192,7 +202,8 @@ export function BulkOrderWizardModal({ onClose, onSuccess, clients, initialMode,
                   <tbody>
                     {targetClients.map(c => {
                       const h = holdingsData?.find(x => x.client_id === c.id);
-                      const freeCash = Math.max(0, ((c as any).totalCapital || 0) - ((c as any).invested || 0));
+                      const clientWithCapital = c as Client & { totalCapital?: number; invested?: number };
+                      const freeCash = Math.max(0, (clientWithCapital.totalCapital || 0) - (clientWithCapital.invested || 0));
                       return (
                         <tr key={c.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                           <td style={{ padding: '8px 12px' }}><input type="checkbox" checked={selectedClients.has(c.id)} onChange={() => toggleClient(c.id)} /></td>

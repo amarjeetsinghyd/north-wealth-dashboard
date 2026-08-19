@@ -2,7 +2,7 @@ import React from 'react';
 import { Activity, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import type { BenchmarkReturn, StockMarketData } from '../lib/yahooFinance';
-import type { Holding } from '../types';
+import type { Holding, Transaction } from '../types';
 import { getStockMeta } from '../lib/sectorMap';
 
 export const SectionCard = ({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) => (
@@ -34,8 +34,6 @@ export function BenchmarkComparison({ benchmarkData, stockMarketData, holdings, 
     );
   }
 
-  let portfolio1YReturn = 0;
-
   const chartData = benchmarkData.map(b => {
     let portfolioWeightedReturn = 0;
     
@@ -58,8 +56,6 @@ export function BenchmarkComparison({ benchmarkData, stockMarketData, holdings, 
       }
     });
 
-    if (b.period === '1Y') portfolio1YReturn = portfolioWeightedReturn;
-
     return {
       name: b.label,
       Nifty500: parseFloat(b.niftyReturn.toFixed(2)),
@@ -70,6 +66,7 @@ export function BenchmarkComparison({ benchmarkData, stockMarketData, holdings, 
 
   const data1Y = benchmarkData.find(d => d.period === '1Y');
   const nifty1Y = data1Y ? data1Y.niftyReturn : 0;
+  const portfolio1YReturn = chartData.find(d => d.name === '1Y')?.Portfolio || 0;
   const alpha1Y = portfolio1YReturn - nifty1Y;
 
   return (
@@ -101,7 +98,7 @@ export function BenchmarkComparison({ benchmarkData, stockMarketData, holdings, 
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280', fontWeight: 600 }} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6b7280' }} tickFormatter={(val: number) => `${val}%`} />
-              <RechartsTooltip formatter={(val: any) => `${Number(val).toFixed(2)}%`} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} cursor={{ fill: '#f3f4f6' }} />
+              <RechartsTooltip formatter={(val: any) => `${Number(val || 0).toFixed(2)}%`} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} cursor={{ fill: '#f3f4f6' }} />
               <Bar dataKey="Portfolio" fill="#C9A84C" radius={[4, 4, 0, 0]} barSize={20} />
               <Bar dataKey="Nifty500" fill="#334155" radius={[4, 4, 0, 0]} barSize={20} />
             </BarChart>
@@ -133,7 +130,18 @@ export function StockLevelAnalysis({ stockMarketData, holdings, totalValue }: Ph
   let nearLow = 0;
   let neutral = 0;
 
-  const scripAnalyses: any[] = [];
+  interface ScripAnalysis {
+    symbol: string;
+    company: string;
+    beta: number;
+    vol: number;
+    alpha: number;
+    liquidity: string;
+    text: string;
+    weight: number;
+  }
+
+  const scripAnalyses: ScripAnalysis[] = [];
 
   holdings.forEach(h => {
     const symbol = h.nse_symbol || h.stock_symbol;
@@ -146,7 +154,7 @@ export function StockLevelAnalysis({ stockMarketData, holdings, totalValue }: Ph
       else neutral++;
 
       // Generate Dynamic Text
-      let text = '';
+      let text;
       if (meta.assetClass === 'Equity') {
          text = `${symbol}: ${smd.liquidity} liquidity, ${meta.marketCap}-cap ${meta.sector} equity with a 1Y return of ${smd.return1Y > 0 ? '+' : ''}${smd.return1Y.toFixed(1)}%. Currently trading ${Math.abs(smd.pctFromHigh).toFixed(1)}% below its 52W high, with a true beta of ${smd.trueBeta.toFixed(2)}.`;
       } else if (meta.assetClass === 'ETF' && !meta.sector.toLowerCase().includes('gold')) {
@@ -264,7 +272,7 @@ export function RiskAndVolatilityTable({ stockMarketData, holdings, totalValue }
   );
 }
 
-export function TransactionAnalytics({ transactions }: Phase2SectionsProps & { transactions: any[] }) {
+export function TransactionAnalytics({ transactions }: Phase2SectionsProps & { transactions: Transaction[] }) {
   const hasTransactionDates = transactions && transactions.length > 0 && transactions.some(t => t.date && t.date !== new Date().toISOString().split('T')[0]);
   
   if (!hasTransactionDates) {

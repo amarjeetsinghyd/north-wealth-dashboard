@@ -137,7 +137,7 @@ export function AnalyticsPage() {
           if (d.exists() && d.data().rms) {
             setRmList(d.data().rms);
           }
-        } catch(e) {}
+        } catch (_e) {}
 
         const holdings = holdingSnap.docs.map(d => {
           const h = d.data() as any;
@@ -324,7 +324,7 @@ export function AnalyticsPage() {
   // Observations
   const observations = useMemo(() => {
     const list: string[] = [];
-    if (sectorData.length > 0 && sectorData[0].value > 25) {
+    if (sectorData.length > 0 && sectorData[0] && sectorData[0].value > 25) {
       list.push(`${sectorData[0].name} forms the largest aggregate exposure at ${sectorData[0].value.toFixed(1)}%, indicating high sector concentration across the firm's assets.`);
     }
     if (aggregateHhi * 10000 > 1800) {
@@ -1327,9 +1327,9 @@ export function AnalyticsPage() {
           onSuccess={() => { setBulkWizard(null); setSelectedStockRows(new Set()); setSelectedClientRows(new Set()); reloadData(); }}
           clients={clients}
           initialMode={bulkWizard.mode}
-          initialSymbol={bulkWizard.symbol}
-          initialSelectedClientIds={bulkWizard.selectedClientIds}
-          holdingsData={bulkWizard.holdingsData}
+          initialSymbol={bulkWizard.symbol ?? ''}
+          initialSelectedClientIds={bulkWizard.selectedClientIds ?? []}
+          holdingsData={bulkWizard.holdingsData ?? []}
         />
       )}
 
@@ -1406,7 +1406,7 @@ export function AnalyticsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={assetClassData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} innerRadius={40}>
-                    {assetClassData.map((_, i) => <Cell key={i} fill={VIBRANT_PALETTE[i % VIBRANT_PALETTE.length]} />)}
+                    {assetClassData.map((_, i) => <Cell key={i} fill={VIBRANT_PALETTE[i % VIBRANT_PALETTE.length] ?? '#888'} />)}
                   </Pie>
                   <ChartTooltip formatter={(v: any) => [`${v.toFixed(2)}%`]} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} />
                 </PieChart>
@@ -1474,7 +1474,7 @@ export function AnalyticsPage() {
                 <ChartTooltip formatter={(v: any) => [`${v.toFixed(1)}%`]} contentStyle={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8, color: '#111827' }} />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={15}>
                   {sectorData.slice(0, 8).map((entry, i) => (
-                    <Cell key={i} fill={SECTOR_COLORS[entry.name] || VIBRANT_PALETTE[i % VIBRANT_PALETTE.length]} />
+                    <Cell key={i} fill={SECTOR_COLORS[entry.name] ?? VIBRANT_PALETTE[i % VIBRANT_PALETTE.length] ?? '#888'} />
                   ))}
                 </Bar>
               </BarChart>
@@ -1528,7 +1528,9 @@ export function AnalyticsPage() {
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.05)', background: 'rgba(0,0,0,0.01)' }}>
                 {['Client Name:name', 'AUM Capital:totalCapital', 'Valuation:value', 'Unrealised P&L:pnl', 'Net P&L %:pnlPct', 'Allocation Share:value', 'Positions (S / E):stockCount'].map(col => {
-                  const [label, key] = col.split(':');
+                  const parts = col.split(':');
+                  const label = parts[0] ?? '';
+                  const key = parts[1] ?? '';
                   const isSorted = clientSortCol === key;
                   return (
                     <th key={label} onClick={() => handleSortClients(key)} style={{

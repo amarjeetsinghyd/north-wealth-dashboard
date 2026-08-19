@@ -11,7 +11,7 @@ import { fetchClient, fetchHoldings, fetchTransactions, fetchMarketDataCache } f
 import { fetchNifty500Returns, fetchStockMarketData } from '../lib/yahooFinance';
 import type { BenchmarkReturn, StockMarketData } from '../lib/yahooFinance';
 import { Spinner } from '../components/Spinner';
-import type { Client, Holding } from '../types';
+import type { Client, Holding, Transaction } from '../types';
 import { getStockMeta, cleanSymbol } from '../lib/sectorMap';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -75,8 +75,20 @@ function SectionCard({ title, icon, children }: { title: string; icon: React.Rea
 }
 
 const RADIAN = Math.PI / 180;
-function CustomPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) {
-  if (percent < 0.05) return null;
+interface PieLabelRenderProps {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  percent?: number;
+  index?: number;
+  name?: string;
+  value?: number;
+}
+function CustomPieLabel(props: PieLabelRenderProps) {
+  const { cx, cy, midAngle, innerRadius, outerRadius, percent } = props;
+  if (percent === undefined || percent < 0.05 || midAngle === undefined || cx === undefined || cy === undefined || innerRadius === undefined || outerRadius === undefined) return null;
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
@@ -87,18 +99,28 @@ function CustomPieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }:
   );
 }
 
-function CustomTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
+interface TooltipPayload {
+  name: string;
+  value: number | string;
+  color?: string;
+}
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+}
+function CustomTooltip({ active, payload }: CustomTooltipProps) {
+  if (!active || !payload?.length || !payload[0]) return null;
+  const item = payload[0];
   return (
     <div style={{
       background: '#ffffff', border: '1px solid #e5e5e5', boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
       borderRadius: 8, padding: '10px 14px', fontSize: 12,
     }}>
-      <div style={{ color: '#111111', fontWeight: 800 }}>{payload[0].name}</div>
+      <div style={{ color: '#111111', fontWeight: 800 }}>{item.name}</div>
       <div style={{ color: '#555555', marginTop: 4, fontWeight: 600 }}>
-        {typeof payload[0].value === 'number' && payload[0].value < 200
-          ? `${payload[0].value.toFixed(1)}%`
-          : fmtCurrency(payload[0].value)}
+        {typeof item.value === 'number' && item.value < 200
+          ? `${item.value.toFixed(1)}%`
+          : fmtCurrency(typeof item.value === 'number' ? item.value : 0)}
       </div>
     </div>
   );
@@ -241,7 +263,7 @@ export function PortfolioDashboardPage() {
   const navigate = useNavigate();
   const [client, setClient] = useState<Client | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [benchmarkData, setBenchmarkData] = useState<BenchmarkReturn[] | null>(null);
   const [stockMarketData, setStockMarketData] = useState<StockMarketData[] | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(true);
@@ -307,7 +329,7 @@ export function PortfolioDashboardPage() {
           // Unblock the PDF download button instantly if we found cache data
           if (niftyDoc && resolvedStock.length > 0) {
             setMarketDataLoading(false);
-            console.log('Pre-loaded from cache, PDF button enabled.');
+            console.warn('Pre-loaded from cache, PDF button enabled.');
           }
         } catch (cacheErr) {
           console.warn('Failed to pre-load market data from cache:', cacheErr);
@@ -321,7 +343,7 @@ export function PortfolioDashboardPage() {
         ]).then(([bench, stock]) => {
           if (bench && bench.length > 0) setBenchmarkData(bench);
           if (stock && stock.length > 0) setStockMarketData(stock);
-          console.log('Background market data refresh complete.');
+          console.warn('Background market data refresh complete.');
         }).catch(err => {
           console.warn('Background market data refresh encountered an error:', err);
         }).finally(() => {
@@ -332,13 +354,16 @@ export function PortfolioDashboardPage() {
         setMarketDataLoading(false);
       }
     } catch (err) {
-      console.error('Error loading portfolio dashboard:', err);
+      console.warn('Error loading portfolio dashboard:', err);
       setLoading(false);
       setMarketDataLoading(false);
     }
   }, [id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
 
   if (loading) {
     return (
@@ -393,8 +418,7 @@ export function PortfolioDashboardPage() {
   const largePct = capData.find(d => d.name === 'Large Cap')?.value || 0;
   const smallPct = capData.find(d => d.name === 'Small Cap')?.value || 0;
 
-  let portfolioVolatility = 0;
-  const betaEstimate = holdings.reduce((s, h) => {
+  const { betaEstimate } = holdings.reduce((acc, h) => {
     const meta = getStockMeta(h.nse_symbol, h.stock_symbol);
     const val = h.current_price > 0 ? (h.current_value || h.buy_price * h.quantity) : (h.invested_amount || h.buy_price * h.quantity);
     const weight = totalValue > 0 ? val / totalValue : 0;
@@ -410,9 +434,11 @@ export function PortfolioDashboardPage() {
        }
     }
     
-    portfolioVolatility += (volVal * weight);
-    return s + (betaVal * weight);
-  }, 0);
+    return {
+      betaEstimate: acc.betaEstimate + (betaVal * weight),
+      portfolioVolatility: acc.portfolioVolatility + (volVal * weight)
+    };
+  }, { betaEstimate: 0, portfolioVolatility: 0 });
 
   const execSummary = generateExecutiveSummary(client.name, holdings, totalValue, totalInvested, largePct, smallPct, health.score, betaEstimate);
   const radarData = health.factors.map(f => ({ subject: f.label, score: f.score, fullMark: 25 }));
@@ -528,7 +554,7 @@ export function PortfolioDashboardPage() {
   const estMonthlyDividend = estAnnualDividend / 12;
 
   const observations: string[] = [];
-  if (sectorData.length > 0 && sectorData[0].value > 30) {
+  if (sectorData.length > 0 && sectorData[0] && sectorData[0].value > 30) {
     observations.push(`${sectorData[0].name} forms the largest sector exposure at ${sectorData[0].value}% of the overall portfolio.`);
   }
   if (belowOnePctCount > 10) {
@@ -591,8 +617,7 @@ export function PortfolioDashboardPage() {
     try {
       await generatePDF(pdfReportRef, client.name);
     } catch (err) {
-      console.error('PDF generation failed:', err);
-      alert('Failed to generate PDF. Please try again.');
+      console.warn('PDF generation failed:', err);
     } finally {
       setGeneratingPDF(false);
     }
@@ -769,7 +794,7 @@ export function PortfolioDashboardPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#777' }}>Largest Sector</span>
-                  <span style={{ fontSize: 12, fontWeight: 900, color: '#111' }}>{sectorData.length > 0 ? `${sectorData[0].name} (${sectorData[0].value.toFixed(0)}%)` : '—'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 900, color: '#111' }}>{sectorData.length > 0 && sectorData[0] ? `${sectorData[0].name} (${sectorData[0].value.toFixed(0)}%)` : '—'}</span>
                 </div>
               </div>
             </div>
@@ -904,7 +929,7 @@ export function PortfolioDashboardPage() {
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={capData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} labelLine={false} label={CustomPieLabel}>
-                    {capData.map((_, i) => <Cell key={i} fill={CAP_COLORS[i % CAP_COLORS.length]} />)}
+                    {capData.map((_, i) => <Cell key={i} fill={CAP_COLORS[i % CAP_COLORS.length] ?? '#888'} />)}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
                 </PieChart>
@@ -925,7 +950,7 @@ export function PortfolioDashboardPage() {
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie data={assetData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} labelLine={false} label={CustomPieLabel}>
-                    {assetData.map((_, i) => <Cell key={i} fill={ASSET_COLORS[i % ASSET_COLORS.length]} />)}
+                    {assetData.map((_, i) => <Cell key={i} fill={ASSET_COLORS[i % ASSET_COLORS.length] ?? '#888'} />)}
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
                 </PieChart>
@@ -1312,7 +1337,7 @@ export function PortfolioDashboardPage() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f0f0f0', padding: '5px 0' }}>
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#777', textTransform: 'uppercase' }}>Largest Sector</span>
-                    <span style={{ fontSize: 12, fontWeight: 900, color: '#111' }}>{sectorData.length > 0 ? `${sectorData[0].name} (${sectorData[0].value.toFixed(0)}%)` : '—'}</span>
+                    <span style={{ fontSize: 12, fontWeight: 900, color: '#111' }}>{sectorData.length > 0 && sectorData[0] ? `${sectorData[0].name} (${sectorData[0].value.toFixed(0)}%)` : '—'}</span>
                   </div>
                 </div>
               </SectionCard>
@@ -1358,7 +1383,7 @@ export function PortfolioDashboardPage() {
                   <ResponsiveContainer width="100%" height={120}>
                     <PieChart>
                       <Pie data={capData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={50} labelLine={false} label={CustomPieLabel}>
-                        {capData.map((_, i) => <Cell key={i} fill={CAP_COLORS[i % CAP_COLORS.length]} />)}
+                        {capData.map((_, i) => <Cell key={i} fill={CAP_COLORS[i % CAP_COLORS.length] ?? '#888'} />)}
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
                     </PieChart>
@@ -1377,7 +1402,7 @@ export function PortfolioDashboardPage() {
                   <ResponsiveContainer width="100%" height={120}>
                     <PieChart>
                       <Pie data={assetData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={50} labelLine={false} label={CustomPieLabel}>
-                        {assetData.map((_, i) => <Cell key={i} fill={ASSET_COLORS[i % ASSET_COLORS.length]} />)}
+                        {assetData.map((_, i) => <Cell key={i} fill={ASSET_COLORS[i % ASSET_COLORS.length] ?? '#888'} />)}
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
                     </PieChart>
