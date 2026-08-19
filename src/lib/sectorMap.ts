@@ -28,7 +28,7 @@ export interface StockMeta {
 }
 
 const DEFAULT_META: StockMeta = {
-  sector: 'Inactive',
+  sector: 'Others',
   marketCap: 'Mid',
   assetClass: 'Equity',
   pe: 20.0,
@@ -66,7 +66,7 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   MANAPPURAM:  { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
   LICHSGFIN:   { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
   POONAWALLA:  { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
-  HDBFSL:      { sector: 'Inactive', marketCap: 'Small',  assetClass: 'Equity' },
+  HDBFSL:      { sector: 'Financial Services', marketCap: 'Mid',   assetClass: 'Equity' },
 
   // ── Large Cap — IT ────────────────────────────────────────────────────────
   TCS:         { sector: 'Information Technology', marketCap: 'Large', assetClass: 'Equity' },
@@ -215,7 +215,7 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   GALAXYSURF:  { sector: 'Chemicals', marketCap: 'Mid',   assetClass: 'Equity' },
   NAVINFLUOR:  { sector: 'Chemicals', marketCap: 'Mid',   assetClass: 'Equity' },
 
-  // ── Commodity ETFs ────────────────────────────────────────────────────────
+  // ── Commodity & Sector ETFs ──────────────────────────────────────────────
   GOLDBEES:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
   GOLDIETF:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
   ICICIGOLD:   { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
@@ -223,6 +223,15 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   AXISGOLD:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
   SILVERBEES:  { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
   SILVERETF:   { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
+  SILVERIETF:  { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
+  HDFCSILVER:  { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
+  METALIETF:   { sector: 'Metals & Mining', marketCap: 'Mid',   assetClass: 'ETF' },
+  HDFCMETAL:   { sector: 'Metals & Mining', marketCap: 'Mid',   assetClass: 'ETF' },
+  AUTOBEES:    { sector: 'Automobiles',  marketCap: 'Large', assetClass: 'ETF' },
+  PHARMABEES:  { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'ETF' },
+  HEALTHY:     { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'ETF' },
+  CONSUMBEES:  { sector: 'FMCG',         marketCap: 'Large', assetClass: 'ETF' },
+  INFRABEES:   { sector: 'Infrastructure', marketCap: 'Large', assetClass: 'ETF' },
 
   // ── Index ETFs ────────────────────────────────────────────────────────────
   NIFTYBEES:   { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
@@ -232,7 +241,19 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   BANKBEES:    { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
   ITBEES:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
   CPSE:        { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
+  CPSEETF:     { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
+  MID150BEES:  { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
+  HDFCSML250:  { sector: 'Index ETF', marketCap: 'Small', assetClass: 'ETF' },
+  MON100:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
+  MAFANG:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
+
+  // ── Liquid & Debt ETFs ───────────────────────────────────────────────────
   LIQUIDBEES:  { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
+  LIQUIDCASE:  { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
+  LIQUIDETF:   { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
+  HDFCLIQUID:  { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
+  ICICILIQ:    { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
+  BHARATBOND:  { sector: 'Debt',       marketCap: 'Large', assetClass: 'Debt' },
 
   // ── Adani Group ───────────────────────────────────────────────────────────
   ADANIENT:    { sector: 'Conglomerate', marketCap: 'Large', assetClass: 'Equity' },
@@ -312,22 +333,23 @@ function standardizeEtfCategory(category: string, etfName: string): { sector: st
   const cat = (category || '').toLowerCase().trim();
   const name = (etfName || '').toLowerCase().trim();
   
-  if (name.includes('silver')) return { sector: 'Silver', assetClass: 'Commodity' };
-  if (name.includes('gold')) return { sector: 'Gold', assetClass: 'Commodity' };
+  if (name.includes('silver')) return { sector: 'Silver ETF', assetClass: 'Commodity' };
+  if (name.includes('gold')) return { sector: 'Gold ETF', assetClass: 'Commodity' };
   if (name.includes('metal')) return { sector: 'Metals & Mining', assetClass: 'ETF' };
   if (name.includes('bank')) return { sector: 'Banking', assetClass: 'ETF' };
-  if (name.includes('it ') || name.includes(' it') || name.includes('tech')) return { sector: 'Information Technology', assetClass: 'ETF' };
+  if (name.includes('it ') || name.includes(' it') || name.includes('tech') || name.includes('software')) return { sector: 'Information Technology', assetClass: 'ETF' };
   if (name.includes('pharma') || name.includes('health')) return { sector: 'Pharma & Healthcare', assetClass: 'ETF' };
   if (name.includes('auto')) return { sector: 'Automobiles', assetClass: 'ETF' };
   if (name.includes('infra')) return { sector: 'Infrastructure', assetClass: 'ETF' };
   if (name.includes('fmcg') || name.includes('consum')) return { sector: 'FMCG', assetClass: 'ETF' };
+  if (name.includes('commodity')) return { sector: 'Commodities / Metals', assetClass: 'Commodity' };
   
-  if (cat.includes('debt') || name.includes('liquid') || name.includes('gilt')) {
-    return { sector: 'Debt', assetClass: 'Debt' };
+  if (cat.includes('debt') || name.includes('liquid') || name.includes('gilt') || name.includes('overnight') || name.includes('money market')) {
+    return { sector: 'Liquid ETF', assetClass: 'Debt' };
   }
   
   // Default for Nifty 50, Next 50, 100, 200, 500, etc.
-  return { sector: 'Broad Based', assetClass: 'ETF' };
+  return { sector: 'Index ETF', assetClass: 'ETF' };
 }
 
 /**
@@ -386,17 +408,14 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
           const mcapVal = company[3] as number;
           const industryname = company[4] as string;
           
-          const nseStatus = (company[8] as string || '').trim().toLowerCase();
-          const bseStatus = (company[9] as string || '').trim().toLowerCase();
-          const isInactive = nseStatus === 'delisted' || bseStatus === 'delisted' ||
-                             nseStatus === 'suspended' || bseStatus === 'suspended' ||
-                             nseStatus === 'not listed' || bseStatus === 'not listed';
-                             
+          const rawSectorClean = rawSector ? standardizeSector(rawSector) : 'Others';
+          const finalSector = rawSectorClean !== 'Inactive' && rawSectorClean !== '' ? rawSectorClean : 'Others';
+                              
           meta = {
-            sector: isInactive ? 'Inactive' : standardizeSector(rawSector),
-            marketCap: mcapType,
+            sector: finalSector,
+            marketCap: mcapType || 'Mid',
             assetClass: 'Equity',
-            industry: industryname,
+            industry: industryname || finalSector,
             mcap: mcapVal,
             companyName: company[0] as string
           };
