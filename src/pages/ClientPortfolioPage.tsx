@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload, PlusCircle } from 'lucide-react';
+import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload, PlusCircle, Trash2 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, updateDoc, addDoc, collection, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -615,6 +615,19 @@ export function ClientPortfolioPage() {
       alert('Failed to add holding');
     } finally {
       setSavingTransaction(false);
+    }
+  };
+
+  const handleDeleteHolding = async (holdingId: string, scripName: string) => {
+    if (!window.confirm(`Are you sure you want to delete holding "${scripName}"?`)) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'holdings', holdingId));
+      await load();
+    } catch (err) {
+      console.error('Failed to delete holding:', err);
+      alert('Failed to delete holding');
     }
   };
 
@@ -1475,6 +1488,37 @@ export function ClientPortfolioPage() {
                     </button>
                   </div>
                 )}
+
+                {/* Delete Holding Button */}
+                <div style={{ textAlign: 'center' }}>
+                  <button
+                    onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--color-error-500)',
+                      padding: '4px 6px',
+                      borderRadius: 4,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: 0.7,
+                      transition: 'opacity 0.15s, background 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.opacity = '1';
+                      (e.currentTarget as HTMLElement).style.background = 'rgba(239, 68, 68, 0.1)';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.opacity = '0.7';
+                      (e.currentTarget as HTMLElement).style.background = 'none';
+                    }}
+                    title="Delete holding"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
               );
             })}
