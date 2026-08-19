@@ -25,6 +25,8 @@ export interface StockMeta {
   industry?: string;
   mcap?: number;
   companyName?: string;
+  listingStatus?: 'Active' | 'Delisted' | 'BSE Only' | 'Suspended' | 'Unlisted';
+  statusReason?: string;
 }
 
 const DEFAULT_META: StockMeta = {
@@ -34,6 +36,8 @@ const DEFAULT_META: StockMeta = {
   pe: 20.0,
   pb: 2.5,
   divYield: 1.0,
+  listingStatus: 'Active',
+  statusReason: 'Standard active listing',
 };
 
 
@@ -98,55 +102,54 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   POWERGRID:   { sector: 'Power & Utilities', marketCap: 'Large', assetClass: 'Equity' },
   ADANIGREEN:  { sector: 'Power & Utilities', marketCap: 'Large', assetClass: 'Equity' },
   ADANIPOWER:  { sector: 'Power & Utilities', marketCap: 'Large', assetClass: 'Equity' },
-  TATAPOWER:   { sector: 'Power & Utilities', marketCap: 'Mid',   assetClass: 'Equity' },
-  CESC:        { sector: 'Power & Utilities', marketCap: 'Mid',   assetClass: 'Equity' },
+  TATAPOWER:   { sector: 'Power & Utilities', marketCap: 'Large', assetClass: 'Equity' },
+  JSWENERGY:   { sector: 'Power & Utilities', marketCap: 'Large', assetClass: 'Equity' },
+  NHPC:        { sector: 'Power & Utilities', marketCap: 'Mid',   assetClass: 'Equity' },
+  SJVN:        { sector: 'Power & Utilities', marketCap: 'Mid',   assetClass: 'Equity' },
+  SUZLON:      { sector: 'Power & Utilities', marketCap: 'Mid',   assetClass: 'Equity' },
   TORNTPOWER:  { sector: 'Power & Utilities', marketCap: 'Mid',   assetClass: 'Equity' },
 
-  // ── Consumer / FMCG ──────────────────────────────────────────────────────
+  // ── FMCG & Retail ─────────────────────────────────────────────────────────
   HINDUNILVR:  { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
   ITC:         { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
   NESTLEIND:   { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
-  DABUR:       { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
-  MARICO:      { sector: 'FMCG', marketCap: 'Mid',   assetClass: 'Equity' },
-  GODREJCP:    { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
-  COLPAL:      { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
-  EMAMILTD:    { sector: 'FMCG', marketCap: 'Mid',   assetClass: 'Equity' },
-  TATACONSUM:  { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
   BRITANNIA:   { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
-  VBL:         { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
+  TATACONSUM:  { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
+  DABUR:       { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
+  MARICO:      { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
+  GODREJCP:    { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
+  COLPAL:      { sector: 'FMCG', marketCap: 'Mid',   assetClass: 'Equity' },
+  VARUN:       { sector: 'FMCG', marketCap: 'Large', assetClass: 'Equity' },
+  EMAMILTD:    { sector: 'FMCG', marketCap: 'Mid',   assetClass: 'Equity' },
 
-  // ── Automobile ───────────────────────────────────────────────────────────
+  // ── Automobiles & Auto Ancillaries ────────────────────────────────────────
   MARUTI:      { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  TATAMOTORS:  { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  TMPV:        { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  TMCV:        { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  M_M:         { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   'M&M':       { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  MM:          { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
+  TATAMOTORS:  { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   BAJAJ_AUTO:  { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  BAJAJAUTO:   { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  HEROMOTOCO:  { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   EICHERMOT:   { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  TVS:         { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
+  HEROMOTOCO:  { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   TVSMOTOR:    { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  ASHOKLEY:    { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
-  MOTHERSON:   { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
-  BALKRISIND:  { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
+  BHARATFORG:  { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
+  MOTHERSON:   { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
   BOSCHLTD:    { sector: 'Automobiles', marketCap: 'Large', assetClass: 'Equity' },
-  TIINDIA:     { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
+  MRF:         { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
+  BALKRISIND:  { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
+  SONACOMS:    { sector: 'Automobiles', marketCap: 'Mid',   assetClass: 'Equity' },
 
-  // ── Pharma & Healthcare ───────────────────────────────────────────────────
+  // ── Pharmaceuticals & Healthcare ──────────────────────────────────────────
   SUNPHARMA:   { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
-  DRREDDY:     { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
   CIPLA:       { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
+  DRREDDY:     { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
   DIVISLAB:    { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
   APOLLOHOSP:  { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
-  TORNTPHARM:  { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
-  AUROPHARMA:  { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
   LUPIN:       { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
-  BIOCON:      { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
+  TORNTPHARM:  { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
+  ZYDUSLIFE:   { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
+  AUROPHARMA:  { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
+  MANKIND:     { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'Equity' },
   ALKEM:       { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
-  IPCALAB:     { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
+  FORTIS:      { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
   MAXHEALTH:   { sector: 'Pharma & Healthcare', marketCap: 'Mid',   assetClass: 'Equity' },
 
   // ── Metals & Mining ───────────────────────────────────────────────────────
@@ -216,44 +219,44 @@ const SECTOR_MAP: Record<string, StockMeta> = {
   NAVINFLUOR:  { sector: 'Chemicals', marketCap: 'Mid',   assetClass: 'Equity' },
 
   // ── Commodity & Sector ETFs ──────────────────────────────────────────────
-  GOLDBEES:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
-  GOLDIETF:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
-  ICICIGOLD:   { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
-  HDFCGOLD:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
-  AXISGOLD:    { sector: 'Gold ETF',     marketCap: 'Large', assetClass: 'Commodity' },
-  SILVERBEES:  { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
-  SILVERETF:   { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
-  SILVERIETF:  { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
-  HDFCSILVER:  { sector: 'Silver ETF',   marketCap: 'Mid',   assetClass: 'Commodity' },
+  GOLDBEES:    { sector: 'Precious Metals', marketCap: 'Large', assetClass: 'Commodity' },
+  GOLDIETF:    { sector: 'Precious Metals', marketCap: 'Large', assetClass: 'Commodity' },
+  ICICIGOLD:   { sector: 'Precious Metals', marketCap: 'Large', assetClass: 'Commodity' },
+  HDFCGOLD:    { sector: 'Precious Metals', marketCap: 'Large', assetClass: 'Commodity' },
+  AXISGOLD:    { sector: 'Precious Metals', marketCap: 'Large', assetClass: 'Commodity' },
+  SILVERBEES:  { sector: 'Precious Metals', marketCap: 'Mid',   assetClass: 'Commodity' },
+  SILVERETF:   { sector: 'Precious Metals', marketCap: 'Mid',   assetClass: 'Commodity' },
+  SILVERIETF:  { sector: 'Precious Metals', marketCap: 'Mid',   assetClass: 'Commodity' },
+  HDFCSILVER:  { sector: 'Precious Metals', marketCap: 'Mid',   assetClass: 'Commodity' },
   METALIETF:   { sector: 'Metals & Mining', marketCap: 'Mid',   assetClass: 'ETF' },
   HDFCMETAL:   { sector: 'Metals & Mining', marketCap: 'Mid',   assetClass: 'ETF' },
-  AUTOBEES:    { sector: 'Automobiles',  marketCap: 'Large', assetClass: 'ETF' },
+  AUTOBEES:    { sector: 'Automobiles',     marketCap: 'Large', assetClass: 'ETF' },
   PHARMABEES:  { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'ETF' },
   HEALTHY:     { sector: 'Pharma & Healthcare', marketCap: 'Large', assetClass: 'ETF' },
-  CONSUMBEES:  { sector: 'FMCG',         marketCap: 'Large', assetClass: 'ETF' },
-  INFRABEES:   { sector: 'Infrastructure', marketCap: 'Large', assetClass: 'ETF' },
+  CONSUMBEES:  { sector: 'FMCG',            marketCap: 'Large', assetClass: 'ETF' },
+  INFRABEES:   { sector: 'Infrastructure',  marketCap: 'Large', assetClass: 'ETF' },
 
   // ── Index ETFs ────────────────────────────────────────────────────────────
-  NIFTYBEES:   { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
-  JUNIORBEES:  { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
-  SETFNIF50:   { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
-  MOM100:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
-  BANKBEES:    { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
-  ITBEES:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
-  CPSE:        { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
-  CPSEETF:     { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
-  MID150BEES:  { sector: 'Index ETF', marketCap: 'Mid',   assetClass: 'ETF' },
-  HDFCSML250:  { sector: 'Index ETF', marketCap: 'Small', assetClass: 'ETF' },
-  MON100:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
-  MAFANG:      { sector: 'Index ETF', marketCap: 'Large', assetClass: 'ETF' },
+  NIFTYBEES:   { sector: 'Broad Market Index', marketCap: 'Large', assetClass: 'ETF' },
+  JUNIORBEES:  { sector: 'Broad Market Index', marketCap: 'Mid',   assetClass: 'ETF' },
+  SETFNIF50:   { sector: 'Broad Market Index', marketCap: 'Large', assetClass: 'ETF' },
+  MOM100:      { sector: 'Broad Market Index', marketCap: 'Large', assetClass: 'ETF' },
+  BANKBEES:    { sector: 'Banking',            marketCap: 'Large', assetClass: 'ETF' },
+  ITBEES:      { sector: 'Information Technology', marketCap: 'Large', assetClass: 'ETF' },
+  CPSE:        { sector: 'Broad Market Index', marketCap: 'Mid',   assetClass: 'ETF' },
+  CPSEETF:     { sector: 'Broad Market Index', marketCap: 'Mid',   assetClass: 'ETF' },
+  MID150BEES:  { sector: 'Broad Market Index', marketCap: 'Mid',   assetClass: 'ETF' },
+  HDFCSML250:  { sector: 'Broad Market Index', marketCap: 'Small', assetClass: 'ETF' },
+  MON100:      { sector: 'Broad Market Index', marketCap: 'Large', assetClass: 'ETF' },
+  MAFANG:      { sector: 'Broad Market Index', marketCap: 'Large', assetClass: 'ETF' },
 
   // ── Liquid & Debt ETFs ───────────────────────────────────────────────────
-  LIQUIDBEES:  { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
-  LIQUIDCASE:  { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
-  LIQUIDETF:   { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
-  HDFCLIQUID:  { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
-  ICICILIQ:    { sector: 'Liquid ETF', marketCap: 'Large', assetClass: 'Debt' },
-  BHARATBOND:  { sector: 'Debt',       marketCap: 'Large', assetClass: 'Debt' },
+  LIQUIDBEES:  { sector: 'Liquid Funds / Debt', marketCap: 'Large', assetClass: 'Debt' },
+  LIQUIDCASE:  { sector: 'Liquid Funds / Debt', marketCap: 'Large', assetClass: 'Debt' },
+  LIQUIDETF:   { sector: 'Liquid Funds / Debt', marketCap: 'Large', assetClass: 'Debt' },
+  HDFCLIQUID:  { sector: 'Liquid Funds / Debt', marketCap: 'Large', assetClass: 'Debt' },
+  ICICILIQ:    { sector: 'Liquid Funds / Debt', marketCap: 'Large', assetClass: 'Debt' },
+  BHARATBOND:  { sector: 'Debt',                marketCap: 'Large', assetClass: 'Debt' },
 
   // ── Adani Group ───────────────────────────────────────────────────────────
   ADANIENT:    { sector: 'Conglomerate', marketCap: 'Large', assetClass: 'Equity' },
@@ -333,8 +336,7 @@ function standardizeEtfCategory(category: string, etfName: string): { sector: st
   const cat = (category || '').toLowerCase().trim();
   const name = (etfName || '').toLowerCase().trim();
   
-  if (name.includes('silver')) return { sector: 'Silver ETF', assetClass: 'Commodity' };
-  if (name.includes('gold')) return { sector: 'Gold ETF', assetClass: 'Commodity' };
+  if (name.includes('silver') || name.includes('gold')) return { sector: 'Precious Metals', assetClass: 'Commodity' };
   if (name.includes('metal')) return { sector: 'Metals & Mining', assetClass: 'ETF' };
   if (name.includes('bank')) return { sector: 'Banking', assetClass: 'ETF' };
   if (name.includes('it ') || name.includes(' it') || name.includes('tech') || name.includes('software')) return { sector: 'Information Technology', assetClass: 'ETF' };
@@ -342,14 +344,14 @@ function standardizeEtfCategory(category: string, etfName: string): { sector: st
   if (name.includes('auto')) return { sector: 'Automobiles', assetClass: 'ETF' };
   if (name.includes('infra')) return { sector: 'Infrastructure', assetClass: 'ETF' };
   if (name.includes('fmcg') || name.includes('consum')) return { sector: 'FMCG', assetClass: 'ETF' };
-  if (name.includes('commodity')) return { sector: 'Commodities / Metals', assetClass: 'Commodity' };
+  if (name.includes('commodity')) return { sector: 'Metals & Mining', assetClass: 'Commodity' };
   
   if (cat.includes('debt') || name.includes('liquid') || name.includes('gilt') || name.includes('overnight') || name.includes('money market')) {
-    return { sector: 'Liquid ETF', assetClass: 'Debt' };
+    return { sector: 'Liquid Funds / Debt', assetClass: 'Debt' };
   }
   
   // Default for Nifty 50, Next 50, 100, 200, 500, etc.
-  return { sector: 'Index ETF', assetClass: 'ETF' };
+  return { sector: 'Broad Market Index', assetClass: 'ETF' };
 }
 
 /**
@@ -390,7 +392,9 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
           marketCap: 'Large',
           assetClass,
           industry: etfName,
-          companyName: etfName
+          companyName: etfName,
+          listingStatus: 'Active',
+          statusReason: 'Active ETF trading on exchange'
         };
       }
     } else {
@@ -408,6 +412,26 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
           const mcapVal = company[3] as number;
           const industryname = company[4] as string;
           
+          const nseStatus = (company[8] as string || '').trim();
+          const bseStatus = (company[9] as string || '').trim();
+
+          let listingStatus: 'Active' | 'Delisted' | 'BSE Only' | 'Suspended' | 'Unlisted' = 'Active';
+          let statusReason = 'Actively traded on exchange';
+
+          if (nseStatus.toLowerCase() === 'delisted' && bseStatus.toLowerCase() === 'delisted') {
+            listingStatus = 'Delisted';
+            statusReason = 'Delisted from both NSE and BSE';
+          } else if (nseStatus.toLowerCase() === 'suspended' || bseStatus.toLowerCase() === 'suspended') {
+            listingStatus = 'Suspended';
+            statusReason = 'Trading temporarily suspended by exchange';
+          } else if (nseStatus.toLowerCase() === 'not listed' && bseStatus.toLowerCase() === 'active') {
+            listingStatus = 'BSE Only';
+            statusReason = 'Not listed on NSE (traded on BSE)';
+          } else if (nseStatus.toLowerCase() === 'not listed' && (bseStatus.toLowerCase() === 'not listed' || !bseStatus)) {
+            listingStatus = 'Unlisted';
+            statusReason = 'Unlisted equity shares';
+          }
+          
           const rawSectorClean = rawSector ? standardizeSector(rawSector) : 'Others';
           const finalSector = rawSectorClean !== 'Inactive' && rawSectorClean !== '' ? rawSectorClean : 'Others';
                               
@@ -417,7 +441,9 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
             assetClass: 'Equity',
             industry: industryname || finalSector,
             mcap: mcapVal,
-            companyName: company[0] as string
+            companyName: company[0] as string,
+            listingStatus,
+            statusReason
           };
         }
       } else {
@@ -425,7 +451,9 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
         meta = {
           ...DEFAULT_META,
           sector: 'Mutual Fund',
-          assetClass: 'Mutual Fund'
+          assetClass: 'Mutual Fund',
+          listingStatus: 'Active',
+          statusReason: 'Mutual Fund Scheme'
         };
       }
     }
