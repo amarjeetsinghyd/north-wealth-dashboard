@@ -610,7 +610,7 @@ export function ClientPortfolioPage() {
           invested_amount: investedPerUnit * remainingQty,
           unrealised_pnl: (remainingQty * holding.current_price) - (investedPerUnit * remainingQty),
           unrealised_pnl_pct: investedPerUnit > 0 ? (((remainingQty * holding.current_price) - (investedPerUnit * remainingQty)) / (investedPerUnit * remainingQty)) * 100 : 0,
-          realised_pnl: holding.realised_pnl + profitLoss,
+          realised_pnl: (holding.realised_pnl || 0) + profitLoss,
         });
       } else {
         await deleteDoc(doc(db, 'holdings', holding.id));
@@ -624,9 +624,17 @@ export function ClientPortfolioPage() {
         company_name: holding.company_name,
         quantity: sellQty,
         price: sellPrc,
+        buy_price: investedPerUnit,
+        realised_pnl: profitLoss,
         total_value: totalValue,
         created_at: new Date().toISOString(),
       });
+
+      if (client?.asset_free_cash !== undefined && client?.asset_free_cash !== null) {
+        await updateDoc(doc(db, 'clients', id), {
+          asset_free_cash: (client.asset_free_cash || 0) + totalValue
+        });
+      }
 
       setSellModalData(null);
       await load();
@@ -711,6 +719,12 @@ export function ClientPortfolioPage() {
         total_value: qty * price,
         created_at: nowIso,
       });
+
+      if (client?.asset_free_cash !== undefined && client?.asset_free_cash !== null) {
+        await updateDoc(doc(db, 'clients', id), {
+          asset_free_cash: Math.max(0, (client.asset_free_cash || 0) - (qty * price))
+        });
+      }
 
       setShowBuyModal(false);
       setNseSymbol(''); setBuyQuantity(''); setBuyPrice('');
@@ -2074,8 +2088,11 @@ export function ClientPortfolioPage() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>P&L (%)</div>
                 </div>
                 {getSortedTransactions().map((tx, i) => {
-                  const pnl = (tx as any).realised_pnl || 0;
-                  const buyPr = tx.price > 0 && tx.quantity > 0 ? (tx.price - (pnl / tx.quantity)) : 0;
+                  const pnl = tx.realised_pnl !== undefined ? tx.realised_pnl : ((tx as any).realised_pnl || 0);
+                  let buyPr = tx.buy_price !== undefined && tx.buy_price > 0 ? tx.buy_price : 0;
+                  if (!buyPr && tx.price > 0 && tx.quantity > 0 && pnl !== 0) {
+                    buyPr = tx.price - (pnl / tx.quantity);
+                  }
                   const pnlPct = buyPr > 0 ? ((tx.price - buyPr) / buyPr) * 100 : 0;
                   return (
                     <div key={tx.id} style={{ display: 'grid', gridTemplateColumns: '120px 160px 100px 120px 120px 130px 110px', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-3) var(--space-5)', borderBottom: i < getSortedTransactions().length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
