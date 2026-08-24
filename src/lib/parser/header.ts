@@ -76,11 +76,17 @@ export function mapColumns(headerRow: unknown[], nextRow?: unknown[]) {
     current_price: undefined, invested_value: undefined, current_value: undefined, pnl: undefined, purchase_date: undefined,
   };
 
+  // Column names that look like serial numbers — must never be claimed as quantity
+  const SERIAL_HEADERS = new Set([
+    'sl no', 'sl. no', 'sl.no', 'sr no', 'sr. no', 'sr.no', 's no', 's.no', 'sno',
+    'serial', 'serial no', 'serial no.', 'serial number', '#', 'no.', 'no', 'row', 'index',
+  ]);
+
   const roleDefs = [
     { role: 'isin',           test: (v: string) => ISIN_SYNONYMS.includes(v) },
     { role: 'symbol',         test: (v: string) => SYMBOL_SYNONYMS.includes(v) || SYMBOL_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'company_name',   test: (v: string) => NAME_SYNONYMS.includes(v) },
-    { role: 'quantity',       test: (v: string) => QTY_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'quantity',       test: (v: string) => !SERIAL_HEADERS.has(v) && QTY_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'buy_price',      test: (v: string) => PRICE_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'current_price',  test: (v: string) => LTP_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'invested_value', test: (v: string) => VALUE_SYNONYMS.some(s => matchHeader(v, s)) && !LTP_SYNONYMS.some(s => matchHeader(v, s)) },
@@ -88,6 +94,7 @@ export function mapColumns(headerRow: unknown[], nextRow?: unknown[]) {
     { role: 'pnl',            test: (v: string) => PNL_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'purchase_date',  test: (v: string) => DATE_SYNONYMS.some(s => matchHeader(v, s)) },
   ];
+
 
   for (const { role, test } of roleDefs) {
     for (let i = 0; i < cols.length; i++) {
