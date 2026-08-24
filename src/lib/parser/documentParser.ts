@@ -15,12 +15,21 @@ export function parseGrid(grid: string[][]): ExtractedHolding[] {
   const headerRow = grid[headerIdx];
   if (!headerRow) return holdings;
   
-  // Check if next row is a sub-header/units row
+  // Check if next row is a genuine sub-header/units row (e.g. 'Rs.', 'Nos.', '(₹)')
+  // A real data row will have at least one parseable number — a units row will not.
   const nextRow = grid[headerIdx + 1];
-  const colMap = mapColumns(headerRow, nextRow);
+  const isSubHeader =
+    nextRow &&
+    nextRow.length === headerRow.length &&
+    !nextRow.some(cell => {
+      const s = String(cell ?? '').trim().replace(/[,₹$%]/g, '');
+      return s !== '' && isFinite(Number(s));
+    });
+  const colMap = mapColumns(headerRow, isSubHeader ? nextRow : undefined);
   
-  // If we used nextRow as sub-header, skip it in data processing
-  const dataStartIdx = (nextRow && nextRow.length === headerRow.length) ? headerIdx + 2 : headerIdx + 1;
+  // Only skip nextRow if it was genuinely treated as a sub-header
+  const dataStartIdx = isSubHeader ? headerIdx + 2 : headerIdx + 1;
+
   
   for (let i = dataStartIdx; i < grid.length; i++) {
     const row = grid[i];
