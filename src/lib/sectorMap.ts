@@ -386,7 +386,10 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
       if (etf && etf[0] && etf[1]) {
         const etfName = etf[0] as string;
         const etfCategory = etf[1] as string;
-        const { sector, assetClass } = standardizeEtfCategory(etfCategory, etfName);
+        // etf[3] is the explicit Sector column from the CSV master — prefer it over the name heuristic
+        const explicitSector = (etf[3] as string | undefined)?.trim();
+        const { sector: heuristicSector, assetClass } = standardizeEtfCategory(etfCategory, etfName);
+        const sector = explicitSector || heuristicSector;
         meta = {
           sector,
           marketCap: 'Large',

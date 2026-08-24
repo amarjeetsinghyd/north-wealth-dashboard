@@ -589,7 +589,11 @@ export function ClientPortfolioPage() {
       if (existingHolding) {
         const exQty = existingHolding.quantity || 0;
         const totalQty = exQty + qty;
-        const exInv = existingHolding.invested_amount || ((existingHolding.buy_price || 0) * exQty);
+        // Prefer the stored invested_amount; fall back to buy_price * qty only when invested_amount is 0/missing.
+        // This prevents wiping out the previous investment when buy_price is 0 (statement-imported holding).
+        const exInv = (existingHolding.invested_amount && existingHolding.invested_amount > 0)
+          ? existingHolding.invested_amount
+          : ((existingHolding.buy_price || 0) * exQty);
         const incomingInv = qty * price;
         const totalInv = exInv + incomingInv;
         const avgBuy = totalQty > 0 ? totalInv / totalQty : price;

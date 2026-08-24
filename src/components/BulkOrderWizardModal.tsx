@@ -173,7 +173,10 @@ export function BulkOrderWizardModal({
           if (existing) {
             const eh = existing.data() as Holding;
             const newQty = (eh.quantity || 0) + order.qty;
-            const prevInvested = eh.invested_amount || ((eh.buy_price || 0) * (eh.quantity || 0));
+            // Prefer stored invested_amount; fall back to buy_price * qty only when invested_amount is 0/missing
+            const prevInvested = (eh.invested_amount && eh.invested_amount > 0)
+              ? eh.invested_amount
+              : ((eh.buy_price || 0) * (eh.quantity || 0));
             const newInvested = prevInvested + (order.qty * p);
             const newAvgBuy = newQty > 0 ? newInvested / newQty : p;
             const currPrice = eh.current_price > 0 ? eh.current_price : p;
