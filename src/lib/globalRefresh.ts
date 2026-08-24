@@ -130,20 +130,28 @@ export async function refreshAllPrices(
     chunk.forEach(holding => {
       const sym = cleanSymbol(holding)!;
       const price = priceMap.get(sym)!;
-      const current_value       = holding.quantity * price;
-      const invested_amount     = holding.quantity * holding.buy_price;
-      const unrealised_pnl      = current_value - invested_amount;
-      const unrealised_pnl_pct  = invested_amount > 0
-        ? (unrealised_pnl / invested_amount) * 100
+
+      // Use the STORED invested_amount from Firestore, never recalculate it here.
+      // invested_amount is set at holding creation/buy time and must not be touched on price refresh.
+      // Guard against zero/null invested_amount with a safe fallback.
+      const qty            = Number(holding.quantity) || 0;
+      const invested       = Number(holding.invested_amount) > 0
+        ? Number(holding.invested_amount)
+        : qty * (Number(holding.buy_price) || 0);
+
+      const current_value      = qty * price;
+      const unrealised_pnl     = current_value - invested;
+      const unrealised_pnl_pct = invested > 0
+        ? (unrealised_pnl / invested) * 100
         : 0;
 
       batch.update(doc(db, 'holdings', holding.id), {
-        current_price:      price,
+        current_price:     price,
         current_value,
-        invested_amount,
+        // invested_amount intentionally NOT written — it is set at buy time
         unrealised_pnl,
         unrealised_pnl_pct,
-        last_price_update:  new Date().toISOString(),
+        last_price_update: new Date().toISOString(),
       });
     });
 

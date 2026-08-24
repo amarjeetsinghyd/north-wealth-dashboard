@@ -48,16 +48,20 @@ export function AddHoldingModal({ clientId, onClose, onSuccess }: AddHoldingModa
         last_price_update: null,
       }]);
 
-      await insertTransaction({
-        client_id: clientId,
-        date,
-        action,
-        stock_symbol: symbol.trim().toUpperCase(),
-        company_name: companyName.trim(),
-        quantity: qty,
-        price,
-        total_value: qty * price,
-      });
+      // Only log a transaction for Fresh holdings.
+      // Existing holdings are pre-North Wealth positions — no transaction entry needed.
+      if (source === 'Fresh') {
+        await insertTransaction({
+          client_id: clientId,
+          date,
+          action,
+          stock_symbol: symbol.trim().toUpperCase(),
+          company_name: companyName.trim(),
+          quantity: qty,
+          price,
+          total_value: qty * price,
+        });
+      }
 
       setDone(true);
       setTimeout(() => { onSuccess(); onClose(); }, 1000);

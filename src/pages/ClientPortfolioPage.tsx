@@ -782,7 +782,43 @@ export function ClientPortfolioPage() {
   const updateHoldingField = async (holdingId: string, field: string, val: string) => {
     try {
       await updateDoc(doc(db, 'holdings', holdingId), { [field]: val });
-      setHoldings(prev => prev.map(h => h.id === holdingId ? { ...h, [field]: val } : h));
+
+      // Build the updated holding state locally
+      const updatedHoldings = holdings.map(h =>
+        h.id === holdingId ? { ...h, [field]: val } : h
+      );
+      setHoldings(updatedHoldings);
+
+      // ── Auto-create BUY transaction when holding becomes "Fresh" with a date ──
+      // Condition: source must be 'Fresh' AND purchase_date must be non-empty.
+      // Both conditions must be true simultaneously (user sets one after the other).
+      const updatedHolding = updatedHoldings.find(h => h.id === holdingId);
+      if (updatedHolding && updatedHolding.source === 'Fresh' && updatedHolding.purchase_date) {
+        // Duplicate guard: check local transactions state.
+        // If a BUY already exists for this stock_symbol, skip creation.
+        const sym = (updatedHolding.nse_symbol || updatedHolding.stock_symbol || '').toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+        const alreadyExists = transactions.some(tx =>
+          tx.action === 'BUY' &&
+          (tx.stock_symbol || '').toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '') === sym
+        );
+        if (!alreadyExists && id) {
+          const nowIso = new Date().toISOString();
+          await addDoc(collection(db, 'transactions'), {
+            client_id: id,
+            date: updatedHolding.purchase_date,
+            action: 'BUY',
+            stock_symbol: sym,
+            company_name: updatedHolding.company_name || sym,
+            quantity: updatedHolding.quantity,
+            price: updatedHolding.buy_price,
+            total_value: updatedHolding.quantity * updatedHolding.buy_price,
+            created_at: nowIso,
+          });
+          // Reload transactions so the Fresh Transactions tab updates instantly
+          const freshTx = await fetchTransactions(id);
+          setTransactions(freshTx);
+        }
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to update holding');
