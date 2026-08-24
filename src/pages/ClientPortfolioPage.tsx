@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, RefreshCw, Upload, PlusCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, Upload, PlusCircle, Trash2 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
-import { doc, updateDoc, addDoc, collection, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Client, Holding, Transaction, PortfolioSummary } from '../types';
 import { AddClientModal } from '../components/AddClientModal';
@@ -31,10 +31,6 @@ export function ClientPortfolioPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [priceAsOf, setPriceAsOf] = useState<string>(
-    () => localStorage.getItem('nw_price_as_of') || ''
-  );
   
   // Rebalance & Inline Actions
   const [isRebalanceMode, setIsRebalanceMode] = useState(false);
@@ -105,95 +101,7 @@ export function ClientPortfolioPage() {
   const [savingScrip, setSavingScrip] = useState(false);
 
 
-  // ── Refresh prices from NSE Bhavcopy price cache ───────────────────────────
-  // The NSE Bhavcopy is downloaded by the Python script (scripts/sync_bhavcopy.py)
-  // and stored in Firebase price_cache. This function reads from there — fast,
-  // no NSE server involved, no CORS issues.
-  const refreshPrices = async (customHoldings?: Holding[]) => {
-    const activeHoldings = customHoldings || holdings;
-    if (!id || activeHoldings.length === 0) return;
 
-    setRefreshing(true);
-    try {
-      // 1. Fetch prices for all holdings from price_cache in parallel
-      const syms = Array.from(new Set(activeHoldings
-        .map(h => cleanSymbol(h))
-        .filter(Boolean)));
-
-      console.warn(`[RefreshPrices] Reading ${syms.length} prices from Firebase price_cache...`);
-
-      // Read each symbol's doc from price_cache
-      const snapshots = await Promise.all(
-        syms.map(sym => getDoc(doc(db, 'price_cache', sym)))
-      );
-
-      const priceMap = new Map<string, number>();
-      snapshots.forEach((snap, i) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          const sym = syms[i];
-          if (sym && data.close > 0) priceMap.set(sym, data.close);
-        }
-      });
-      console.warn(`[RefreshPrices] price_cache: ${priceMap.size}/${syms.length} symbols matched`);
-
-      // Also fetch sync metadata to show "Prices as of" date
-      const metaSnap = await getDoc(doc(db, 'price_cache', 'sync_meta'));
-      if (metaSnap.exists()) {
-        const metaData = metaSnap.data();
-        if (metaData.bhavcopyDate) setPriceAsOf(metaData.bhavcopyDate);
-      }
-
-      // If price_cache is completely empty, show a friendly message
-      if (priceMap.size === 0) {
-        alert('No price data found yet. Prices are synced automatically every weekday at 7:30 PM IST via GitHub Actions.');
-        return;
-      }
-
-      // 2. Update holdings with prices from cache
-      let updatedCount = 0;
-      for (const holding of activeHoldings) {
-        try {
-          const sym = cleanSymbol(holding);
-          const price = priceMap.get(sym) || 0;
-
-          if (price > 0) {
-            const current_value      = holding.quantity * price;
-            const invested_amount    = holding.quantity * holding.buy_price;
-            const unrealised_pnl     = current_value - invested_amount;
-            const unrealised_pnl_pct = invested_amount > 0 ? (unrealised_pnl / invested_amount) * 100 : 0;
-
-            await updateDoc(doc(db, 'holdings', holding.id), {
-              current_price:     price,
-              current_value,
-              invested_amount,
-              unrealised_pnl,
-              unrealised_pnl_pct,
-              last_price_update: new Date().toISOString(),
-            });
-            updatedCount++;
-            console.warn(`✓ ${sym}: ₹${price}`);
-          } else {
-            console.warn(`✗ ${sym}: not in price_cache (keeping existing price)`);
-          }
-        } catch (e) {
-          console.warn(`Error updating ${holding.stock_symbol}:`, e);
-        }
-      }
-
-      console.warn(`[RefreshPrices] Updated ${updatedCount}/${activeHoldings.length} holdings`);
-
-      // 3. Reload UI
-      const fresh = await fetchHoldings(id);
-      setHoldings(fresh);
-
-    } catch (err) {
-      console.warn('Refresh error:', err);
-      alert('Price refresh failed: ' + ((err as Error).message || 'Please try again.'));
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -208,13 +116,6 @@ export function ClientPortfolioPage() {
       setMutualFunds(c?.mutual_funds || 0);
       setHoldings(h);
       setTransactions(tx);
-      // Load last sync date from price_cache metadata
-      try {
-        const metaSnap = await getDoc(doc(db, 'price_cache', 'sync_meta'));
-        if (metaSnap.exists() && metaSnap.data().bhavcopyDate) {
-          setPriceAsOf(metaSnap.data().bhavcopyDate);
-        }
-      } catch { /* ignore */ }
     } catch (err) {
       console.warn('Error loading portfolio data:', err);
     } finally {
@@ -236,9 +137,6 @@ export function ClientPortfolioPage() {
       try {
         const fresh = await fetchHoldings(id);
         setHoldings(fresh);
-        // Also update priceAsOf from localStorage (set by globalRefresh.ts)
-        const stored = localStorage.getItem('nw_price_as_of');
-        if (stored) setPriceAsOf(stored);
       } catch { /* non-fatal */ }
     };
     window.addEventListener('nw:prices-refreshed', onGlobalRefresh);
@@ -1285,21 +1183,7 @@ export function ClientPortfolioPage() {
                     >
                       <PlusCircle size={14} /> Add Scrip
                     </button>
-                    <button
-                      onClick={() => refreshPrices()}
-                      disabled={refreshing}
-                      className="btn-glass-light"
-                      style={{ padding: '7px 14px', fontSize: 12, opacity: refreshing ? 0.6 : 1 }}
-                    >
-                      <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-                      {refreshing ? 'Refreshing...' : 'Refresh Prices'}
-                    </button>
                   </div>
-                  {priceAsOf && (
-                    <span style={{ fontSize: 11, color: '#888', letterSpacing: '0.3px' }}>
-                      Prices as of: {priceAsOf}
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -1489,29 +1373,7 @@ export function ClientPortfolioPage() {
                   <option value="">All M Cap</option>
                   {uniqueMCaps.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  {priceAsOf && (
-                    <span style={{ position: 'absolute', top: -18, left: 0, right: 0, textAlign: 'center', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
-                      As of: {priceAsOf}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => refreshPrices()}
-                    disabled={refreshing}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
-                      background: 'var(--bg-elevated)', border: '1px solid var(--gold-border)',
-                      color: 'var(--gold)', fontSize: 13, fontWeight: 600,
-                      cursor: refreshing ? 'not-allowed' : 'pointer', transition: 'all 0.15s',
-                      opacity: refreshing ? 0.7 : 1,
-                    }}
-                    onMouseEnter={e => { if (!refreshing) (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.1)'; }}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--bg-elevated)'}
-                  >
-                    <RefreshCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-                    {refreshing ? 'Refreshing...' : 'Refresh Prices'}
-                  </button>
-                </div>
+
                 <button
                   onClick={handleDownloadExcel}
                   style={{
