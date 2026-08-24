@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Users, BarChart2, LogOut } from 'lucide-react';
+import { Users, BarChart2, LogOut, RefreshCw } from 'lucide-react';
 import { useAuth } from '../lib/useAuth';
 import NorthWealthLogo from '../assets/North_Wealth_Logo_Transparent.png';
+import { refreshAllPrices, getCachedPriceDate } from '../lib/globalRefresh';
 
 interface LayoutProps { children: React.ReactNode; }
 
@@ -9,6 +11,37 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState('');
+  const [priceDate, setPriceDate] = useState(getCachedPriceDate);
+
+  // Keep priceDate in sync if another tab updates localStorage
+  useEffect(() => {
+    const onStorage = () => setPriceDate(getCachedPriceDate());
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const handleRefreshAll = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshStatus('Starting…');
+    try {
+      const result = await refreshAllPrices(msg => setRefreshStatus(msg));
+      setPriceDate(result.priceDate);
+      setRefreshStatus(`✓ ${result.updated} holdings updated`);
+      setTimeout(() => setRefreshStatus(''), 4000);
+    } catch (err) {
+      console.error('[GlobalRefresh] Failed:', err);
+      setRefreshStatus('Refresh failed');
+      setTimeout(() => setRefreshStatus(''), 4000);
+    } finally {
+      setRefreshing(false);
+      // Dispatch a custom event so open ClientPortfolioPage tabs can reload their holdings
+      window.dispatchEvent(new CustomEvent('nw:prices-refreshed'));
+    }
+  };
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -60,6 +93,43 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Actions (right) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+            {/* ── Global Refresh All Prices ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+              <button
+                onClick={handleRefreshAll}
+                disabled={refreshing}
+                className="btn-glass-gold"
+                title="Refresh prices for ALL clients in one click"
+                style={{
+                  padding: '7px 14px',
+                  fontSize: 12, fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  opacity: refreshing ? 0.75 : 1,
+                  cursor: refreshing ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <RefreshCw
+                  size={13}
+                  style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }}
+                />
+                {refreshing ? 'Refreshing All…' : 'Refresh All Prices'}
+              </button>
+
+              {/* Status / date badge */}
+              {(refreshStatus || priceDate) && (
+                <span style={{
+                  fontSize: 10, color: 'var(--text-muted)',
+                  letterSpacing: '0.3px', lineHeight: 1,
+                  maxWidth: 180, textAlign: 'right',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {refreshStatus || (priceDate ? `Prices as of ${priceDate}` : '')}
+                </span>
+              )}
+            </div>
+
             <button
               onClick={handleLogout}
               className="btn-glass-light"

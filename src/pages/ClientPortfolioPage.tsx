@@ -32,7 +32,9 @@ export function ClientPortfolioPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [priceAsOf, setPriceAsOf] = useState<string>('');
+  const [priceAsOf, setPriceAsOf] = useState<string>(
+    () => localStorage.getItem('nw_price_as_of') || ''
+  );
   
   // Rebalance & Inline Actions
   const [isRebalanceMode, setIsRebalanceMode] = useState(false);
@@ -224,6 +226,24 @@ export function ClientPortfolioPage() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   }, [load]);
+
+  // ── Auto-reload holdings when global "Refresh All Prices" completes ─────────
+  // Layout.tsx dispatches 'nw:prices-refreshed' after a successful global refresh.
+  // This makes the current client's page update instantly without a manual reload.
+  useEffect(() => {
+    if (!id) return;
+    const onGlobalRefresh = async () => {
+      try {
+        const fresh = await fetchHoldings(id);
+        setHoldings(fresh);
+        // Also update priceAsOf from localStorage (set by globalRefresh.ts)
+        const stored = localStorage.getItem('nw_price_as_of');
+        if (stored) setPriceAsOf(stored);
+      } catch { /* non-fatal */ }
+    };
+    window.addEventListener('nw:prices-refreshed', onGlobalRefresh);
+    return () => window.removeEventListener('nw:prices-refreshed', onGlobalRefresh);
+  }, [id]);
 
   useEffect(() => {
     if (client) {
