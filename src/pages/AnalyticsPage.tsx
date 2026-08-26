@@ -762,12 +762,15 @@ export function AnalyticsPage() {
       <div className="glass-card" style={{ padding: 24, marginBottom: 32 }}>
 
         {/* Tab strip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-          <Search size={18} color="#C9A84C" />
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          <Search size={18} color="#8c6314" />
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px', flex: 1 }}>
             Smart Search
           </h3>
-          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.03)', borderRadius: 12, padding: 3, gap: 3, border: '1px solid rgba(229, 231, 235, 0.7)' }}>
+          <div style={{
+            display: 'flex', background: 'rgba(0, 0, 0, 0.04)', borderRadius: 14, padding: '4px 6px', gap: 4,
+            border: 'none', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', flexWrap: 'wrap',
+          }}>
             {([
               { key: 'stock', label: 'Stock', icon: <Search size={13} style={{ marginRight: 6 }} /> },
               { key: 'cash', label: 'Free Cash', icon: <Briefcase size={13} style={{ marginRight: 6 }} /> },
@@ -781,15 +784,15 @@ export function AnalyticsPage() {
                 key={tab.key}
                 onClick={() => setSearchMode(tab.key)}
                 style={{
-                  padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
-                  fontSize: 12, fontWeight: searchMode === tab.key ? 600 : 500, display: 'flex', alignItems: 'center',
-                  background: searchMode === tab.key ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.20), rgba(160, 124, 45, 0.12))' : 'transparent',
-                  border: searchMode === tab.key ? '1px solid rgba(201, 168, 76, 0.45)' : '1px solid transparent',
-                  color: searchMode === tab.key ? '#8c6314' : 'var(--text-secondary)',
-                  boxShadow: searchMode === tab.key ? 'inset 0 1px 1px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(201, 168, 76, 0.12)' : 'none',
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
-                  transition: 'all 0.15s ease',
+                  padding: '7px 16px', borderRadius: 10, cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: searchMode === tab.key ? 700 : 500, display: 'flex', alignItems: 'center',
+                  background: searchMode === tab.key ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.32) 0%, rgba(185, 145, 45, 0.18) 100%)' : 'transparent',
+                  border: 'none',
+                  color: searchMode === tab.key ? '#5c3e04' : '#64748b',
+                  boxShadow: searchMode === tab.key ? 'inset 0 1px 1px rgba(255, 255, 255, 0.95), 0 2px 8px rgba(201, 168, 76, 0.14)' : 'none',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
               >
                 {tab.icon}
@@ -803,6 +806,7 @@ export function AnalyticsPage() {
         {searchMode === 'stock' && (
           <div>
             <div style={{ position: 'relative', marginBottom: 20 }}>
+              <Search size={16} color="#8c6314" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               <input
                 type="text" autoFocus
                 placeholder="Type a symbol or company name (e.g. SBIN, IRFC, Reliance)…"
@@ -810,12 +814,21 @@ export function AnalyticsPage() {
                 onChange={e => setStockQuery(e.target.value)}
                 className="glass-input"
                 style={{
-                  width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, boxSizing: 'border-box',
+                  width: '100%', padding: '12px 42px 12px 46px', fontSize: 14, boxSizing: 'border-box',
                 }}
               />
-              <Search size={16} color="#888" style={{ position: 'absolute', left: 14, top: 14, pointerEvents: 'none' }} />
               {stockQuery && (
-                <button onClick={() => setStockQuery('')} style={{ position: 'absolute', right: 12, top: 10, background: 'none', border: 'none', color: '#777', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+                <button
+                  onClick={() => setStockQuery('')}
+                  style={{
+                    position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', padding: 2,
+                  }}
+                  title="Clear"
+                >
+                  <XIcon size={16} />
+                </button>
               )}
             </div>
             
@@ -1056,17 +1069,30 @@ export function AnalyticsPage() {
         {searchMode === 'client' && (
           <div>
             <div style={{ position: 'relative', marginBottom: 20 }}>
+              <Search size={16} color="#8c6314" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               <input
                 type="text" autoFocus
-                placeholder="Type a client name…"
+                placeholder="Type a client name, email, or RM…"
                 value={clientQuery}
                 onChange={e => setClientQuery(e.target.value)}
-                style={{ width: '100%', padding: '12px 40px 12px 40px', fontSize: 14, borderRadius: 8, boxSizing: 'border-box', background: 'rgba(0,0,0,0.04)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.10)', outline: 'none', transition: 'border-color 0.15s' }}
-                onFocus={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,0.55)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,0,0,0.10)'}
+                className="glass-input"
+                style={{
+                  width: '100%', padding: '12px 42px 12px 46px', fontSize: 14, boxSizing: 'border-box',
+                }}
               />
-              <Search size={16} color="#555" style={{ position: 'absolute', left: 14, top: 14, pointerEvents: 'none' }} />
-              {clientQuery && <button onClick={() => setClientQuery('')} style={{ position: 'absolute', right: 12, top: 10, background: 'none', border: 'none', color: '#777', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>}
+              {clientQuery && (
+                <button
+                  onClick={() => setClientQuery('')}
+                  style={{
+                    position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', padding: 2,
+                  }}
+                  title="Clear"
+                >
+                  <XIcon size={16} />
+                </button>
+              )}
             </div>
             {clientQuery && clientSearchResults.length === 0 && (
               <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>No client found for <strong style={{ color: '#C9A84C' }}>"{clientQuery}"</strong></div>
@@ -1773,7 +1799,8 @@ export function AnalyticsPage() {
             </h3>
           </div>
           {/* Search */}
-          <div style={{ position: 'relative', width: 260 }}>
+          <div style={{ position: 'relative', width: 280 }}>
+            <Search size={14} color="#8c6314" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             <input
               type="text"
               placeholder="Search scrip, name or sector..."
@@ -1781,10 +1808,22 @@ export function AnalyticsPage() {
               onChange={e => setSearchTerm(e.target.value)}
               className="glass-input"
               style={{
-                width: '100%', padding: '8px 12px 8px 32px', fontSize: 12,
+                width: '100%', padding: '9px 34px 9px 36px', fontSize: 12.5,
               }}
             />
-            <Search size={14} color="#888" style={{ position: 'absolute', left: 10, top: 10 }} />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
+                  display: 'flex', alignItems: 'center', padding: 2,
+                }}
+                title="Clear"
+              >
+                <XIcon size={13} />
+              </button>
+            )}
           </div>
         </div>
 

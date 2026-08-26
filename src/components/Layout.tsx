@@ -84,12 +84,14 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Nav links (center) */}
           <nav style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'rgba(243, 244, 246, 0.7)',
+            display: 'flex', alignItems: 'center', gap: 4,
+            background: 'rgba(0, 0, 0, 0.04)',
             padding: '4px 6px',
-            borderRadius: 12,
-            border: '1px solid rgba(229, 231, 235, 0.8)',
-            backdropFilter: 'blur(8px)',
+            borderRadius: 14,
+            border: 'none',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
           }}>
             <NavLink
               to="/" label="Clients" icon={<Users size={15} />}
@@ -193,15 +195,15 @@ function NavLink({
       to={to}
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        padding: '6px 16px',
-        borderRadius: 8,
-        fontSize: 13, fontWeight: active ? 600 : 500,
-        color: active ? '#8c6314' : 'var(--text-secondary)',
-        background: active ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.20), rgba(160, 124, 45, 0.12))' : 'transparent',
-        border: active ? '1px solid rgba(201, 168, 76, 0.45)' : '1px solid transparent',
-        boxShadow: active ? 'inset 0 1px 1px rgba(255, 255, 255, 0.85), 0 2px 8px rgba(201, 168, 76, 0.12)' : 'none',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
+        padding: '7px 18px',
+        borderRadius: 10,
+        fontSize: 13, fontWeight: active ? 700 : 500,
+        color: active ? '#5c3e04' : '#64748b',
+        background: active ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.30) 0%, rgba(185, 145, 45, 0.16) 100%)' : 'transparent',
+        border: 'none',
+        boxShadow: active ? 'inset 0 1px 1px rgba(255, 255, 255, 0.95), 0 2px 8px rgba(201, 168, 76, 0.14)' : 'none',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         textDecoration: 'none',
         transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         letterSpacing: '0.1px',
@@ -209,15 +211,17 @@ function NavLink({
       onMouseEnter={e => {
         if (!active) {
           const el = e.currentTarget as HTMLElement;
-          el.style.background = 'rgba(255, 255, 255, 0.9)';
+          el.style.background = 'rgba(255, 255, 255, 0.85)';
           el.style.color = 'var(--text-primary)';
+          el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.03)';
         }
       }}
       onMouseLeave={e => {
         if (!active) {
           const el = e.currentTarget as HTMLElement;
           el.style.background = 'transparent';
-          el.style.color = 'var(--text-secondary)';
+          el.style.color = '#64748b';
+          el.style.boxShadow = 'none';
         }
       }}
     >
