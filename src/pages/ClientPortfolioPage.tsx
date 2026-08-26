@@ -1631,7 +1631,7 @@ export function ClientPortfolioPage() {
               className="btn-glass-gold"
               style={{ padding: '7px 16px', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}
             >
-              <Pencil size={13} /> Update Base Cash & Liquid Funds
+              <Pencil size={13} /> Update Base Cash as on Date
             </button>
           </div>
 
@@ -1648,35 +1648,35 @@ export function ClientPortfolioPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* 1. Client Cash as on date */}
+                {/* 1. Client cash as on date */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5 }}>
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    Client Cash as on date ({client.client_cash_base_date || client.onboarding_date || '—'}):
+                    Client cash as on date ({client.client_cash_base_date || client.onboarding_date || '—'}):
                   </span>
                   <strong style={{ fontSize: 16, color: 'var(--text-primary)' }} className="tabular-nums">
                     {fmtCurrency(baseClientCash)}
                   </strong>
                 </div>
 
-                {/* 2. Less: new stock given till date */}
+                {/* 2. New stock given till date */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#dc2626' }}>
-                  <span>Less - new stock given till date ({executedBuys.length} Buys):</span>
+                  <span>New stock given till date ({executedBuys.length} Buys):</span>
                   <strong style={{ fontSize: 15 }} className="tabular-nums">
                     - {fmtCurrency(freshBuysTotal)}
                   </strong>
                 </div>
 
-                {/* 3. Add: sold old stocks as on date */}
+                {/* 3. Sold old stocks as on date */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#16a34a' }}>
-                  <span>Add + sold old stocks as on date ({executedSells.length} Sells):</span>
+                  <span>Sold old stocks as on date ({executedSells.length} Sells):</span>
                   <strong style={{ fontSize: 15 }} className="tabular-nums">
                     + {fmtCurrency(freshSellsTotal)}
                   </strong>
                 </div>
 
-                {/* 4. Add: Cash parked in liquid */}
+                {/* 4. Cash parked in liquid */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#2563eb' }}>
-                  <span>Add + Cash parked in liquid:</span>
+                  <span>Cash parked in liquid:</span>
                   <strong style={{ fontSize: 15 }} className="tabular-nums">
                     + {fmtCurrency(parkedLiquidAmount)}
                   </strong>
@@ -1684,9 +1684,9 @@ export function ClientPortfolioPage() {
 
                 <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
 
-                {/* 5. As on date estimated Cash */}
+                {/* 5. As on date estimated cash */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, fontWeight: 800 }}>
-                  <span style={{ color: '#8c6314' }}>As on date Estimated Cash:</span>
+                  <span style={{ color: '#8c6314' }}>As on date estimated cash:</span>
                   <strong style={{ fontSize: 20, color: '#8c6314' }} className="tabular-nums">
                     {fmtCurrency(dynamicEstimatedCash)}
                   </strong>
@@ -1695,16 +1695,16 @@ export function ClientPortfolioPage() {
                 {/* Ratio and Buckets */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                   <div style={{ padding: '10px 12px', background: freeCashRatio < 10 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a' }}>Free Cash Ratio</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a' }}>Free Cash to Portfolio Ratio</div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a', marginTop: 2 }}>
                       {freeCashRatio.toFixed(1)}% <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Target: 10%)</span>
                     </div>
                   </div>
 
                   <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.06)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Buckets</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Allocation</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                      Core: {fmtCurrencyKPI(longTermCash)} | Tac: {fmtCurrencyKPI(momentumCash)}
+                      Long-Term: {fmtCurrencyKPI(longTermCash)} | Momentum: {fmtCurrencyKPI(momentumCash)}
                     </div>
                   </div>
                 </div>
