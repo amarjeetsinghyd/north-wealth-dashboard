@@ -62,28 +62,32 @@ export function ClientsPage() {
       {/* Stats bar */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 'var(--space-4)', marginBottom: 'var(--space-8)',
+        gap: 18, marginBottom: 32,
       }}>
         {[
-          { label: 'Total Clients', value: clients.length.toString(), icon: <User size={16} />, color: '#C9A84C' },
-          { label: 'Active Portfolios', value: clients.length.toString(), icon: <TrendingUp size={16} />, color: '#22c55e' },
-          { label: 'Service', value: 'Rebalancing', icon: <Calendar size={16} />, color: '#C9A84C' },
+          { label: 'Total Clients', value: clients.length.toString(), icon: <User size={18} />, color: '#C9A84C' },
+          { label: 'Active Portfolios', value: clients.length.toString(), icon: <TrendingUp size={18} />, color: '#22c55e' },
+          { label: 'Service', value: 'Rebalancing', icon: <Calendar size={18} />, color: '#C9A84C' },
         ].map(stat => (
           <div key={stat.label} className="glass-card glass-card-interactive" style={{
-            padding: '16px 20px',
-            display: 'flex', alignItems: 'center', gap: 14,
+            padding: '20px 24px',
+            display: 'flex', alignItems: 'center', gap: 16,
+            borderRadius: 16,
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.85)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
             <div style={{
-              width: 38, height: 38, borderRadius: 10,
-              background: `${stat.color}15`,
-              border: `1px solid ${stat.color}30`,
+              width: 44, height: 44, borderRadius: 12,
+              background: `${stat.color}18`,
+              border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: stat.color, flexShrink: 0,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(0,0,0,0.02)',
             }}>{stat.icon}</div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{stat.value}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 }}>{stat.label}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>{stat.value}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 700, marginTop: 2 }}>{stat.label}</div>
             </div>
           </div>
         ))}
@@ -96,7 +100,10 @@ export function ClientsPage() {
         </div>
       ) : clients.length === 0 ? (
         <div className="glass-card" style={{
-          border: '2px dashed var(--border-strong)',
+          border: 'none',
+          borderRadius: 16,
+          background: 'rgba(255, 255, 255, 0.85)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
           padding: 'var(--space-16)', textAlign: 'center',
         }}>
           <User size={48} style={{ color: 'var(--text-muted)', margin: '0 auto var(--space-4)', display: 'block' }} />
@@ -113,17 +120,17 @@ export function ClientsPage() {
           </button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Table header */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'minmax(340px, 3.5fr) minmax(160px, 1.8fr) minmax(120px, 1.2fr) auto',
-            gap: 'var(--space-6)',
+            gap: 20,
             padding: '0 24px',
-            marginBottom: 'var(--space-2)',
+            marginBottom: 4,
           }}>
             {['Client Name & Details', 'Onboarding Date', 'Status', ''].map(h => (
-              <span key={h} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{h}</span>
+              <span key={h} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>{h}</span>
             ))}
           </div>
 
@@ -136,8 +143,13 @@ export function ClientsPage() {
                 animationDelay: `${i * 35}ms`,
                 display: 'grid',
                 gridTemplateColumns: 'minmax(340px, 3.5fr) minmax(160px, 1.8fr) minmax(120px, 1.2fr) auto',
-                gap: 'var(--space-6)', alignItems: 'center',
-                padding: '16px 24px',
+                gap: 20, alignItems: 'center',
+                padding: '18px 24px',
+                borderRadius: 16,
+                border: 'none',
+                background: 'rgba(255, 255, 255, 0.88)',
+                backdropFilter: 'blur(20px) saturate(180%)',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
                 cursor: 'pointer',
               }}
             >
@@ -146,23 +158,23 @@ export function ClientsPage() {
                 <div style={{
                   width: 44, height: 44,
                   borderRadius: 12,
-                  background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.16), rgba(160, 124, 45, 0.08))',
-                  border: '1px solid rgba(201, 168, 76, 0.35)',
+                  background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.24) 0%, rgba(185, 145, 45, 0.12) 100%)',
+                  border: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: 700, fontSize: 17,
-                  color: '#8c6314',
+                  fontWeight: 800, fontSize: 17,
+                  color: '#624206',
                   flexShrink: 0,
-                  boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 2px 8px rgba(201, 168, 76, 0.10)',
+                  boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 2px 8px rgba(201, 168, 76, 0.12)',
                 }}>
                   {client.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 15, letterSpacing: '-0.2px' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 15, letterSpacing: '-0.2px' }}>
                     {client.name}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      ID: <strong style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{client.id}</strong>
+                      ID: <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{client.id}</strong>
                     </span>
                     {client.rm_name && (
                       <span className="glass-pill-gold" style={{ padding: '2px 8px', fontSize: 11 }}>
@@ -174,7 +186,7 @@ export function ClientsPage() {
               </div>
 
               {/* Date */}
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}>
                 {new Date(client.onboarding_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
               </div>
 
@@ -195,13 +207,13 @@ export function ClientsPage() {
                     borderRadius: 8,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: 'var(--text-muted)',
-                    background: 'rgba(255, 255, 255, 0.5)',
-                    border: '1px solid rgba(229, 231, 235, 0.8)',
+                    background: 'rgba(0, 0, 0, 0.035)',
+                    border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8c6314'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(201, 168, 76, 0.5)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(229, 231, 235, 0.8)'; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#8c6314'; (e.currentTarget as HTMLElement).style.background = 'rgba(201, 168, 76, 0.15)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.background = 'rgba(0, 0, 0, 0.035)'; }}
                   title="Edit Client"
                 >
                   <Edit2 size={14} />
@@ -214,13 +226,13 @@ export function ClientsPage() {
                     borderRadius: 8,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: 'var(--text-muted)',
-                    background: 'rgba(255, 255, 255, 0.5)',
-                    border: '1px solid rgba(229, 231, 235, 0.8)',
+                    background: 'rgba(0, 0, 0, 0.035)',
+                    border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s',
                   }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#dc2626'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(239, 68, 68, 0.5)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(229, 231, 235, 0.8)'; }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#dc2626'; (e.currentTarget as HTMLElement).style.background = 'rgba(239, 68, 68, 0.15)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLElement).style.background = 'rgba(0, 0, 0, 0.035)'; }}
                   title="Delete Client"
                 >
                   <Trash2 size={14} />
