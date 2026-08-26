@@ -49,6 +49,20 @@ export function ClientPortfolioPage() {
   const [stockPriceInput, setStockPriceInput] = useState('');
   const [savingStock, setSavingStock] = useState(false);
 
+  // Dedicated Sell Stock Modal (for Working Portfolio & Recos)
+  const [sellModalData, setSellModalData] = useState<{
+    holdingId?: string | undefined;
+    stockSymbol: string;
+    companyName: string;
+    avgBuyPrice: number;
+    currentPrice: number;
+    maxQty: number;
+  } | null>(null);
+  const [sellDateInput, setSellDateInput] = useState(new Date().toISOString().split('T')[0]);
+  const [sellPriceInput, setSellPriceInput] = useState('');
+  const [sellQtyInput, setSellQtyInput] = useState('');
+  const [savingSell, setSavingSell] = useState(false);
+
   // New Recommendation / Trade Entry Modal (Tab 3)
   const [showNewRecoModal, setShowNewRecoModal] = useState(false);
   const [recoDate, setRecoDate] = useState(new Date().toISOString().split('T')[0]);
@@ -522,6 +536,158 @@ export function ClientPortfolioPage() {
     }
   };
 
+  // ── Open Sell Modal Helpers ───────────────────────────────────────────────
+  const openSellModalForHolding = (h: Holding) => {
+    const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
+    const cleanSym = cleanSymbol(h);
+    const currPrice = h.current_price > 0 ? h.current_price : h.buy_price;
+    setSellModalData({
+      holdingId: h.id,
+      stockSymbol: cleanSym,
+      companyName: meta.companyName || h.company_name || cleanSym,
+      avgBuyPrice: h.buy_price,
+      currentPrice: currPrice,
+      maxQty: h.quantity,
+    });
+    setSellDateInput(new Date().toISOString().split('T')[0]);
+    setSellPriceInput(String(currPrice));
+    setSellQtyInput(String(h.quantity));
+  };
+
+  const openSellModalForTx = (tx: Transaction) => {
+    const cleanSym = cleanSymbol(tx);
+    const meta = getStockMeta(cleanSym, tx.company_name || '');
+    const normClean = cleanSym.replace(/\.NS$/, '').replace(/\.BO$/, '');
+    const holding = holdings.find(h => {
+      const hSym = (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+      return hSym === normClean;
+    });
+
+    const avgBuyPrice = holding ? holding.buy_price : (tx.reco_price || tx.price || 0);
+    const currPrice = holding && holding.current_price > 0 ? holding.current_price : avgBuyPrice;
+    const maxQty = holding ? holding.quantity : tx.quantity;
+
+    setSellModalData({
+      holdingId: holding?.id,
+      stockSymbol: cleanSym,
+      companyName: meta.companyName || tx.company_name || cleanSym,
+      avgBuyPrice,
+      currentPrice: currPrice,
+      maxQty,
+    });
+    setSellDateInput(new Date().toISOString().split('T')[0]);
+    setSellPriceInput(String(currPrice));
+    setSellQtyInput(String(maxQty));
+  };
+
+  const handleConfirmSell = async () => {
+    if (!sellModalData || !sellPriceInput || !sellQtyInput || !id) {
+      alert('Please fill Sell Price and Quantity');
+      return;
+    }
+    const sellPrice = parseFloat(sellPriceInput);
+    const sellQty = parseFloat(sellQtyInput);
+    if (isNaN(sellPrice) || sellPrice <= 0 || isNaN(sellQty) || sellQty <= 0) {
+      alert('Please enter valid sell price and quantity');
+      return;
+    }
+    if (sellQty > sellModalData.maxQty) {
+      alert(`Quantity to sell (${sellQty}) cannot exceed current holding quantity (${sellModalData.maxQty})`);
+      return;
+    }
+
+    setSavingSell(true);
+    try {
+      const buyPrice = sellModalData.avgBuyPrice;
+      const investedSold = buyPrice * sellQty;
+      const totalVal = sellPrice * sellQty;
+      const pnl = totalVal - investedSold;
+      const nowIso = new Date().toISOString();
+      const cleanSym = sellModalData.stockSymbol;
+
+      // 1. Add Executed SELL record to transactions
+      await addDoc(collection(db, 'transactions'), {
+        client_id: id,
+        date: sellDateInput || nowIso.split('T')[0],
+        action: 'SELL',
+        stock_symbol: cleanSym,
+        company_name: sellModalData.companyName,
+        quantity: sellQty,
+        price: sellPrice,
+        buy_price: buyPrice,
+        sell_price: sellPrice,
+        total_value: totalVal,
+        realised_pnl: pnl,
+        status: 'Executed',
+        call_status: 'Closed',
+        created_at: nowIso,
+      });
+
+      // 2. Reduce or Delete holding
+      if (sellModalData.holdingId) {
+        const existing = holdings.find(h => h.id === sellModalData.holdingId);
+        if (existing) {
+          const remQty = Math.max(0, existing.quantity - sellQty);
+          if (remQty > 0) {
+            const newInv = buyPrice * remQty;
+            const currPrice = existing.current_price > 0 ? existing.current_price : buyPrice;
+            const currVal = remQty * currPrice;
+            const unrealPnl = currVal - newInv;
+            const unrealPnlPct = newInv > 0 ? (unrealPnl / newInv) * 100 : 0;
+            await updateDoc(doc(db, 'holdings', existing.id), {
+              quantity: remQty,
+              invested_amount: newInv,
+              current_value: currVal,
+              unrealised_pnl: unrealPnl,
+              unrealised_pnl_pct: unrealPnlPct,
+              realised_pnl: (existing.realised_pnl || 0) + pnl,
+              updated_at: nowIso,
+            });
+          } else {
+            await deleteDoc(doc(db, 'holdings', existing.id));
+          }
+        }
+      } else {
+        const normClean = cleanSym.replace(/\.NS$/, '').replace(/\.BO$/, '');
+        const existing = holdings.find(h => {
+          const hSym = (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+          return hSym === normClean;
+        });
+        if (existing) {
+          const remQty = Math.max(0, existing.quantity - sellQty);
+          if (remQty > 0) {
+            const newInv = buyPrice * remQty;
+            const currPrice = existing.current_price > 0 ? existing.current_price : buyPrice;
+            const currVal = remQty * currPrice;
+            const unrealPnl = currVal - newInv;
+            const unrealPnlPct = newInv > 0 ? (unrealPnl / newInv) * 100 : 0;
+            await updateDoc(doc(db, 'holdings', existing.id), {
+              quantity: remQty,
+              invested_amount: newInv,
+              current_value: currVal,
+              unrealised_pnl: unrealPnl,
+              unrealised_pnl_pct: unrealPnlPct,
+              realised_pnl: (existing.realised_pnl || 0) + pnl,
+              updated_at: nowIso,
+            });
+          } else {
+            await deleteDoc(doc(db, 'holdings', existing.id));
+          }
+        }
+      }
+
+      setSellModalData(null);
+      setSellPriceInput('');
+      setSellQtyInput('');
+      await load();
+    } catch (err) {
+      console.error('Error confirming sell:', err);
+      alert('Failed to execute sell order');
+    } finally {
+      setSavingSell(false);
+    }
+  };
+
   // ── New Recommendation & Status Toggle (Tab 3) ────────────────────────────
   const handleSaveRecommendation = async () => {
     if (!recoSymbol.trim() || !recoPrice || !recoQty || !id) {
@@ -812,7 +978,7 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const gridCols = '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 50px';
+  const gridCols = '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 65px';
 
   return (
     <div className="container animate-fade-in" style={{ paddingBottom: 'var(--space-12)' }}>
@@ -1295,7 +1461,16 @@ export function ClientPortfolioPage() {
                         </div>
 
                         <div>
-                          {portfolioTab === 'client' && (
+                          {portfolioTab === 'working' ? (
+                            <button
+                              onClick={() => openSellModalForHolding(h)}
+                              className="btn-glass-red"
+                              style={{ padding: '3px 9px', fontSize: 11, fontWeight: 700, borderRadius: 5 }}
+                              title="Sell position"
+                            >
+                              Sell
+                            </button>
+                          ) : (
                             <button
                               onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
                               style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
@@ -1427,7 +1602,7 @@ export function ClientPortfolioPage() {
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 1100 }}>
                 <div style={{
-                  display: 'grid', gridTemplateColumns: '110px 80px 170px 110px 130px 90px 120px 120px 90px 50px', gap: 10,
+                  display: 'grid', gridTemplateColumns: '105px 75px 160px 105px 120px 85px 115px 115px 80px 95px', gap: 10,
                   padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
                   fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
                 }}>
@@ -1457,7 +1632,7 @@ export function ClientPortfolioPage() {
                       <div
                         key={tx.id}
                         style={{
-                          display: 'grid', gridTemplateColumns: '110px 80px 170px 110px 130px 90px 120px 120px 90px 50px', gap: 10,
+                          display: 'grid', gridTemplateColumns: '105px 75px 160px 105px 120px 85px 115px 115px 80px 95px', gap: 10,
                           alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
                           fontSize: 12.5,
                         }}
@@ -1527,7 +1702,17 @@ export function ClientPortfolioPage() {
                           </span>
                         </div>
 
-                        <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {tx.action === 'BUY' && isExecuted && tx.call_status !== 'Closed' && (
+                            <button
+                              onClick={() => openSellModalForTx(tx)}
+                              className="btn-glass-red"
+                              style={{ padding: '2px 7px', fontSize: 11, fontWeight: 700, borderRadius: 4 }}
+                              title="Sell shares of this recommendation"
+                            >
+                              Sell
+                            </button>
+                          )}
                           <button
                             onClick={() => handleDeleteTransaction(tx.id)}
                             style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
@@ -1553,9 +1738,9 @@ export function ClientPortfolioPage() {
                 </h3>
               </div>
               <div style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: 800 }}>
+                <div style={{ minWidth: 900 }}>
                   <div style={{
-                    display: 'grid', gridTemplateColumns: '120px 180px 100px 120px 120px 140px 100px', gap: 10,
+                    display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
                     padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
                     fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
                   }}>
@@ -1564,8 +1749,10 @@ export function ClientPortfolioPage() {
                     <div>Qty Sold</div>
                     <div>Buy Price</div>
                     <div>Sales Price</div>
+                    <div>Sales Value (₹)</div>
                     <div>Realised P&L (₹)</div>
                     <div>P&L %</div>
+                    <div>Act</div>
                   </div>
 
                   {executedSells.map((tx) => {
@@ -1575,12 +1762,13 @@ export function ClientPortfolioPage() {
                       buyPr = tx.price - (pnl / tx.quantity);
                     }
                     const pnlPct = buyPr > 0 ? ((tx.price - buyPr) / buyPr) * 100 : 0;
+                    const salesVal = tx.total_value || (tx.price * tx.quantity);
 
                     return (
                       <div
                         key={tx.id}
                         style={{
-                          display: 'grid', gridTemplateColumns: '120px 180px 100px 120px 120px 140px 100px', gap: 10,
+                          display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
                           alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
                           fontSize: 12.5,
                         }}
@@ -1596,11 +1784,23 @@ export function ClientPortfolioPage() {
                         <div className="tabular-nums" style={{ fontWeight: 600 }}>
                           ₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </div>
+                        <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {fmtCurrency(salesVal)}
+                        </div>
                         <div className="tabular-nums" style={{ fontWeight: 700, color: pnl >= 0 ? '#16a34a' : '#dc2626' }}>
                           {pnl >= 0 ? '+' : ''}{fmtCurrency(pnl)}
                         </div>
                         <div>
                           <PnLBadge value={pnlPct} suffix="%" />
+                        </div>
+                        <div>
+                          <button
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
+                            title="Delete transaction"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
                     );
@@ -1976,7 +2176,135 @@ export function ClientPortfolioPage() {
         document.body
       )}
 
-      {/* 4. Full Statement Parser Modal */}
+      {/* 4. Sell Stock Modal */}
+      {sellModalData && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setSellModalData(null); }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 14, width: '100%', maxWidth: 460, boxShadow: 'var(--shadow-xl)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#dc2626', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Sell Holding — {sellModalData.stockSymbol}
+                </h3>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sellModalData.companyName}</span>
+              </div>
+              <button onClick={() => setSellModalData(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
+            </div>
+
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Position Info Banner */}
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(0,0,0,0.03)', border: '1px solid var(--border-subtle)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Available Holding</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>
+                    {sellModalData.maxQty.toLocaleString('en-IN')} shares
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Avg Buy: ₹{sellModalData.avgBuyPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Current CMP</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#2563eb', marginTop: 2 }}>
+                    ₹{sellModalData.currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Live market price</div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Selling Date *</label>
+                <input type="date" value={sellDateInput} onChange={e => setSellDateInput(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }} />
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Quantity to Sell *</label>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[
+                      { label: '25%', q: Math.max(1, Math.floor(sellModalData.maxQty * 0.25)) },
+                      { label: '50%', q: Math.max(1, Math.floor(sellModalData.maxQty * 0.5)) },
+                      { label: '100%', q: sellModalData.maxQty },
+                    ].map(chip => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => setSellQtyInput(String(chip.q))}
+                        style={{ padding: '2px 6px', fontSize: 10.5, fontWeight: 700, borderRadius: 4, border: '1px solid var(--border-default)', background: 'rgba(0,0,0,0.04)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  value={sellQtyInput}
+                  onChange={e => setSellQtyInput(e.target.value)}
+                  placeholder={`Max ${sellModalData.maxQty}`}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Selling Price (₹) *</label>
+                <input
+                  type="number"
+                  value={sellPriceInput}
+                  onChange={e => setSellPriceInput(e.target.value)}
+                  placeholder="e.g. 1540"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                />
+              </div>
+
+              {/* Live Realised P&L Preview */}
+              {sellPriceInput && sellQtyInput && parseFloat(sellQtyInput) > 0 && parseFloat(sellPriceInput) > 0 && (() => {
+                const sPrice = parseFloat(sellPriceInput);
+                const sQty = parseFloat(sellQtyInput);
+                const salesVal = sPrice * sQty;
+                const costVal = sellModalData.avgBuyPrice * sQty;
+                const pnl = salesVal - costVal;
+                const pnlPct = costVal > 0 ? (pnl / costVal) * 100 : 0;
+                const isProfitable = pnl >= 0;
+
+                return (
+                  <div style={{
+                    padding: '12px 14px', borderRadius: 8,
+                    background: isProfitable ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
+                    border: `1px solid ${isProfitable ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Sales Proceeds:</span>
+                      <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>{fmtCurrency(salesVal)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: isProfitable ? '#16a34a' : '#dc2626' }}>Realised P&L:</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <strong style={{ fontSize: 15, color: isProfitable ? '#16a34a' : '#dc2626' }}>
+                          {isProfitable ? '+' : ''}{fmtCurrency(pnl)}
+                        </strong>
+                        <PnLBadge value={pnlPct} suffix="%" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setSellModalData(null)} style={{ padding: '7px 16px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+              <button
+                onClick={handleConfirmSell}
+                disabled={savingSell || !sellPriceInput || !sellQtyInput}
+                className="btn-glass-red"
+                style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700 }}
+              >
+                {savingSell ? 'Executing Sell...' : 'Execute SELL Order'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 5. Full Statement Parser Modal */}
       {showUploadModal && client && (
         <AddClientModal
           existingClient={client}
