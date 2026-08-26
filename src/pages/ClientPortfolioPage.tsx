@@ -110,8 +110,7 @@ export function ClientPortfolioPage() {
   const [sectorFilter, setSectorFilter] = useState<string>('');
   const [mcapFilter, setMcapFilter] = useState<string>('');
 
-  // Transactions Tab Filters
-  const [txTabFilter, setTxTabFilter] = useState<'all' | 'buy' | 'sell' | 'avoid'>('all');
+  // Transactions Tab Search and Sort
   const [txStockSearch, setTxStockSearch] = useState('');
   const [txSortColumn, setTxSortColumn] = useState<TxSortColumn>('date');
   const [txSortOrder, setTxSortOrder] = useState<SortOrder>('desc');
@@ -350,15 +349,29 @@ export function ClientPortfolioPage() {
     }
   };
 
-  const getSortedTransactions = () => {
-    let list = [...transactions];
-    if (txTabFilter === 'buy') {
-      list = list.filter(t => t.action === 'BUY' && (t.status === 'Executed' || !t.status));
-    } else if (txTabFilter === 'sell') {
-      list = list.filter(t => t.action === 'SELL' && (t.status === 'Executed' || !t.status));
-    } else if (txTabFilter === 'avoid') {
-      list = list.filter(t => t.status === 'Avoid');
+  const getSortedBuyTransactions = () => {
+    let list = transactions.filter(t => t.action === 'BUY' || !t.action);
+    if (txStockSearch.trim()) {
+      const q = txStockSearch.toLowerCase();
+      list = list.filter(t =>
+        (t.stock_symbol && t.stock_symbol.toLowerCase().includes(q)) ||
+        (t.company_name && t.company_name.toLowerCase().includes(q))
+      );
     }
+    if (!txSortColumn) return list;
+
+    return list.sort((a, b) => {
+      const aVal = a[txSortColumn];
+      const bVal = b[txSortColumn];
+      if (txSortColumn === 'date' || txSortColumn === 'stock_symbol' || txSortColumn === 'action' || txSortColumn === 'status') {
+        return txSortOrder === 'asc' ? String(aVal ?? '').localeCompare(String(bVal ?? '')) : String(bVal ?? '').localeCompare(String(aVal ?? ''));
+      }
+      return txSortOrder === 'asc' ? (Number(aVal) || 0) - (Number(bVal) || 0) : (Number(bVal) || 0) - (Number(aVal) || 0);
+    });
+  };
+
+  const getSortedSellTransactions = () => {
+    let list = transactions.filter(t => t.action === 'SELL');
     if (txStockSearch.trim()) {
       const q = txStockSearch.toLowerCase();
       list = list.filter(t =>
@@ -1494,83 +1507,41 @@ export function ClientPortfolioPage() {
           ══════════════════════════════════════════════════════════════════════ */}
       {portfolioTab === 'transactions' && (
         <section style={{ marginBottom: 'var(--space-10)' }}>
+          {/* Header Strip */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-5)', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
                 Transactions During Service Period
               </h2>
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'block', marginTop: 3 }}>
-                Live recommendation orders and executions with automated Realised P&L capture.
+                Two-tier segregated view: Buy recommendations (top) & Executed sell ledger (bottom).
               </span>
             </div>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', gap: 4, background: 'rgba(0,0,0,0.04)', padding: 3, borderRadius: 8 }}>
-                <button
-                  onClick={() => setTxTabFilter('all')}
-                  style={{
-                    padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
-                    background: txTabFilter === 'all' ? 'var(--gold)' : 'transparent',
-                    color: txTabFilter === 'all' ? '#000' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  All ({transactions.length})
-                </button>
-                <button
-                  onClick={() => setTxTabFilter('buy')}
-                  style={{
-                    padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
-                    background: txTabFilter === 'buy' ? 'rgba(34,197,94,0.15)' : 'transparent',
-                    color: txTabFilter === 'buy' ? '#16a34a' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Executed BUYs ({executedBuys.length})
-                </button>
-                <button
-                  onClick={() => setTxTabFilter('sell')}
-                  style={{
-                    padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
-                    background: txTabFilter === 'sell' ? 'rgba(239,68,68,0.15)' : 'transparent',
-                    color: txTabFilter === 'sell' ? '#dc2626' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Executed SELLs ({executedSells.length})
-                </button>
-                <button
-                  onClick={() => setTxTabFilter('avoid')}
-                  style={{
-                    padding: '5px 10px', fontSize: 11.5, fontWeight: 700, borderRadius: 6, border: 'none',
-                    background: txTabFilter === 'avoid' ? 'rgba(100,116,139,0.15)' : 'transparent',
-                    color: txTabFilter === 'avoid' ? '#475569' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Avoided ({transactions.filter(t => t.status === 'Avoid').length})
-                </button>
-              </div>
-
               <input
                 type="text"
-                placeholder="Search orders..."
+                placeholder="Search stock symbol..."
                 value={txStockSearch}
                 onChange={e => setTxStockSearch(e.target.value)}
                 style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12, outline: 'none' }}
               />
 
               <button
-                onClick={() => setShowNewRecoModal(true)}
+                onClick={() => {
+                  setRecoType('BUY');
+                  setShowNewRecoModal(true);
+                }}
                 className="btn-glass-gold"
                 style={{ padding: '7px 14px', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                <PlusCircle size={13} /> + New Reco / Trade Entry
+                <PlusCircle size={13} /> + New Buy Recommendation
               </button>
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 20 }}>
+          {/* 3 KPI Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
             <div style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '14px 16px' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase' }}>Executed BUY Volume</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{fmtCurrency(freshBuysTotal)}</div>
@@ -1598,16 +1569,36 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+          {/* ════════════════════════════════════════════════════════════════════
+              SECTION 1: BUY RECOMMENDATIONS & ORDERS TABLE (TOP)
+              ════════════════════════════════════════════════════════════════════ */}
+          <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 28 }}>
+            <div style={{
+              padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(34,197,94,0.03)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: '#16a34a', color: '#fff' }}>
+                  1. BUY ORDERS
+                </span>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Buy Recommendations & Open Positions
+                </h3>
+              </div>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                {transactions.filter(t => t.action === 'BUY' || !t.action).length} recommendations
+              </span>
+            </div>
+
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 1100 }}>
+              <div style={{ minWidth: 1050 }}>
                 <div style={{
-                  display: 'grid', gridTemplateColumns: '105px 75px 160px 105px 120px 85px 115px 115px 80px 95px', gap: 10,
+                  display: 'grid', gridTemplateColumns: '105px 165px 110px 120px 85px 120px 115px 85px 95px', gap: 10,
                   padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
                   fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
                 }}>
                   <div style={{ cursor: 'pointer' }} onClick={() => handleTxSort('date')}>Date</div>
-                  <div>Type</div>
                   <div>Stock Name</div>
                   <div>Reco Price</div>
                   <div>Target Range</div>
@@ -1618,12 +1609,18 @@ export function ClientPortfolioPage() {
                   <div>Act</div>
                 </div>
 
-                {getSortedTransactions().length === 0 ? (
-                  <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                    No transaction recommendations found.
-                  </div>
-                ) : (
-                  getSortedTransactions().map((tx) => {
+                {(() => {
+                  const buyList = getSortedBuyTransactions();
+
+                  if (buyList.length === 0) {
+                    return (
+                      <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                        No Buy recommendations added yet. Click <strong>"+ New Buy Recommendation"</strong> to add a fresh buy call.
+                      </div>
+                    );
+                  }
+
+                  return buyList.map((tx) => {
                     const meta = getStockMeta(tx.stock_symbol, tx.company_name || '');
                     const isExecuted = tx.status === 'Executed' || !tx.status;
                     const amt = tx.total_value || (tx.price * tx.quantity);
@@ -1632,23 +1629,13 @@ export function ClientPortfolioPage() {
                       <div
                         key={tx.id}
                         style={{
-                          display: 'grid', gridTemplateColumns: '105px 75px 160px 105px 120px 85px 115px 115px 80px 95px', gap: 10,
+                          display: 'grid', gridTemplateColumns: '105px 165px 110px 120px 85px 120px 115px 85px 95px', gap: 10,
                           alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
                           fontSize: 12.5,
                         }}
                       >
                         <div style={{ color: 'var(--text-secondary)' }}>
                           {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </div>
-
-                        <div>
-                          <span style={{
-                            fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-                            background: tx.action === 'BUY' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                            color: tx.action === 'BUY' ? '#16a34a' : '#dc2626',
-                          }}>
-                            {tx.action}
-                          </span>
                         </div>
 
                         <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1698,12 +1685,12 @@ export function ClientPortfolioPage() {
                             background: tx.call_status === 'Closed' ? 'rgba(0,0,0,0.06)' : 'rgba(59,130,246,0.08)',
                             color: tx.call_status === 'Closed' ? 'var(--text-muted)' : '#2563eb',
                           }}>
-                            {tx.call_status || (tx.action === 'SELL' ? 'Closed' : 'Open')}
+                            {tx.call_status || 'Open'}
                           </span>
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {tx.action === 'BUY' && isExecuted && tx.call_status !== 'Closed' && (
+                          {isExecuted && tx.call_status !== 'Closed' && (
                             <button
                               onClick={() => openSellModalForTx(tx)}
                               className="btn-glass-red"
@@ -1723,39 +1710,70 @@ export function ClientPortfolioPage() {
                         </div>
                       </div>
                     );
-                  })
-                )}
+                  });
+                })()}
               </div>
             </div>
           </div>
 
-          {/* Executed Sells Table (Realised P&L Ledger) */}
-          {executedSells.length > 0 && (
-            <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* ════════════════════════════════════════════════════════════════════
+              SECTION 2: EXECUTED SELL ORDERS & REALISED P&L LEDGER (BOTTOM)
+              ════════════════════════════════════════════════════════════════════ */}
+          <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{
+              padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(239,68,68,0.03)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: '#dc2626', color: '#fff' }}>
+                  2. SELL LEDGER
+                </span>
                 <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Executed Sells & Realised P&L Ledger ({executedSells.length} positions closed)
+                  Executed Sell Orders & Realised P&L Ledger
                 </h3>
               </div>
-              <div style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: 900 }}>
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
-                    padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
-                    fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
-                  }}>
-                    <div>Date</div>
-                    <div>Stock Name</div>
-                    <div>Qty Sold</div>
-                    <div>Buy Price</div>
-                    <div>Sales Price</div>
-                    <div>Sales Value (₹)</div>
-                    <div>Realised P&L (₹)</div>
-                    <div>P&L %</div>
-                    <div>Act</div>
-                  </div>
 
-                  {executedSells.map((tx) => {
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Total Realised: <strong style={{ color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626' }}>{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</strong>
+                </span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
+                  {executedSells.length} positions closed
+                </span>
+              </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: 900 }}>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
+                  padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
+                  fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
+                }}>
+                  <div>Date</div>
+                  <div>Stock Name</div>
+                  <div>Qty Sold</div>
+                  <div>Buy Price</div>
+                  <div>Sales Price</div>
+                  <div>Sales Value (₹)</div>
+                  <div>Realised P&L (₹)</div>
+                  <div>P&L %</div>
+                  <div>Act</div>
+                </div>
+
+                {(() => {
+                  const sellList = getSortedSellTransactions();
+
+                  if (sellList.length === 0) {
+                    return (
+                      <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                        No Sell orders recorded yet. Click the <strong>"Sell"</strong> button on any active stock in the Working Portfolio or in the Buy table above to execute a sell order.
+                      </div>
+                    );
+                  }
+
+                  return sellList.map((tx) => {
                     const pnl = tx.realised_pnl || 0;
                     let buyPr = tx.buy_price && tx.buy_price > 0 ? tx.buy_price : 0;
                     if (!buyPr && tx.price > 0 && tx.quantity > 0 && pnl !== 0) {
@@ -1804,11 +1822,11 @@ export function ClientPortfolioPage() {
                         </div>
                       </div>
                     );
-                  })}
-                </div>
+                  });
+                })()}
               </div>
             </div>
-          )}
+          </div>
         </section>
       )}
       {/* ══════════════════════════════════════════════════════════════════════
