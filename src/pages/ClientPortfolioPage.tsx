@@ -252,24 +252,50 @@ export function ClientPortfolioPage() {
   const activeTableHoldings = portfolioTab === 'client' ? clientHoldings : workingHoldings;
 
   // ── Portfolio Summary Metrics ──────────────────────────────────────────────
-  const summary: PortfolioSummary = activeTableHoldings.reduce(
-    (acc: PortfolioSummary, h: Holding) => {
-      const hasPrice = h.current_price > 0;
-      const inv = h.invested_amount || (h.buy_price * h.quantity);
-      const val = hasPrice ? (h.current_value || h.buy_price * h.quantity) : inv;
-      return {
-        totalInvested: acc.totalInvested + inv,
-        currentValue: acc.currentValue + val,
-        unrealisedPnL: acc.unrealisedPnL + h.unrealised_pnl,
-        realisedPnL: acc.realisedPnL + (h.realised_pnl || 0),
-        unrealisedPnLPct: 0,
-      };
-    },
-    { totalInvested: 0, currentValue: 0, unrealisedPnL: 0, realisedPnL: 0, unrealisedPnLPct: 0 }
-  );
-  if (summary.totalInvested > 0) {
-    summary.unrealisedPnLPct = (summary.unrealisedPnL / summary.totalInvested) * 100;
-  }
+  const summary: PortfolioSummary = useMemo(() => {
+    const res = activeTableHoldings.reduce(
+      (acc: PortfolioSummary, h: Holding) => {
+        const hasPrice = h.current_price > 0;
+        const inv = h.invested_amount || (h.buy_price * h.quantity);
+        const val = hasPrice ? (h.current_value || h.buy_price * h.quantity) : inv;
+        return {
+          totalInvested: acc.totalInvested + inv,
+          currentValue: acc.currentValue + val,
+          unrealisedPnL: acc.unrealisedPnL + (h.unrealised_pnl || 0),
+          realisedPnL: acc.realisedPnL + (h.realised_pnl || 0),
+          unrealisedPnLPct: 0,
+        };
+      },
+      { totalInvested: 0, currentValue: 0, unrealisedPnL: 0, realisedPnL: 0, unrealisedPnLPct: 0 }
+    );
+    if (res.totalInvested > 0) {
+      res.unrealisedPnLPct = (res.unrealisedPnL / res.totalInvested) * 100;
+    }
+    return res;
+  }, [activeTableHoldings]);
+
+  // ── Dedicated Working Portfolio Summary (for live overview strip) ───────────
+  const workingSummary: PortfolioSummary = useMemo(() => {
+    const res = workingHoldings.reduce(
+      (acc: PortfolioSummary, h: Holding) => {
+        const hasPrice = h.current_price > 0;
+        const inv = h.invested_amount || (h.buy_price * h.quantity);
+        const val = hasPrice ? (h.current_value || h.buy_price * h.quantity) : inv;
+        return {
+          totalInvested: acc.totalInvested + inv,
+          currentValue: acc.currentValue + val,
+          unrealisedPnL: acc.unrealisedPnL + (h.unrealised_pnl || 0),
+          realisedPnL: acc.realisedPnL + (h.realised_pnl || 0),
+          unrealisedPnLPct: 0,
+        };
+      },
+      { totalInvested: 0, currentValue: 0, unrealisedPnL: 0, realisedPnL: 0, unrealisedPnLPct: 0 }
+    );
+    if (res.totalInvested > 0) {
+      res.unrealisedPnLPct = (res.unrealisedPnL / res.totalInvested) * 100;
+    }
+    return res;
+  }, [workingHoldings]);
 
   // ── Transactions Metrics & Classification ──────────────────────────────────
   const executedBuys = useMemo(() => {
@@ -1413,26 +1439,74 @@ export function ClientPortfolioPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Landmark size={18} style={{ color: 'var(--gold)' }} />
             <h3 style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-              Master Asset Allocation & AUA Buffer
+              Master Asset Allocation & Live Performance Strip
             </h3>
           </div>
-          {isAuaBreached && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: 'rgba(239,68,68,0.12)', border: 'none', borderRadius: 8, color: '#dc2626', fontSize: 12, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
-              <ShieldAlert size={14} />
-              <span>AUA Breached by ₹{auaBreachAmount.toLocaleString('en-IN')}!</span>
+
+          {/* Slim Companion Strip: Mutual Funds & Buffer Info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Mutual Funds Compact Pill */}
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '6px 14px', borderRadius: 10,
+              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(147, 51, 234, 0.06) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.95), 0 2px 8px rgba(168, 85, 247, 0.08)',
+              border: 'none',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Mutual Funds:
+              </span>
+              {editingMutualFunds ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    type="number"
+                    value={mutualFundsInput}
+                    onChange={e => setMutualFundsInput(e.target.value)}
+                    autoFocus
+                    style={{ width: 110, padding: '3px 6px', fontSize: 12.5, fontWeight: 700, borderRadius: 6, border: 'none', background: '#fff', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)' }}
+                  />
+                  <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer', padding: 2 }}><Check size={14} /></button>
+                  <button onClick={() => setEditingMutualFunds(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}><XIcon size={14} /></button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <strong style={{ fontSize: 13.5, fontWeight: 800, color: '#7e22ce' }}>{fmtCurrency(mutualFunds)}</strong>
+                  <button onClick={() => setEditingMutualFunds(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#7e22ce', display: 'flex', padding: 0 }} title="Edit Mutual Funds"><Pencil size={11} /></button>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* AUA Deficit / Buffer Pill */}
+            {isAuaBreached ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: 'none', borderRadius: 10, color: '#dc2626', fontSize: 12, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
+                <ShieldAlert size={14} />
+                <span>AUA Breached by ₹{auaBreachAmount.toLocaleString('en-IN')}!</span>
+              </div>
+            ) : (
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', borderRadius: 10,
+                background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.12) 0%, rgba(185, 145, 45, 0.06) 100%)',
+                boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+                color: '#8c6314', fontSize: 12, fontWeight: 700,
+              }}>
+                <span>Buffer Capital: <strong>{fmtCurrency(auaBuffer)}</strong></span>
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* ── 5 Key Master Metric Cards ───────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-          {/* Total AUA */}
+          {/* Card 1: Total AUA */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.88)', border: 'none', borderRadius: 16,
+            background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
+            border: 'none', borderRadius: 16,
             padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
+            boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total AUA (Master)</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total AUA (Master)</div>
             {editingAua ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <input
@@ -1447,84 +1521,83 @@ export function ClientPortfolioPage() {
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>{fmtCurrency(totalAua)}</span>
-                <button onClick={() => setEditingAua(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Pencil size={12} /></button>
+                <span style={{ fontSize: 20, fontWeight: 800, color: '#5c3e04' }}>{fmtCurrency(totalAua)}</span>
+                <button onClick={() => setEditingAua(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314' }}><Pencil size={12} /></button>
               </div>
             )}
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Total client relationship asset</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Total relationship asset</div>
           </div>
 
-          {/* Equity */}
+          {/* Card 2: Equity Valuation (Auto) */}
           <div style={{
-            background: 'rgba(59, 130, 246, 0.08)', border: 'none', borderRadius: 16,
+            background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
+            border: 'none', borderRadius: 16,
             padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 4px 20px rgba(59, 130, 246, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
+            boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Equity Portfolio (Auto)</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#2563eb', marginTop: 6 }}>{fmtCurrency(totalEquityValue)}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{holdings.length} stocks/ETFs tracked</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Equity Portfolio (Auto)</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#5c3e04', marginTop: 6 }}>{fmtCurrency(workingSummary.currentValue || totalEquityValue)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{workingHoldings.length} stocks/ETFs tracked</div>
           </div>
 
-          {/* Mutual Funds */}
+          {/* Card 3: Unrealised P&L (Working Live) */}
           <div style={{
-            background: 'rgba(168, 85, 247, 0.08)', border: 'none', borderRadius: 16,
+            background: workingSummary.unrealisedPnL >= 0 
+              ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.16) 0%, rgba(22, 163, 74, 0.08) 100%)' 
+              : 'linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(220, 38, 38, 0.08) 100%)',
+            border: 'none', borderRadius: 16,
             padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 4px 20px rgba(168, 85, 247, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
+            boxShadow: workingSummary.unrealisedPnL >= 0 
+              ? '0 4px 20px rgba(34, 197, 94, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)' 
+              : '0 4px 20px rgba(239, 68, 68, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Mutual Funds</div>
-            {editingMutualFunds ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <input
-                  type="number"
-                  value={mutualFundsInput}
-                  onChange={e => setMutualFundsInput(e.target.value)}
-                  autoFocus
-                  style={{ width: '100%', padding: '6px 10px', fontSize: 14, fontWeight: 700, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.95)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
-                />
-                <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer' }}><Check size={16} /></button>
-                <button onClick={() => setEditingMutualFunds(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}><XIcon size={16} /></button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, color: '#7e22ce' }}>{fmtCurrency(mutualFunds)}</span>
-                <button onClick={() => setEditingMutualFunds(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Pencil size={12} /></button>
-              </div>
-            )}
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>External MF holdings</div>
-          </div>
-
-          {/* Estimated Cash */}
-          <div style={{
-            background: 'rgba(34, 197, 94, 0.08)', border: 'none', borderRadius: 16,
-            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 4px 20px rgba(34, 197, 94, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Estimated Free Cash</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 6 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>From ledger equation</div>
-          </div>
-
-          {/* Buffer */}
-          <div style={{
-            background: auaBuffer < 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(201, 168, 76, 0.12)',
-            border: 'none',
-            borderRadius: 16, padding: '18px 20px',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: auaBuffer < 0 ? '0 4px 20px rgba(239, 68, 68, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 4px 20px rgba(201, 168, 76, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-              {auaBuffer < 0 ? 'AUA Deficit' : 'Buffer Capital'}
+            <div style={{ fontSize: 11, fontWeight: 700, color: workingSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+              Unrealised P&L (Live)
             </div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', marginTop: 6 }}>
-              {auaBuffer < 0 ? `- ₹${Math.abs(auaBuffer).toLocaleString('en-IN')}` : fmtCurrency(auaBuffer)}
+            <div style={{ fontSize: 20, fontWeight: 800, color: workingSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }}>
+              {workingSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(workingSummary.unrealisedPnL)}
+            </div>
+            <div style={{ fontSize: 10.5, color: workingSummary.unrealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>
+              {workingSummary.unrealisedPnLPct >= 0 ? '+' : ''}{workingSummary.unrealisedPnLPct.toFixed(2)}% · Working Portfolio
+            </div>
+          </div>
+
+          {/* Card 4: Realised P&L (Sell Ledger) */}
+          <div style={{
+            background: totalRealisedPnL >= 0 
+              ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.16) 0%, rgba(22, 163, 74, 0.08) 100%)' 
+              : 'linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(220, 38, 38, 0.08) 100%)',
+            border: 'none', borderRadius: 16,
+            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: totalRealisedPnL >= 0 
+              ? '0 4px 20px rgba(34, 197, 94, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)' 
+              : '0 4px 20px rgba(239, 68, 68, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+              Realised P&L (Locked)
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }}>
+              {totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}
             </div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
-              {auaBuffer < 0 ? 'Allocations exceed AUA' : 'Balancing figure'}
+              {executedSells.length} sell orders executed
             </div>
+          </div>
+
+          {/* Card 5: Estimated Free Cash */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
+            border: 'none', borderRadius: 16,
+            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Estimated Free Cash</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: dynamicEstimatedCash >= 0 ? '#5c3e04' : '#dc2626', marginTop: 6 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>From dynamic ledger</div>
           </div>
         </div>
       </div>
