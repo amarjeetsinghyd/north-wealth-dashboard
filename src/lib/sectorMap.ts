@@ -103,12 +103,18 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
   if (companyIdx === undefined) {
     companyIdx = (companyMaster.bse as Record<string, number>)[upper];
   }
+  if (companyIdx === undefined && upper.startsWith('INE')) {
+    companyIdx = (companyMaster.isin as Record<string, number>)[upper];
+  }
   if (companyIdx === undefined && normKey) {
     companyIdx = companyNameIndex[normKey];
   }
   if (companyIdx === undefined && cleanStock) {
     const normStock = cleanStock.toUpperCase().replace(/[^A-Z0-9]/g, '');
     companyIdx = companyNameIndex[normStock];
+  }
+  if (companyIdx === undefined && (normKey === 'MMRUBBER' || normKey === 'MMRUBBERCO' || normKey === 'MMRUBBERCOLTD')) {
+    companyIdx = 527;
   }
 
   if (companyIdx !== undefined) {

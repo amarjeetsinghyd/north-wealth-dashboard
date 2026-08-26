@@ -1188,7 +1188,18 @@ export function PortfolioDashboardPage() {
                         {idx + 1}
                       </td>
                       <td style={{ padding: '14px 10px', textAlign: 'left' }}>
-                        <div style={{ fontWeight: 800, color: '#111', fontSize: 14 }}>{displaySymbol}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 800, color: '#111', fontSize: 14 }}>{displaySymbol}</span>
+                          {meta.listingStatus === 'BSE Only' && (
+                            <span style={{
+                              fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                              background: 'rgba(234, 88, 12, 0.12)', color: '#c2410c',
+                              letterSpacing: '0.3px', flexShrink: 0,
+                            }}>
+                              BSE Only
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 11, color: '#666', fontWeight: 500 }}>
                           {displayCompanyName || '—'}
                         </div>

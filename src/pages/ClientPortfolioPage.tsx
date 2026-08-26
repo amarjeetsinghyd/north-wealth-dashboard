@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import ReactDOM from 'react-dom';
+import ReactDOM, { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CircleAlert as AlertCircle, Pencil, Check, X as XIcon,
@@ -69,6 +69,9 @@ export function ClientPortfolioPage() {
   const [wizardEditSource, setWizardEditSource] = useState('Existing');
   const [savingWizard, setSavingWizard] = useState(false);
 
+  // Delete Holding Confirmation Centered Modal
+  const [deleteConfirmHolding, setDeleteConfirmHolding] = useState<{ id: string; symbol: string } | null>(null);
+  const [isDeletingHolding, setIsDeletingHolding] = useState(false);
 
   // Dedicated Sell Stock Modal (for Working Portfolio & Recos)
   const [sellModalData, setSellModalData] = useState<{
@@ -671,6 +674,8 @@ export function ClientPortfolioPage() {
         stock_symbol: cleanSym,
         nse_symbol: cleanSym,
         company_name: meta.companyName || cleanSym,
+        sector: meta.sector || 'Diversified',
+        market_cap_category: meta.marketCap ? `${meta.marketCap} Cap` : 'Mid Cap',
         buy_price: price,
         quantity: qty,
         invested_amount: invested,
@@ -681,6 +686,7 @@ export function ClientPortfolioPage() {
         realised_pnl: 0,
         source: 'Existing',
         holding_tier: 'client',
+        purchase_date: wizardDate,
         created_at: nowIso,
       });
 
@@ -731,6 +737,7 @@ export function ClientPortfolioPage() {
         unrealised_pnl: unrealPnl,
         unrealised_pnl_pct: unrealPnlPct,
         source: wizardEditSource || 'Existing',
+        purchase_date: wizardDate,
         updated_at: nowIso,
       });
 
@@ -753,23 +760,12 @@ export function ClientPortfolioPage() {
     if (!id || !wizardSelectedHoldingId) return;
     const holding = clientHoldings.find(h => h.id === wizardSelectedHoldingId);
     if (!holding) return;
-    if (!confirm(`Are you sure you want to remove ${cleanSymbol(holding)} from the baseline portfolio?`)) return;
-
-    setSavingWizard(true);
-    try {
-      await deleteDoc(doc(db, 'holdings', holding.id));
-      await updateDoc(doc(db, 'clients', id), {
-        client_portfolio_date: wizardDate,
-        updated_at: new Date().toISOString(),
-      });
-      setShowUpdateWizardModal(false);
-      await load();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to delete holding');
-    } finally {
-      setSavingWizard(false);
-    }
+    
+    setShowUpdateWizardModal(false);
+    setDeleteConfirmHolding({
+      id: holding.id,
+      symbol: cleanSymbol(holding) || 'this holding',
+    });
   };
 
     const handleSaveEditHolding = async () => {
@@ -815,23 +811,6 @@ export function ClientPortfolioPage() {
   };
 
   // ── Open Sell Modal Helpers ───────────────────────────────────────────────
-  const openSellModalForHolding = (h: Holding) => {
-    const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
-    const cleanSym = cleanSymbol(h);
-    const currPrice = h.current_price > 0 ? h.current_price : h.buy_price;
-    setSellModalData({
-      holdingId: h.id,
-      stockSymbol: cleanSym,
-      companyName: meta.companyName || h.company_name || cleanSym,
-      avgBuyPrice: h.buy_price,
-      currentPrice: currPrice,
-      maxQty: h.quantity,
-    });
-    setSellDateInput(new Date().toISOString().split('T')[0]);
-    setSellPriceInput(String(currPrice));
-    setSellQtyInput(String(h.quantity));
-  };
-
   const openSellModalForTx = (tx: Transaction) => {
     const cleanSym = cleanSymbol(tx);
     const meta = getStockMeta(cleanSym, tx.company_name || '');
@@ -1144,16 +1123,7 @@ export function ClientPortfolioPage() {
     }
   };
 
-  const handleDeleteHolding = async (holdingId: string, scripName: string) => {
-    if (!window.confirm('Are you sure you want to delete holding ' + scripName + '?')) return;
-    try {
-      await deleteDoc(doc(db, 'holdings', holdingId));
-      await load();
-    } catch (err) {
-      console.error('Failed to delete holding:', err);
-      alert('Failed to delete holding');
-    }
-  };
+
 
   const saveBuyPrice = async (holdingId: string) => {
     const newPrice = parseFloat(editBuyPriceVal);
@@ -1619,8 +1589,14 @@ export function ClientPortfolioPage() {
                 ) : (
                   getSortedHoldings().map((h, idx) => {
                     const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
+                    const isBseOnly = meta.listingStatus === 'BSE Only' || (meta.statusReason?.includes('BSE') ?? false);
+                    const isBseOnlyNoPrice = isBseOnly && (!h.current_price || h.current_price <= 0);
+
                     const invested = h.invested_amount || (h.buy_price * h.quantity);
-                    const currVal = h.current_value || (h.buy_price * h.quantity);
+                    const currPrice = isBseOnlyNoPrice ? 0 : (h.current_price || 0);
+                    const currVal = isBseOnlyNoPrice ? 0 : (h.current_value || (currPrice > 0 ? currPrice * h.quantity : invested));
+                    const unrealPnl = isBseOnlyNoPrice ? 0 : (h.unrealised_pnl || (currVal - invested));
+                    const unrealPnlPct = isBseOnlyNoPrice ? 0 : (h.unrealised_pnl_pct || (invested > 0 ? (unrealPnl / invested) * 100 : 0));
                     const allocPct = summary.currentValue > 0 ? (currVal / summary.currentValue) * 100 : 0;
 
                     return (
@@ -1636,7 +1612,18 @@ export function ClientPortfolioPage() {
                         <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{idx + 1}</div>
 
                         <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          <div style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(h)}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(h)}</span>
+                            {isBseOnly && (
+                              <span style={{
+                                fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                                background: 'rgba(234, 88, 12, 0.12)', color: '#c2410c',
+                                letterSpacing: '0.3px', flexShrink: 0,
+                              }}>
+                                BSE Only
+                              </span>
+                            )}
+                          </div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {meta.companyName || h.company_name || '—'}
                           </div>
@@ -1719,19 +1706,19 @@ export function ClientPortfolioPage() {
                         </div>
 
                         <div className="tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                          {h.current_price > 0 ? ('₹' + h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })) : '—'}
+                          {currPrice > 0 ? ('₹' + currPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })) : '—'}
                         </div>
 
                         <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {fmtCurrency(currVal)}
+                          {currVal > 0 ? fmtCurrency(currVal) : '₹0.00'}
                         </div>
 
-                        <div className="tabular-nums" style={{ fontWeight: 700, color: h.unrealised_pnl >= 0 ? '#16a34a' : '#dc2626' }}>
-                          {h.unrealised_pnl >= 0 ? '+' : ''}{fmtCurrency(h.unrealised_pnl)}
+                        <div className="tabular-nums" style={{ fontWeight: 700, color: unrealPnl > 0 ? '#16a34a' : unrealPnl < 0 ? '#dc2626' : 'var(--text-muted)' }}>
+                          {unrealPnl > 0 ? '+' : ''}{fmtCurrency(unrealPnl)}
                         </div>
 
                         <div>
-                          <PnLBadge value={h.unrealised_pnl_pct || 0} suffix="%" />
+                          <PnLBadge value={unrealPnlPct || 0} suffix="%" />
                         </div>
 
                         <div className="tabular-nums" style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -1750,14 +1737,7 @@ export function ClientPortfolioPage() {
 
                         <div>
                           {portfolioTab === 'working' ? (
-                            <button
-                              onClick={() => openSellModalForHolding(h)}
-                              className="btn-glass-red"
-                              style={{ padding: '3px 9px', fontSize: 11, fontWeight: 700, borderRadius: 5 }}
-                              title="Sell position"
-                            >
-                              Sell
-                            </button>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 13, display: 'inline-block', paddingLeft: 4 }}>—</span>
                           ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <button
@@ -1768,14 +1748,14 @@ export function ClientPortfolioPage() {
                                   setEditModalPrice(String(h.buy_price));
                                   setEditModalSource(h.source || 'Existing');
                                 }}
-                                style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.3)', color: '#8c6314', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}
+                                style={{ background: 'rgba(201,168,76,0.14)', border: 'none', color: '#8c6314', borderRadius: 6, cursor: 'pointer', padding: '4px 7px', display: 'flex', alignItems: 'center', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85)' }}
                                 title="Edit holding details"
                               >
                                 <Pencil size={12} />
                               </button>
                               <button
-                                onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
-                                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#dc2626', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}
+                                onClick={() => setDeleteConfirmHolding({ id: h.id, symbol: cleanSymbol(h) || 'this holding' })}
+                                style={{ background: 'rgba(239,68,68,0.12)', border: 'none', color: '#dc2626', borderRadius: 6, cursor: 'pointer', padding: '4px 7px', display: 'flex', alignItems: 'center', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85)' }}
                                 title="Delete position"
                               >
                                 <Trash2 size={12} />
@@ -2991,7 +2971,78 @@ export function ClientPortfolioPage() {
         document.body
       )}
 
-      {/* 5. Full Statement Parser Modal */}
+      {/* 5. Centered Delete Holding Confirmation Modal */}
+      {deleteConfirmHolding && createPortal(
+        <div className="glass-modal-backdrop animate-fade-in" style={{
+          position: 'fixed', inset: 0, zIndex: 99999,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+        }}>
+          <div className="glass-modal animate-scale-up" style={{
+            maxWidth: 420, width: '100%', padding: '30px 28px 26px',
+            textAlign: 'center', borderRadius: 22,
+            background: '#ffffff',
+            border: 'none',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
+          }}>
+            <div style={{
+              width: 54, height: 54, borderRadius: '50%',
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#dc2626',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <Trash2 size={26} />
+            </div>
+
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+              Delete Holding?
+            </h3>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 24px' }}>
+              Are you sure you want to remove <strong style={{ color: '#8c6314' }}>{deleteConfirmHolding.symbol}</strong> from this client's baseline portfolio?
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmHolding(null)}
+                disabled={isDeletingHolding}
+                className="btn-glass-light"
+                style={{ flex: 1, padding: '10px 18px', fontSize: 13.5 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!deleteConfirmHolding) return;
+                  setIsDeletingHolding(true);
+                  try {
+                    await deleteDoc(doc(db, 'holdings', deleteConfirmHolding.id));
+                    setDeleteConfirmHolding(null);
+                    await load();
+                  } catch (err) {
+                    console.error('Failed to delete holding:', err);
+                    alert('Failed to delete holding');
+                  } finally {
+                    setIsDeletingHolding(false);
+                  }
+                }}
+                disabled={isDeletingHolding}
+                className="btn-glass-red"
+                style={{ flex: 1, padding: '10px 18px', fontSize: 13.5, fontWeight: 700 }}
+              >
+                {isDeletingHolding ? 'Deleting…' : 'Delete Holding'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 6. Full Statement Parser Modal */}
       {showUploadModal && client && (
         <AddClientModal
           existingClient={client}
