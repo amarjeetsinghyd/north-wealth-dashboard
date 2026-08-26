@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CircleAlert as AlertCircle, Pencil, Check, X as XIcon,
-  Landmark, Download, Upload, PlusCircle, Trash2, ShieldAlert
+  Landmark, Download, Upload, PlusCircle, Trash2, ShieldAlert, Sparkles
 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, getDoc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
@@ -43,7 +43,6 @@ export function ClientPortfolioPage() {
 
   // Add Stock Modal
   const [showAddStockModal, setShowAddStockModal] = useState(false);
-  const [targetPortfolioForAdd, setTargetPortfolioForAdd] = useState<'client' | 'working'>('client');
   const [stockSymbolInput, setStockSymbolInput] = useState('');
   const [stockQtyInput, setStockQtyInput] = useState('');
   const [stockPriceInput, setStockPriceInput] = useState('');
@@ -56,6 +55,20 @@ export function ClientPortfolioPage() {
   const [editModalPrice, setEditModalPrice] = useState('');
   const [editModalSource, setEditModalSource] = useState('Existing');
   const [savingEditHolding, setSavingEditHolding] = useState(false);
+
+  // Unified Update Client Portfolio Wizard (Tab 2)
+  const [showUpdateWizardModal, setShowUpdateWizardModal] = useState(false);
+  const [wizardDate, setWizardDate] = useState(new Date().toISOString().split('T')[0]);
+  const [wizardMode, setWizardMode] = useState<'full_upload' | 'add_stock' | 'edit_holding'>('add_stock');
+  const [wizardStockSymbol, setWizardStockSymbol] = useState('');
+  const [wizardStockQty, setWizardStockQty] = useState('');
+  const [wizardStockPrice, setWizardStockPrice] = useState('');
+  const [wizardSelectedHoldingId, setWizardSelectedHoldingId] = useState('');
+  const [wizardEditQty, setWizardEditQty] = useState('');
+  const [wizardEditPrice, setWizardEditPrice] = useState('');
+  const [wizardEditSource, setWizardEditSource] = useState('Existing');
+  const [savingWizard, setSavingWizard] = useState(false);
+
 
   // Dedicated Sell Stock Modal (for Working Portfolio & Recos)
   const [sellModalData, setSellModalData] = useState<{
@@ -539,8 +552,8 @@ export function ClientPortfolioPage() {
         unrealised_pnl: unrealPnl,
         unrealised_pnl_pct: unrealPnlPct,
         realised_pnl: 0,
-        source: targetPortfolioForAdd === 'client' ? 'Existing' : 'Fresh',
-        holding_tier: targetPortfolioForAdd,
+        source: 'Existing',
+        holding_tier: 'client',
         created_at: nowIso,
       });
 
@@ -557,7 +570,175 @@ export function ClientPortfolioPage() {
     }
   };
 
-  const handleSaveEditHolding = async () => {
+  // ── Unified Update Client Portfolio Wizard Handlers ───────────────────────
+  const openUpdateWizard = () => {
+    const defaultDate = client?.client_portfolio_date || client?.onboarding_date || new Date().toISOString().split('T')[0];
+    setWizardDate(defaultDate);
+    setWizardMode('add_stock');
+    setWizardStockSymbol('');
+    setWizardStockQty('');
+    setWizardStockPrice('');
+    if (clientHoldings.length > 0 && clientHoldings[0]) {
+      const first = clientHoldings[0];
+      setWizardSelectedHoldingId(first.id);
+      setWizardEditQty(String(first.quantity));
+      setWizardEditPrice(String(first.buy_price));
+      setWizardEditSource(first.source || 'Existing');
+    } else {
+      setWizardSelectedHoldingId('');
+      setWizardEditQty('');
+      setWizardEditPrice('');
+    }
+    setShowUpdateWizardModal(true);
+  };
+
+  const handleWizardSelectHolding = (holdingId: string) => {
+    setWizardSelectedHoldingId(holdingId);
+    const h = clientHoldings.find(item => item.id === holdingId);
+    if (h) {
+      setWizardEditQty(String(h.quantity));
+      setWizardEditPrice(String(h.buy_price));
+      setWizardEditSource(h.source || 'Existing');
+    }
+  };
+
+  const handleSaveWizardAddStock = async () => {
+    if (!id || !wizardStockSymbol.trim() || !wizardStockQty || !wizardStockPrice) {
+      alert('Please fill Stock Symbol, Quantity, and Buy Price');
+      return;
+    }
+    const qty = parseFloat(wizardStockQty);
+    const price = parseFloat(wizardStockPrice);
+    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
+      alert('Please enter valid quantity and price');
+      return;
+    }
+    setSavingWizard(true);
+    try {
+      const cleanSym = wizardStockSymbol.trim().toUpperCase();
+      const meta = getStockMeta(cleanSym);
+      const invested = qty * price;
+      let currPrice = price;
+      try {
+        const priceSnap = await getDoc(doc(db, 'price_cache', cleanSym));
+        if (priceSnap.exists()) {
+          const p = Number(priceSnap.data()?.close);
+          if (p > 0) currPrice = p;
+        }
+      } catch { /* non-fatal */ }
+
+      const currVal = qty * currPrice;
+      const unrealPnl = currVal - invested;
+      const unrealPnlPct = invested > 0 ? (unrealPnl / invested) * 100 : 0;
+      const nowIso = new Date().toISOString();
+
+      await addDoc(collection(db, 'holdings'), {
+        client_id: id,
+        stock_symbol: cleanSym,
+        nse_symbol: cleanSym,
+        company_name: meta.companyName || cleanSym,
+        buy_price: price,
+        quantity: qty,
+        invested_amount: invested,
+        current_price: currPrice,
+        current_value: currVal,
+        unrealised_pnl: unrealPnl,
+        unrealised_pnl_pct: unrealPnlPct,
+        realised_pnl: 0,
+        source: 'Existing',
+        holding_tier: 'client',
+        created_at: nowIso,
+      });
+
+      // Update client statement date
+      await updateDoc(doc(db, 'clients', id), {
+        client_portfolio_date: wizardDate,
+        updated_at: nowIso,
+      });
+
+      setShowUpdateWizardModal(false);
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to add stock');
+    } finally {
+      setSavingWizard(false);
+    }
+  };
+
+  const handleSaveWizardEditHolding = async () => {
+    if (!id || !wizardSelectedHoldingId) {
+      alert('Please select a holding to edit');
+      return;
+    }
+    const qty = parseFloat(wizardEditQty);
+    const price = parseFloat(wizardEditPrice);
+    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
+      alert('Please enter valid quantity and price');
+      return;
+    }
+    setSavingWizard(true);
+    try {
+      const holding = clientHoldings.find(h => h.id === wizardSelectedHoldingId);
+      if (!holding) throw new Error('Holding not found');
+
+      const inv = qty * price;
+      const currPrice = holding.current_price > 0 ? holding.current_price : price;
+      const currVal = qty * currPrice;
+      const unrealPnl = currVal - inv;
+      const unrealPnlPct = inv > 0 ? (unrealPnl / inv) * 100 : 0;
+      const nowIso = new Date().toISOString();
+
+      await updateDoc(doc(db, 'holdings', holding.id), {
+        quantity: qty,
+        buy_price: price,
+        invested_amount: inv,
+        current_value: currVal,
+        unrealised_pnl: unrealPnl,
+        unrealised_pnl_pct: unrealPnlPct,
+        source: wizardEditSource || 'Existing',
+        updated_at: nowIso,
+      });
+
+      await updateDoc(doc(db, 'clients', id), {
+        client_portfolio_date: wizardDate,
+        updated_at: nowIso,
+      });
+
+      setShowUpdateWizardModal(false);
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update holding');
+    } finally {
+      setSavingWizard(false);
+    }
+  };
+
+  const handleSaveWizardDeleteHolding = async () => {
+    if (!id || !wizardSelectedHoldingId) return;
+    const holding = clientHoldings.find(h => h.id === wizardSelectedHoldingId);
+    if (!holding) return;
+    if (!confirm(`Are you sure you want to remove ${cleanSymbol(holding)} from the baseline portfolio?`)) return;
+
+    setSavingWizard(true);
+    try {
+      await deleteDoc(doc(db, 'holdings', holding.id));
+      await updateDoc(doc(db, 'clients', id), {
+        client_portfolio_date: wizardDate,
+        updated_at: new Date().toISOString(),
+      });
+      setShowUpdateWizardModal(false);
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete holding');
+    } finally {
+      setSavingWizard(false);
+    }
+  };
+
+    const handleSaveEditHolding = async () => {
     if (!editingHoldingModal || !id) return;
     const qty = parseFloat(editModalQty);
     const price = parseFloat(editModalPrice);
@@ -1322,25 +1503,13 @@ export function ClientPortfolioPage() {
               </button>
 
               {portfolioTab === 'client' && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => {
-                      setTargetPortfolioForAdd('client');
-                      setShowAddStockModal(true);
-                    }}
-                    className="btn-glass-gold"
-                    style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <PlusCircle size={13} /> Add Stock
-                  </button>
-                  <button
-                    onClick={() => setShowUploadModal(true)}
-                    className="btn-glass-gold"
-                    style={{ padding: '6px 14px', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <Upload size={13} /> Update Client Portfolio (Excel)
-                  </button>
-                </div>
+                <button
+                  onClick={openUpdateWizard}
+                  className="btn-glass-gold"
+                  style={{ padding: '7px 18px', fontSize: 12.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 7, boxShadow: '0 2px 10px rgba(201,168,76,0.25)' }}
+                >
+                  <Sparkles size={14} /> Update Client Portfolio
+                </button>
               )}
             </div>
           </div>
@@ -2153,13 +2322,239 @@ export function ClientPortfolioPage() {
         document.body
       )}
 
+      
+      {/* ── UNIFIED UPDATE CLIENT PORTFOLIO WIZARD MODAL ─────────────────── */}
+      {showUpdateWizardModal && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setShowUpdateWizardModal(false); }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 16, width: '100%', maxWidth: 540, boxShadow: 'var(--shadow-xl)', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(201,168,76,0.06)' }}>
+              <div>
+                <h3 style={{ fontSize: 16.5, fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Sparkles size={17} color="#8c6314" /> Update Client Portfolio
+                </h3>
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                  {client.name} — Select an update method with statement receipt date.
+                </span>
+              </div>
+              <button onClick={() => setShowUpdateWizardModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
+            </div>
+
+            <div style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}>
+              {/* Step 1: Mandatory Portfolio Date */}
+              <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.03)', border: '1px solid var(--border-subtle)' }}>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', marginBottom: 4 }}>
+                  1. Portfolio Statement Date (As on Date) *
+                </label>
+                <input
+                  type="date"
+                  value={wizardDate}
+                  onChange={e => setWizardDate(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}
+                />
+                <span style={{ fontSize: 10.5, color: 'var(--text-muted)', display: 'block', marginTop: 3 }}>
+                  Specify the date when this portfolio was received from the client.
+                </span>
+              </div>
+
+              {/* Step 2: 3 Update Modes (Radio Cards) */}
+              <div>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>
+                  2. Choose Update Mode *
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                  {[
+                    { id: 'full_upload', icon: '📁', title: 'Full Excel Upload', desc: 'Replace full statement' },
+                    { id: 'add_stock', icon: '➕', title: 'Add Stock', desc: 'Add 1 new stock' },
+                    { id: 'edit_holding', icon: '✏️', title: 'Edit / Delete', desc: 'Modify existing scrip' },
+                  ].map(mode => (
+                    <div
+                      key={mode.id}
+                      onClick={() => setWizardMode(mode.id as any)}
+                      style={{
+                        padding: '12px 10px', borderRadius: 10, cursor: 'pointer', textAlign: 'center',
+                        border: `1.5px solid ${wizardMode === mode.id ? '#8c6314' : 'var(--border-subtle)'}`,
+                        background: wizardMode === mode.id ? 'rgba(201,168,76,0.12)' : 'rgba(0,0,0,0.02)',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ fontSize: 18 }}>{mode.icon}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: wizardMode === mode.id ? '#8c6314' : 'var(--text-primary)', marginTop: 4 }}>
+                        {mode.title}
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{mode.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 3: Mode-Specific Form Body */}
+              {wizardMode === 'full_upload' && (
+                <div style={{ padding: '16px', borderRadius: 10, background: 'rgba(201,168,76,0.04)', border: '1px dashed var(--gold-border)', textAlign: 'center' }}>
+                  <Upload size={28} color="#8c6314" style={{ margin: '0 auto 8px', display: 'block' }} />
+                  <h4 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+                    Upload New Broker / CAMS Statement
+                  </h4>
+                  <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '0 0 14px' }}>
+                    This will replace the client's current baseline portfolio with the parsed file for date <strong>{wizardDate}</strong>.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      if (id) {
+                        await updateDoc(doc(db, 'clients', id), { client_portfolio_date: wizardDate });
+                      }
+                      setShowUpdateWizardModal(false);
+                      setShowUploadModal(true);
+                    }}
+                    className="btn-glass-gold"
+                    style={{ padding: '8px 20px', fontSize: 12, fontWeight: 800 }}
+                  >
+                    Open Statement Parser & Upload File
+                  </button>
+                </div>
+              )}
+
+              {wizardMode === 'add_stock' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px', borderRadius: 10, background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-subtle)' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>NSE / BSE Stock Symbol *</label>
+                    <input
+                      value={wizardStockSymbol}
+                      onChange={e => setWizardStockSymbol(e.target.value.toUpperCase())}
+                      placeholder="e.g. RELIANCE / HDFCBANK"
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>Quantity *</label>
+                      <input
+                        type="number"
+                        value={wizardStockQty}
+                        onChange={e => setWizardStockQty(e.target.value)}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>Buy Price (₹) *</label>
+                      <input
+                        type="number"
+                        value={wizardStockPrice}
+                        onChange={e => setWizardStockPrice(e.target.value)}
+                        placeholder="0.00"
+                        style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                      />
+                    </div>
+                  </div>
+
+                  {wizardStockQty && wizardStockPrice && parseFloat(wizardStockQty) > 0 && parseFloat(wizardStockPrice) > 0 && (
+                    <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(201,168,76,0.1)', color: '#8c6314', fontSize: 12, fontWeight: 700 }}>
+                      Invested Total: ₹{(parseFloat(wizardStockQty) * parseFloat(wizardStockPrice)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveWizardAddStock}
+                    disabled={savingWizard || !wizardStockSymbol.trim() || !wizardStockQty || !wizardStockPrice}
+                    className="btn-glass-gold"
+                    style={{ width: '100%', padding: '9px', fontSize: 12.5, fontWeight: 800, marginTop: 4 }}
+                  >
+                    {savingWizard ? 'Saving...' : 'Add Stock to Client Baseline'}
+                  </button>
+                </div>
+              )}
+
+              {wizardMode === 'edit_holding' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px', borderRadius: 10, background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-subtle)' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>Select Holding to Modify *</label>
+                    <select
+                      value={wizardSelectedHoldingId}
+                      onChange={e => handleWizardSelectHolding(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12.5, fontWeight: 600 }}
+                    >
+                      {clientHoldings.length === 0 ? (
+                        <option value="">No holdings available</option>
+                      ) : (
+                        clientHoldings.map(h => (
+                          <option key={h.id} value={h.id}>
+                            {cleanSymbol(h)} ({h.quantity} shares @ ₹{h.buy_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {wizardSelectedHoldingId && (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>Quantity *</label>
+                          <input
+                            type="number"
+                            value={wizardEditQty}
+                            onChange={e => setWizardEditQty(e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>Buy Price (₹) *</label>
+                          <input
+                            type="number"
+                            value={wizardEditPrice}
+                            onChange={e => setWizardEditPrice(e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                        <button
+                          onClick={handleSaveWizardEditHolding}
+                          disabled={savingWizard || !wizardEditQty || !wizardEditPrice}
+                          className="btn-glass-gold"
+                          style={{ flex: 1, padding: '9px', fontSize: 12, fontWeight: 800 }}
+                        >
+                          {savingWizard ? 'Saving...' : 'Save Holding Changes'}
+                        </button>
+                        <button
+                          onClick={handleSaveWizardDeleteHolding}
+                          disabled={savingWizard}
+                          className="btn-glass-red"
+                          style={{ padding: '9px 14px', fontSize: 12, fontWeight: 700 }}
+                          title="Delete this holding from baseline"
+                        >
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.01)' }}>
+              <button
+                onClick={() => setShowUpdateWizardModal(false)}
+                style={{ padding: '7px 16px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}
+              >
+                Close Wizard
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* 1. Add Stock Modal */}
       {showAddStockModal && ReactDOM.createPortal(
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setShowAddStockModal(false); }}>
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 14, width: '100%', maxWidth: 420, boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                Add Holding to {targetPortfolioForAdd === 'client' ? 'Client Portfolio' : 'Working Portfolio'}
+                Add Holding to Client Portfolio
               </h3>
               <button onClick={() => setShowAddStockModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             </div>
