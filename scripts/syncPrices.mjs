@@ -113,7 +113,7 @@ async function main() {
   // Find latest available Bhavcopy
   console.log('🔍 Finding latest NSE Bhavcopy...');
   let csv = null, usedDate = '';
-  for (let d = 1; d <= 10; d++) {
+  for (let d = 0; d <= 10; d++) {
     const dateStr = getISTDate(d);
     process.stdout.write(`  Trying ${dateStr} ... `);
     try {
@@ -148,15 +148,25 @@ async function main() {
       console.log(`  ✓ ${done}/${allDocs.length} written`);
   }
 
-  // Write metadata doc
-  await firestoreBatchWrite([{
-    ref: db.collection('price_cache').doc('_sync_meta'),
-    data: {
-      bhavcopyDate: usedDate,
-      recordCount: priceMap.size,
-      updatedAt: new Date().toISOString(),
+  // Write metadata doc (both sync_meta and _sync_meta for full compatibility)
+  await firestoreBatchWrite([
+    {
+      ref: db.collection('price_cache').doc('sync_meta'),
+      data: {
+        bhavcopyDate: usedDate,
+        recordCount: priceMap.size,
+        updatedAt: new Date().toISOString(),
+      }
+    },
+    {
+      ref: db.collection('price_cache').doc('_sync_meta'),
+      data: {
+        bhavcopyDate: usedDate,
+        recordCount: priceMap.size,
+        updatedAt: new Date().toISOString(),
+      }
     }
-  }]);
+  ]);
 
   console.log(`\n✅ Done! ${priceMap.size} prices written to Firebase for ${usedDate}`);
   console.log('   Now click "Refresh Prices" on the website — it will work instantly!\n');
