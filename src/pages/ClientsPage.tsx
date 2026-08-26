@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Plus, User, TrendingUp, Calendar, Trash2, ChevronRight, Edit2 } from 'lucide-react';
+import { Plus, User, TrendingUp, Calendar, Trash2, ChevronRight, Edit2, Search, X as XIcon } from 'lucide-react';
 import { fetchClients, deleteClient } from '../lib/queries';
 import type { Client } from '../types';
 import { AddClientModal } from '../components/AddClientModal';
@@ -9,9 +10,11 @@ import { Spinner } from '../components/Spinner';
 export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmClient, setDeleteConfirmClient] = useState<Client | null>(null);
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
   const navigate = useNavigate();
 
   const load = async () => {
@@ -29,13 +32,32 @@ export function ClientsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!confirm('Delete this client and all their holdings?')) return;
-    setDeletingId(id);
-    await deleteClient(id);
-    setDeletingId(null);
-    load();
+  const filteredClients = useMemo(() => {
+    if (!searchQuery.trim()) return clients;
+    const q = searchQuery.toLowerCase().trim();
+    return clients.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.phone?.toLowerCase().includes(q) ||
+      c.rm_name?.toLowerCase().includes(q) ||
+      c.id?.toLowerCase().includes(q) ||
+      c.risk_profile?.toLowerCase().includes(q)
+    );
+  }, [clients, searchQuery]);
+
+  const handleConfirmDeleteClient = async () => {
+    if (!deleteConfirmClient) return;
+    setIsDeletingClient(true);
+    try {
+      await deleteClient(deleteConfirmClient.id);
+      setDeleteConfirmClient(null);
+      await load();
+    } catch (err) {
+      console.error('Failed to delete client:', err);
+      alert('Failed to delete client');
+    } finally {
+      setIsDeletingClient(false);
+    }
   };
 
   return (
@@ -93,6 +115,57 @@ export function ClientsPage() {
         ))}
       </div>
 
+      {/* Search & Filter Bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: 16, marginBottom: 20, flexWrap: 'wrap',
+      }}>
+        <div style={{
+          position: 'relative', flex: 1, minWidth: 280, maxWidth: 440,
+        }}>
+          <Search size={16} style={{
+            position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
+            color: 'var(--text-muted)', pointerEvents: 'none',
+          }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search clients by name, RM, email, phone, ID..."
+            style={{
+              width: '100%',
+              padding: '11px 36px 11px 42px',
+              borderRadius: 14,
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
+              fontSize: 13.5,
+              fontWeight: 500,
+              color: 'var(--text-primary)',
+              outline: 'none',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', padding: 2,
+              }}
+              title="Clear Search"
+            >
+              <XIcon size={14} />
+            </button>
+          )}
+        </div>
+
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
+          Showing <span style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{filteredClients.length}</span> of {clients.length} clients
+        </div>
+      </div>
+
       {/* Client list */}
       {loading ? (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-16)' }}>
@@ -119,6 +192,29 @@ export function ClientsPage() {
             <Plus size={16} /> Add First Client
           </button>
         </div>
+      ) : filteredClients.length === 0 ? (
+        <div className="glass-card" style={{
+          border: 'none',
+          borderRadius: 16,
+          background: 'rgba(255, 255, 255, 0.85)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
+          padding: '48px 24px', textAlign: 'center',
+        }}>
+          <Search size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 12px', display: 'block', opacity: 0.6 }} />
+          <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 16, margin: '0 0 6px' }}>
+            No clients match "{searchQuery}"
+          </p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 18px' }}>
+            Try checking for spelling errors or search with a different keyword.
+          </p>
+          <button
+            onClick={() => setSearchQuery('')}
+            className="btn-glass-light"
+            style={{ padding: '8px 18px', fontSize: 13 }}
+          >
+            Clear Search
+          </button>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Table header */}
@@ -134,7 +230,7 @@ export function ClientsPage() {
             ))}
           </div>
 
-          {clients.map((client, i) => (
+          {filteredClients.map((client, i) => (
             <div
               key={client.id}
               onClick={() => navigate(`/client/${client.id}`)}
@@ -219,8 +315,10 @@ export function ClientsPage() {
                   <Edit2 size={14} />
                 </button>
                 <button
-                  onClick={e => handleDelete(e, client.id)}
-                  disabled={deletingId === client.id}
+                  onClick={e => {
+                    e.stopPropagation();
+                    setDeleteConfirmClient(client);
+                  }}
                   style={{
                     width: 32, height: 32,
                     borderRadius: 8,
@@ -258,6 +356,64 @@ export function ClientsPage() {
           onSuccess={() => { setEditingClient(null); load(); }}
           existingClient={editingClient}
         />
+      )}
+
+      {/* Centered Delete Client Confirmation Modal */}
+      {deleteConfirmClient && createPortal(
+        <div className="glass-modal-backdrop animate-fade-in" style={{
+          position: 'fixed', inset: 0, zIndex: 99999,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+        }}>
+          <div className="glass-modal animate-scale-up" style={{
+            maxWidth: 440, width: '100%', padding: '30px 28px 26px',
+            textAlign: 'center', borderRadius: 22,
+            background: '#ffffff',
+            border: 'none',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
+          }}>
+            <div style={{
+              width: 54, height: 54, borderRadius: '50%',
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#dc2626',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <Trash2 size={26} />
+            </div>
+
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+              Delete Client Portfolio?
+            </h3>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 24px' }}>
+              Are you sure you want to permanently delete <strong style={{ color: '#8c6314' }}>{deleteConfirmClient.name}</strong> and all associated portfolio holdings and transactions?
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmClient(null)}
+                disabled={isDeletingClient}
+                className="btn-glass-light"
+                style={{ flex: 1, padding: '10px 18px', fontSize: 13.5 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteClient}
+                disabled={isDeletingClient}
+                className="btn-glass-red"
+                style={{ flex: 1, padding: '10px 18px', fontSize: 13.5, fontWeight: 700 }}
+              >
+                {isDeletingClient ? 'Deleting…' : 'Delete Client'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
