@@ -49,6 +49,14 @@ export function ClientPortfolioPage() {
   const [stockPriceInput, setStockPriceInput] = useState('');
   const [savingStock, setSavingStock] = useState(false);
 
+  // Edit Existing Holding Modal (Client Portfolio)
+  const [editingHoldingModal, setEditingHoldingModal] = useState<Holding | null>(null);
+  const [editModalSymbol, setEditModalSymbol] = useState('');
+  const [editModalQty, setEditModalQty] = useState('');
+  const [editModalPrice, setEditModalPrice] = useState('');
+  const [editModalSource, setEditModalSource] = useState('Existing');
+  const [savingEditHolding, setSavingEditHolding] = useState(false);
+
   // Dedicated Sell Stock Modal (for Working Portfolio & Recos)
   const [sellModalData, setSellModalData] = useState<{
     holdingId?: string | undefined;
@@ -549,6 +557,48 @@ export function ClientPortfolioPage() {
     }
   };
 
+  const handleSaveEditHolding = async () => {
+    if (!editingHoldingModal || !id) return;
+    const qty = parseFloat(editModalQty);
+    const price = parseFloat(editModalPrice);
+    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
+      alert('Please enter valid quantity and buy price');
+      return;
+    }
+    setSavingEditHolding(true);
+    try {
+      const inv = qty * price;
+      const currPrice = editingHoldingModal.current_price > 0 ? editingHoldingModal.current_price : price;
+      const currVal = qty * currPrice;
+      const unrealPnl = currVal - inv;
+      const unrealPnlPct = inv > 0 ? (unrealPnl / inv) * 100 : 0;
+      const cleanSym = (editModalSymbol || editingHoldingModal.stock_symbol).trim().toUpperCase();
+      const meta = getStockMeta(cleanSym);
+
+      await updateDoc(doc(db, 'holdings', editingHoldingModal.id), {
+        stock_symbol: cleanSym,
+        nse_symbol: cleanSym,
+        company_name: meta.companyName || cleanSym,
+        quantity: qty,
+        buy_price: price,
+        invested_amount: inv,
+        current_value: currVal,
+        unrealised_pnl: unrealPnl,
+        unrealised_pnl_pct: unrealPnlPct,
+        source: editModalSource || 'Existing',
+        updated_at: new Date().toISOString(),
+      });
+
+      setEditingHoldingModal(null);
+      await load();
+    } catch (err) {
+      console.error('Error updating holding:', err);
+      alert('Failed to update holding');
+    } finally {
+      setSavingEditHolding(false);
+    }
+  };
+
   // ── Open Sell Modal Helpers ───────────────────────────────────────────────
   const openSellModalForHolding = (h: Holding) => {
     const meta = getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '');
@@ -991,7 +1041,7 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const gridCols = '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 65px';
+  const gridCols = '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 75px';
 
   return (
     <div className="container animate-fade-in" style={{ paddingBottom: 'var(--space-12)' }}>
@@ -1484,13 +1534,28 @@ export function ClientPortfolioPage() {
                               Sell
                             </button>
                           ) : (
-                            <button
-                              onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
-                              style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
-                              title="Delete position"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <button
+                                onClick={() => {
+                                  setEditingHoldingModal(h);
+                                  setEditModalSymbol(cleanSymbol(h));
+                                  setEditModalQty(String(h.quantity));
+                                  setEditModalPrice(String(h.buy_price));
+                                  setEditModalSource(h.source || 'Existing');
+                                }}
+                                style={{ background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.3)', color: '#8c6314', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}
+                                title="Edit holding details"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteHolding(h.id, cleanSymbol(h))}
+                                style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#dc2626', borderRadius: 4, cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}
+                                title="Delete position"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2035,6 +2100,58 @@ export function ClientPortfolioPage() {
       {/* ══════════════════════════════════════════════════════════════════════
           MODALS (Portaled via createPortal)
           ══════════════════════════════════════════════════════════════════════ */}
+
+      
+      {/* 2. Edit Holding Modal (Client Portfolio) */}
+      {editingHoldingModal && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setEditingHoldingModal(null); }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 14, width: '100%', maxWidth: 420, boxShadow: 'var(--shadow-xl)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Pencil size={16} color="#8c6314" /> Edit Holding — {editModalSymbol}
+              </h3>
+              <button onClick={() => setEditingHoldingModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
+            </div>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>NSE / BSE Symbol *</label>
+                <input value={editModalSymbol} onChange={e => setEditModalSymbol(e.target.value.toUpperCase())} placeholder="e.g. RELIANCE" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Quantity *</label>
+                  <input type="number" value={editModalQty} onChange={e => setEditModalQty(e.target.value)} placeholder="0" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Buy Price (₹) *</label>
+                  <input type="number" value={editModalPrice} onChange={e => setEditModalPrice(e.target.value)} placeholder="0.00" style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Position Source</label>
+                <select value={editModalSource} onChange={e => setEditModalSource(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13 }}>
+                  <option value="Existing">Existing (Client Baseline)</option>
+                  <option value="Fresh">Fresh (Added during service)</option>
+                </select>
+              </div>
+
+              {editModalQty && editModalPrice && parseFloat(editModalQty) > 0 && parseFloat(editModalPrice) > 0 && (
+                <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(201,168,76,0.1)', color: '#8c6314', fontSize: 12.5, fontWeight: 700 }}>
+                  Total Invested: ₹{(parseFloat(editModalQty) * parseFloat(editModalPrice)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setEditingHoldingModal(null)} style={{ padding: '7px 16px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleSaveEditHolding} disabled={savingEditHolding || !editModalSymbol.trim() || !editModalQty || !editModalPrice} className="btn-glass-gold" style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700 }}>
+                {savingEditHolding ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* 1. Add Stock Modal */}
       {showAddStockModal && ReactDOM.createPortal(
