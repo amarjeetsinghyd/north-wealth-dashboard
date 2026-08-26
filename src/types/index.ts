@@ -3,6 +3,7 @@ export interface Client {
   name: string;
   onboarding_date: string;
   total_capital?: number;
+  total_aua?: number;
   mutual_funds?: number;
   rm_name?: string;
   phone?: string;
@@ -15,6 +16,15 @@ export interface Client {
   asset_free_cash?: number;
   aua_breach_reason?: string;
   cash_difference_reason?: string;
+  client_portfolio_date?: string;
+  client_cash_base_date?: string;
+  client_cash_base_amount?: number;
+  cash_parked_liquid?: number;
+  cash_reported_date?: string;
+  cash_reported_amount?: number;
+  cash_differ_reason?: string;
+  client_momentum_cash?: number;
+  client_long_cash?: number;
   created_at: string;
 }
 
@@ -36,6 +46,7 @@ export interface Holding {
   last_price_update: string | null;
   purchase_date?: string;
   source?: 'Fresh' | 'Existing';
+  holding_tier?: 'client' | 'working';
   created_at: string;
 }
 
@@ -50,8 +61,14 @@ export interface Transaction {
   price: number;
   total_value: number;
   buy_price?: number;
+  sell_price?: number;
   realised_pnl?: number;
   price_range?: string | null;
+  price_range_min?: number;
+  price_range_max?: number;
+  reco_price?: number;
+  status?: 'Executed' | 'Avoid';
+  call_status?: 'Open' | 'Closed';
   bucket?: 'Long-Term' | 'Momentum';
   created_at: string;
 }

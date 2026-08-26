@@ -27,3 +27,8 @@ firebase-debug.log
 .runtimeconfig.json
 service-account.json
 serviceAccountKey.json
+
+# Media & Transcripts
+*.mp4
+*.docx
+transcript_extracted.txt
