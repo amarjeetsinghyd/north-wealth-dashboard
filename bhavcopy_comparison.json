@@ -1,0 +1,134 @@
+{
+  "date": "yesterday",
+  "bhavcopy_count": 0,
+  "master_count": 7620,
+  "problematic_check": {
+    "ABDL": {
+      "bhavcopy_symbol": "ALLIEDBLENDERS",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "ABDL"
+    },
+    "AWFIS": {
+      "bhavcopy_symbol": "AWFISSPACE",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "AWFIS"
+    },
+    "GOLDETF": {
+      "bhavcopy_symbol": "MIRAEAGETF",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "GOLDETF"
+    },
+    "GROWW": {
+      "bhavcopy_symbol": "BILLIONBRAINS",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "GROWW"
+    },
+    "GRSE": {
+      "bhavcopy_symbol": "GARDENREACHSH.",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "GRSE"
+    },
+    "GSFC": {
+      "bhavcopy_symbol": "GSFC",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "GSFC"
+    },
+    "IRFC": {
+      "bhavcopy_symbol": "IRFC",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "IRFC"
+    },
+    "JPPOWER": {
+      "bhavcopy_symbol": "JPPOWERVEN.",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "JPPOWER"
+    },
+    "MAZDOCK": {
+      "bhavcopy_symbol": "MAZAGONDOCK",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "MAZDOCK"
+    },
+    "MTNL": {
+      "bhavcopy_symbol": "MTNL",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "MTNL"
+    },
+    "OIL": {
+      "bhavcopy_symbol": "OILINDIA",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "OIL"
+    },
+    "PRIVISCL": {
+      "bhavcopy_symbol": "PRIVISPECI.",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "PRIVISCL"
+    },
+    "RVNL": {
+      "bhavcopy_symbol": "RAILVIKAS",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "RVNL"
+    },
+    "TITAGARH": {
+      "bhavcopy_symbol": "TITAGARHRAIL",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "TITAGARH"
+    },
+    "TMPV": {
+      "bhavcopy_symbol": "TATAMOTORSPVEH",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "TMPV"
+    },
+    "FEDERALBNK": {
+      "bhavcopy_symbol": "FEDERALBANK",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "FEDERALBNK"
+    },
+    "RAJRATAN": {
+      "bhavcopy_symbol": "RAJRATANGLOBAL",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "RAJRATAN"
+    },
+    "JWL": {
+      "bhavcopy_symbol": "JUPITERWAGONS",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "JWL"
+    },
+    "KPITTECH": {
+      "bhavcopy_symbol": "KPITTECHNOLOGI.",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "KPITTECH"
+    },
+    "PRAJIND": {
+      "bhavcopy_symbol": "PRAJINDUSTRIES",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "PRAJIND"
+    },
+    "CDSL": {
+      "bhavcopy_symbol": "CDSL",
+      "in_bhavcopy": false,
+      "price": null,
+      "mapped_key": "CDSL"
+    }
+  },
+  "unmapped_bhavcopy_symbols": []
+}

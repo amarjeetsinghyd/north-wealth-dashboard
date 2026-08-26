@@ -27,6 +27,15 @@ export function Layout({ children }: LayoutProps) {
     if (refreshing) return;
     setRefreshing(true);
     setRefreshStatus('Starting…');
+    
+    // Safety timeout: force reset refreshing state after 30 seconds
+    const safetyTimeout = setTimeout(() => {
+      console.warn('[Layout] Refresh timeout - forcing state reset');
+      setRefreshing(false);
+      setRefreshStatus('Refresh timed out');
+      setTimeout(() => setRefreshStatus(''), 4000);
+    }, 30000);
+    
     try {
       const result = await refreshAllPrices(msg => setRefreshStatus(msg));
       setPriceDate(result.priceDate);
@@ -37,6 +46,7 @@ export function Layout({ children }: LayoutProps) {
       setRefreshStatus('Refresh failed');
       setTimeout(() => setRefreshStatus(''), 4000);
     } finally {
+      clearTimeout(safetyTimeout);
       setRefreshing(false);
       // Dispatch a custom event so open ClientPortfolioPage tabs can reload their holdings
       window.dispatchEvent(new CustomEvent('nw:prices-refreshed'));

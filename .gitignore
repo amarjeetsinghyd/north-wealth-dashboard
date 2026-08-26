@@ -26,3 +26,4 @@ scratch/
 firebase-debug.log
 .runtimeconfig.json
 service-account.json
+serviceAccountKey.json

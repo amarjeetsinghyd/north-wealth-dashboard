@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, IndianRupee, TrendingUp, TrendingDown, ChartBar as BarChart3, CircleAlert as AlertCircle, Pencil, Check, X as XIcon, Wallet, Landmark, Download, Upload, PlusCircle, Trash2 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
-import { doc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import type { Client, Holding, Transaction, PortfolioSummary } from '../types';
 import { AddClientModal } from '../components/AddClientModal';
@@ -114,7 +114,38 @@ export function ClientPortfolioPage() {
       setClient(c);
       setTotalCapital(c?.total_capital || 0);
       setMutualFunds(c?.mutual_funds || 0);
-      setHoldings(h);
+
+      // Real-time CMP Fallback: If any holding in Firestore has current_price <= 0, resolve from price_cache in real-time
+      const resolvedHoldings = await Promise.all(h.map(async (holding) => {
+        if (holding.current_price > 0) return holding;
+        const sym = cleanSymbol(holding);
+        if (!sym) return holding;
+        try {
+          const priceSnap = await getDoc(doc(db, 'price_cache', sym));
+          if (priceSnap.exists()) {
+            const cmp = Number(priceSnap.data()?.close);
+            if (cmp > 0) {
+              const qty = Number(holding.quantity) || 0;
+              const invested = Number(holding.invested_amount) > 0
+                ? Number(holding.invested_amount)
+                : qty * (Number(holding.buy_price) || 0);
+              const currVal = qty * cmp;
+              const unrealPnl = currVal - invested;
+              const unrealPnlPct = invested > 0 ? (unrealPnl / invested) * 100 : 0;
+              return {
+                ...holding,
+                current_price: cmp,
+                current_value: currVal,
+                unrealised_pnl: unrealPnl,
+                unrealised_pnl_pct: unrealPnlPct,
+              };
+            }
+          }
+        } catch { /* non-fatal */ }
+        return holding;
+      }));
+
+      setHoldings(resolvedHoldings);
       setTransactions(tx);
     } catch (err) {
       console.warn('Error loading portfolio data:', err);
@@ -428,16 +459,39 @@ export function ClientPortfolioPage() {
       return;
     }
     const meta = getStockMeta(newSymbol, '');
-    // Allow saving even if symbol not in master database - user can refresh prices after
     const companyName = meta.companyName || newSymbol;
     setSavingScrip(true);
     try {
       const holding = holdings.find(h => h.id === holdingId);
       if (!holding) { setSavingScrip(false); return; }
+
+      // Check if price exists in price_cache for instant CMP update
+      let currPrice = holding.current_price || 0;
+      try {
+        const priceSnap = await getDoc(doc(db, 'price_cache', newSymbol));
+        if (priceSnap.exists()) {
+          const p = Number(priceSnap.data()?.close);
+          if (p > 0) currPrice = p;
+        }
+      } catch { /* non-fatal */ }
+
+      const qty = Number(holding.quantity) || 0;
+      const invested = Number(holding.invested_amount) > 0
+        ? Number(holding.invested_amount)
+        : qty * (Number(holding.buy_price) || 0);
+
+      const currVal = currPrice > 0 ? qty * currPrice : (holding.current_value || 0);
+      const unrealPnl = currVal > 0 ? currVal - invested : 0;
+      const unrealPnlPct = (invested > 0 && currVal > 0) ? (unrealPnl / invested) * 100 : 0;
+
       await updateDoc(doc(db, 'holdings', holdingId), {
         stock_symbol: newSymbol,
         nse_symbol: newSymbol,
         company_name: companyName,
+        current_price: currPrice,
+        current_value: currVal,
+        unrealised_pnl: unrealPnl,
+        unrealised_pnl_pct: unrealPnlPct,
       });
       setEditingScrip(null);
       setEditScripVal('');
@@ -1496,8 +1550,18 @@ export function ClientPortfolioPage() {
                           </div>
                         ) : (
                           <>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13.5, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
+                              {meta.listingStatus === 'BSE Only' && (
+                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: '1px solid rgba(59, 130, 246, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Listed only on BSE (NSE CMP not available)">
+                                  BSE Only
+                                </span>
+                              )}
+                              {meta.listingStatus === 'Delisted' && (
+                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Delisted security">
+                                  Delisted
+                                </span>
+                              )}
                               <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
                             </div>
                             {displayCompanyName && (

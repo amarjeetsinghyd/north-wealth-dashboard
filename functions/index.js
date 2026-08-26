@@ -39,7 +39,7 @@ exports.syncBhavcopy = onCall(
   async (request) => {
     try {
       // 1. Check if already synced today
-      const metaRef = db.collection('price_cache').doc('__sync_meta__');
+      const metaRef = db.collection('price_cache').doc('sync_meta');
       const snap = await metaRef.get();
       
       // Date formatting helper (IST)

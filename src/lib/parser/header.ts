@@ -82,16 +82,24 @@ export function mapColumns(headerRow: unknown[], nextRow?: unknown[]) {
     'serial', 'serial no', 'serial no.', 'serial number', '#', 'no.', 'no', 'row', 'index',
   ]);
 
+  // Headers that represent category/mcap/type/allocation — must never match price/quantity/value
+  const NON_PRICE_HEADERS = new Set([
+    'market cap', 'mcap', 'm.cap', 'market capitalization', 'cap',
+    'type', 'asset class', 'instrument type', 'security type',
+    'sector', 'industry',
+    'allocation', '% allocation', 'weightage', 'weight',
+  ]);
+
   const roleDefs = [
     { role: 'isin',           test: (v: string) => ISIN_SYNONYMS.includes(v) },
-    { role: 'symbol',         test: (v: string) => SYMBOL_SYNONYMS.includes(v) || SYMBOL_SYNONYMS.some(s => matchHeader(v, s)) },
-    { role: 'company_name',   test: (v: string) => NAME_SYNONYMS.includes(v) },
-    { role: 'quantity',       test: (v: string) => !SERIAL_HEADERS.has(v) && QTY_SYNONYMS.some(s => matchHeader(v, s)) },
-    { role: 'buy_price',      test: (v: string) => PRICE_SYNONYMS.some(s => matchHeader(v, s)) },
-    { role: 'current_price',  test: (v: string) => LTP_SYNONYMS.some(s => matchHeader(v, s)) },
-    { role: 'invested_value', test: (v: string) => VALUE_SYNONYMS.some(s => matchHeader(v, s)) && !LTP_SYNONYMS.some(s => matchHeader(v, s)) },
-    { role: 'current_value',  test: (v: string) => CURRVAL_SYNONYMS.some(s => matchHeader(v, s)) },
-    { role: 'pnl',            test: (v: string) => PNL_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'symbol',         test: (v: string) => !NON_PRICE_HEADERS.has(v) && (SYMBOL_SYNONYMS.includes(v) || SYMBOL_SYNONYMS.some(s => matchHeader(v, s))) },
+    { role: 'company_name',   test: (v: string) => !NON_PRICE_HEADERS.has(v) && NAME_SYNONYMS.includes(v) },
+    { role: 'quantity',       test: (v: string) => !SERIAL_HEADERS.has(v) && !NON_PRICE_HEADERS.has(v) && QTY_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'buy_price',      test: (v: string) => !NON_PRICE_HEADERS.has(v) && PRICE_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'current_price',  test: (v: string) => !NON_PRICE_HEADERS.has(v) && LTP_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'invested_value', test: (v: string) => !NON_PRICE_HEADERS.has(v) && VALUE_SYNONYMS.some(s => matchHeader(v, s)) && !LTP_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'current_value',  test: (v: string) => !NON_PRICE_HEADERS.has(v) && CURRVAL_SYNONYMS.some(s => matchHeader(v, s)) },
+    { role: 'pnl',            test: (v: string) => !NON_PRICE_HEADERS.has(v) && PNL_SYNONYMS.some(s => matchHeader(v, s)) },
     { role: 'purchase_date',  test: (v: string) => DATE_SYNONYMS.some(s => matchHeader(v, s)) },
   ];
 

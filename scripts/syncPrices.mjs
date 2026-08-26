@@ -3,43 +3,61 @@
  * -------------------------------------------------------
  * Run: node scripts/syncPrices.mjs
  *
- * Uses the Firebase CLI OAuth token already stored on this machine.
- * No email, no password, no service account needed.
+ * Uses firebase-admin with serviceAccountKey.json for authentication.
  */
 
 import { readFileSync, existsSync } from 'fs';
-import { homedir }  from 'os';
-import { join }     from 'path';
+import { join } from 'path';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore, WriteBatch } from 'firebase-admin/firestore';
 
-const PROJECT   = 'north-wealth';
-const DB_PREFIX = `projects/${PROJECT}/databases/(default)/documents`;
+// Load Bhavcopy → companyMaster symbol mapping
+const MAPPING_FILE = join(process.cwd(), 'bhavcopy_to_master_mapping.json');
+const bhavcopyToMaster = JSON.parse(readFileSync(MAPPING_FILE, 'utf-8'));
 
-const API_KEY = 'AIzaSyBoxq1i_hEFJBgaIMsAWnrFabAjmDgLaF4';
+// Initialize Firebase Admin SDK
+function initFirebaseAdmin() {
+  if (getApps().length > 0) {
+    return getApps()[0];
+  }
+  
+  const serviceAccountPath = join(process.cwd(), 'serviceAccountKey.json');
+  if (!existsSync(serviceAccountPath)) {
+    throw new Error('serviceAccountKey.json not found in project root');
+  }
+  
+  const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
+  
+  return initializeApp({
+    credential: cert(serviceAccount),
+    projectId: serviceAccount.project_id,
+  });
+}
 
-// ── Firestore REST: batchWrite (no auth — rules are open for price_cache) ─────
+// Get Firestore instance
+const app = initFirebaseAdmin();
+const db = getFirestore(app);
+
+// ── Firestore Admin SDK: batchWrite ──────────────────────────────────────────
 function makeDoc(sym, price) {
+  // Use companyMaster key as document ID so frontend cleanSymbol() lookups work
+  const masterKey = bhavcopyToMaster[sym] || sym;
   return {
-    name:   `${DB_PREFIX}/price_cache/${sym}`,
-    fields: {
-      symbol:      { stringValue:  sym },
-      close:       { doubleValue:  price },
-      lastUpdated: { stringValue:  new Date().toISOString() },
+    ref: db.collection('price_cache').doc(masterKey),
+    data: {
+      symbol: masterKey,
+      close: price,
+      lastUpdated: new Date().toISOString(),
     },
   };
 }
 
 async function firestoreBatchWrite(docs) {
-  const url = `https://firestore.googleapis.com/v1/${DB_PREFIX}:batchWrite?key=${API_KEY}`;
-  const res = await fetch(url, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ writes: docs.map(d => ({ update: d })) }),
-    signal:  AbortSignal.timeout(30000),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Firestore error ${res.status}: ${err.slice(0, 300)}`);
+  const batch = db.batch();
+  for (const { ref, data } of docs) {
+    batch.set(ref, data, { merge: true });
   }
+  await batch.commit();
 }
 
 // ── Date helper ───────────────────────────────────────────────────────────────
@@ -89,9 +107,8 @@ function parseCSV(csv) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
-  console.log('\n🔑 Reading Firebase CLI credentials...');
-  const token = getAccessToken();
-  console.log('✓ OAuth token found\n');
+  console.log('\n🔑 Initializing Firebase Admin SDK...');
+  console.log('✓ Firebase Admin initialized\n');
 
   // Find latest available Bhavcopy
   console.log('🔍 Finding latest NSE Bhavcopy...');
@@ -120,24 +137,24 @@ async function main() {
   const allDocs = [];
   priceMap.forEach((price, sym) => allDocs.push(makeDoc(sym, price)));
 
-  // Firestore REST batchWrite allows max 20 writes per call
-  const BATCH = 20;
+  // Firestore Admin SDK batchWrite allows max 500 writes per batch
+  const BATCH = 500;
   let done = 0;
   console.log(`\n📤 Writing to Firebase (${allDocs.length} symbols in batches of ${BATCH})...`);
   for (let i = 0; i < allDocs.length; i += BATCH) {
-    await firestoreBatchWrite(token, allDocs.slice(i, i + BATCH));
+    await firestoreBatchWrite(allDocs.slice(i, i + BATCH));
     done += Math.min(BATCH, allDocs.length - i);
     if (done % 500 === 0 || done === allDocs.length)
       console.log(`  ✓ ${done}/${allDocs.length} written`);
   }
 
   // Write metadata doc
-  await firestoreBatchWrite(token, [{
-    name:   `${DB_PREFIX}/price_cache/__sync_meta__`,
-    fields: {
-      bhavcopyDate: { stringValue:  usedDate },
-      recordCount:  { integerValue: String(priceMap.size) },
-      updatedAt:    { stringValue:  new Date().toISOString() },
+  await firestoreBatchWrite([{
+    ref: db.collection('price_cache').doc('_sync_meta'),
+    data: {
+      bhavcopyDate: usedDate,
+      recordCount: priceMap.size,
+      updatedAt: new Date().toISOString(),
     }
   }]);
 

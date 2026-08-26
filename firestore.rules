@@ -7,6 +7,9 @@ service cloud.firestore {
     match /holdings/{doc=**}     { allow read, write: if true; }
     match /transactions/{doc=**} { allow read, write: if true; }
 
+    // Settings collection — for RM list and other app settings
+    match /settings/{doc=**}     { allow read, write: if true; }
+
     // price_cache and market_data — public market data, open read/write
     // Safe: contains only NSE closing prices (publicly available data)
     // Written by sync script, read by dashboard

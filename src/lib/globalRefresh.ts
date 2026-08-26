@@ -74,22 +74,33 @@ export async function refreshAllPrices(
   log(`Fetching prices for ${uniqueSymbols.length} unique symbols…`);
 
   // ── 3. Batch-read price_cache (Firestore getDoc per symbol in parallel) ─────
-  // Firestore doesn't support "get multiple docs by ID" in a single RPC via SDK,
-  // so we use Promise.all with individual getDoc calls (same as the per-client refresh).
-  const BATCH_SIZE = 30;
+  const READ_BATCH_SIZE = 35;
   const priceMap = new Map<string, number>();
 
-  for (let i = 0; i < uniqueSymbols.length; i += BATCH_SIZE) {
-    const batch = uniqueSymbols.slice(i, i + BATCH_SIZE);
-    const snaps = await Promise.all(batch.map(sym => getDoc(doc(db, 'price_cache', sym))));
-    snaps.forEach((snap, idx) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        const sym = batch[idx]!;
-        if (data.close > 0) priceMap.set(sym, data.close);
+  for (let i = 0; i < uniqueSymbols.length; i += READ_BATCH_SIZE) {
+    const batch = uniqueSymbols.slice(i, i + READ_BATCH_SIZE);
+    const promises = batch.map(async sym => {
+      try {
+        const snap = await getDoc(doc(db, 'price_cache', sym));
+        if (snap.exists()) {
+          const data = snap.data();
+          const close = Number(data?.close);
+          if (close > 0) return { sym, close };
+        }
+      } catch (e) {
+        console.warn(`[GlobalRefresh] Error reading price for ${sym}:`, e);
+      }
+      return null;
+    });
+
+    const results = await Promise.allSettled(promises);
+    results.forEach(res => {
+      if (res.status === 'fulfilled' && res.value) {
+        priceMap.set(res.value.sym, res.value.close);
       }
     });
-    log(`Prices loaded: ${Math.min(i + BATCH_SIZE, uniqueSymbols.length)}/${uniqueSymbols.length}`);
+
+    log(`Loaded prices (${priceMap.size} found)…`);
   }
 
   log(`price_cache matched ${priceMap.size}/${uniqueSymbols.length} symbols.`);
@@ -100,28 +111,29 @@ export async function refreshAllPrices(
     const metaSnap = await getDoc(doc(db, 'price_cache', 'sync_meta'));
     if (metaSnap.exists()) {
       priceDate = metaSnap.data().bhavcopyDate || '';
+    } else {
+      const altMeta = await getDoc(doc(db, 'price_cache', '_sync_meta'));
+      if (altMeta.exists()) priceDate = altMeta.data().bhavcopyDate || '';
     }
   } catch { /* non-fatal */ }
 
   if (!priceDate) {
-    // Fallback: today's date in a readable format
     priceDate = new Date().toLocaleDateString('en-IN', {
       day: '2-digit', month: 'short', year: 'numeric',
     });
   }
 
-  // ── 5. Write updated prices using Firestore batched writes ──────────────────
-  // Firestore batch limit = 500 operations per batch
-  const WRITE_BATCH_SIZE = 400;
+  // ── 5. Write updated prices using smaller Firestore batched writes ─────────
+  // Safe chunk size for browser WebSocket/gRPC is 100 docs per batch
+  const WRITE_BATCH_SIZE = 100;
   let updated = 0;
-  let skipped = 0;
 
   const holdingsToUpdate = allHoldings.filter(h => {
     const sym = cleanSymbol(h);
     return sym && priceMap.has(sym);
   });
 
-  log(`Updating ${holdingsToUpdate.length} holdings with new prices…`);
+  log(`Updating ${holdingsToUpdate.length} holdings…`);
 
   for (let i = 0; i < holdingsToUpdate.length; i += WRITE_BATCH_SIZE) {
     const chunk = holdingsToUpdate.slice(i, i + WRITE_BATCH_SIZE);
@@ -131,11 +143,8 @@ export async function refreshAllPrices(
       const sym = cleanSymbol(holding)!;
       const price = priceMap.get(sym)!;
 
-      // Use the STORED invested_amount from Firestore, never recalculate it here.
-      // invested_amount is set at holding creation/buy time and must not be touched on price refresh.
-      // Guard against zero/null invested_amount with a safe fallback.
-      const qty            = Number(holding.quantity) || 0;
-      const invested       = Number(holding.invested_amount) > 0
+      const qty = Number(holding.quantity) || 0;
+      const invested = Number(holding.invested_amount) > 0
         ? Number(holding.invested_amount)
         : qty * (Number(holding.buy_price) || 0);
 
@@ -148,25 +157,28 @@ export async function refreshAllPrices(
       batch.update(doc(db, 'holdings', holding.id), {
         current_price:     price,
         current_value,
-        // invested_amount intentionally NOT written — it is set at buy time
         unrealised_pnl,
         unrealised_pnl_pct,
         last_price_update: new Date().toISOString(),
       });
     });
 
-    await batch.commit();
-    updated += chunk.length;
-    log(`Updated ${Math.min(i + WRITE_BATCH_SIZE, holdingsToUpdate.length)}/${holdingsToUpdate.length} holdings…`);
+    try {
+      await batch.commit();
+      updated += chunk.length;
+      log(`Updated ${updated}/${holdingsToUpdate.length} holdings…`);
+    } catch (batchErr) {
+      console.error(`[GlobalRefresh] Batch commit error at chunk ${i}:`, batchErr);
+    }
   }
 
-  skipped = total - updated;
+  const skipped = total - updated;
 
-  // ── 6. Persist price date to localStorage so all pages can read it ──────────
+  // ── 6. Persist price date to localStorage ──────────────────────────────────
   setPriceDate(priceDate);
 
   const durationMs = Date.now() - t0;
-  log(`✓ Done. Updated ${updated}/${total} holdings in ${(durationMs / 1000).toFixed(1)}s. Prices as of ${priceDate}.`);
+  log(`✓ Done. Updated ${updated}/${total} holdings in ${(durationMs / 1000).toFixed(1)}s.`);
 
   return { updated, total, skipped, priceDate, durationMs };
 }
