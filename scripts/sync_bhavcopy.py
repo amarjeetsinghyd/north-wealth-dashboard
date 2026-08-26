@@ -132,16 +132,13 @@ def write_doc(nse_symbol, close):
     return master_key
 
 def write_meta(date_str, count):
-    doc_ref = db.collection('price_cache').document('sync_meta')
-    doc_ref.set({
+    meta_data = {
         'bhavcopyDate': date_str,
         'recordCount': count,
         'updatedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    }, merge=True)
-    resp = session.patch(url, json=body, timeout=15)
-    if resp.status_code not in (200, 204):
-        raise RuntimeError(f"Failed to write market_data/{doc_id}: {resp.status_code} {resp.text[:200]}")
-    return doc_id
+    }
+    db.collection('price_cache').document('sync_meta').set(meta_data, merge=True)
+    db.collection('price_cache').document('_sync_meta').set(meta_data, merge=True)
 
 def get_unique_holdings_symbols(session):
     symbols = set()
