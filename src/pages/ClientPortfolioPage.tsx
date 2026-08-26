@@ -1553,13 +1553,23 @@ export function ClientPortfolioPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: 600, color: '#8c6314', fontSize: 13.5, letterSpacing: '0.2px' }}>{cleanSymbol(h)}</span>
                               {meta.listingStatus === 'BSE Only' && (
-                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: '1px solid rgba(59, 130, 246, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Listed only on BSE (NSE CMP not available)">
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: '1px solid rgba(59, 130, 246, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Listed only on BSE (NSE CMP not available)">
                                   BSE Only
                                 </span>
                               )}
                               {meta.listingStatus === 'Delisted' && (
-                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Delisted security">
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Delisted security">
                                   Delisted
+                                </span>
+                              )}
+                              {meta.listingStatus === 'Suspended' && (
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: '1px solid rgba(245, 158, 11, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Trading suspended by exchange">
+                                  Suspended
+                                </span>
+                              )}
+                              {meta.listingStatus === 'Unlisted' && (
+                                <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'rgba(107, 114, 128, 0.12)', color: '#4b5563', border: '1px solid rgba(107, 114, 128, 0.25)', letterSpacing: '0.2px', whiteSpace: 'nowrap' }} title="Unlisted equity shares">
+                                  Unlisted
                                 </span>
                               )}
                               <button onClick={() => { setEditingScrip(h.id); setEditScripVal(cleanSymbol(h)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, opacity: 0.6, display: 'flex', alignItems: 'center' }} title="Edit scrip"><Pencil size={11} /></button>
@@ -1605,7 +1615,19 @@ export function ClientPortfolioPage() {
                         {h.buy_price > 0 ? fmtCurrency(h.invested_amount || h.buy_price * h.quantity) : '0'}
                       </div>
                       <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
-                        {h.current_price > 0 ? `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '0'}
+                        {h.current_price > 0 ? (
+                          `₹${h.current_price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                        ) : meta.listingStatus === 'BSE Only' ? (
+                          <span style={{ color: '#2563eb', fontSize: 11.5, fontWeight: 600 }} title="Traded on BSE (NSE CMP not synced)">BSE Only</span>
+                        ) : meta.listingStatus === 'Delisted' ? (
+                          <span style={{ color: '#dc2626', fontSize: 11.5, fontWeight: 600 }} title="Delisted from exchange">Delisted</span>
+                        ) : meta.listingStatus === 'Suspended' ? (
+                          <span style={{ color: '#d97706', fontSize: 11.5, fontWeight: 600 }} title="Trading suspended">Suspended</span>
+                        ) : meta.listingStatus === 'Unlisted' ? (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 11.5, fontWeight: 600 }}>Unlisted</span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                        )}
                       </div>
                       <div style={{ color: 'var(--text-primary)', fontSize: 13.5, fontWeight: 400 }} className="tabular-nums">
                         {h.current_price > 0 ? fmtCurrency(h.current_value || h.buy_price * h.quantity) : '0'}

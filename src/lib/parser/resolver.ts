@@ -72,10 +72,17 @@ function findFuzzyCandidates(query: string, limit: number = MAX_CANDIDATES) {
 export function resolveSymbol({ symbol, isin, companyName }: { symbol?: string; isin?: string | null; companyName?: string }): ResolveResult {
   const flags: string[] = [];
 
-  // 1. Existing sectorMap ISIN lookup
+  // 1. ISIN lookup (handles both NSE and BSE-only securities)
   if (isin) {
-    const isinResolved = resolveISINToNSE(isin);
-    if (isinResolved) return { symbol: isinResolved, confidence: 1.0, flags: ['RESOLVED_BY_ISIN'], candidates: [] };
+    const isinUpper = isin.trim().toUpperCase();
+    const isinDict = (companyMaster as any).isin as Record<string, number>;
+    const idx = isinDict[isinUpper];
+    if (idx !== undefined) {
+      const comp = (companyMaster as any).companies[idx];
+      const isinResolved = resolveISINToNSE(isin);
+      const sym = isinResolved || (comp[7] ? String(comp[7]).replace(/\s/g, '').toUpperCase() : '') || isinUpper;
+      return { symbol: sym, confidence: 1.0, flags: ['RESOLVED_BY_ISIN'], candidates: [] };
+    }
   }
 
   const cleaned = cleanSymbol(symbol || companyName || isin || '');
@@ -86,18 +93,29 @@ export function resolveSymbol({ symbol, isin, companyName }: { symbol?: string; 
     return { symbol: cleaned, confidence: 1.0, flags: ['EXACT_SYMBOL'], candidates: [] };
   }
 
-  // 3. Alias map
+  // 3. Numeric BSE Code lookup (e.g. '509196')
+  if (/^\d{5,6}$/.test(cleaned)) {
+    const bseDict = (companyMaster as any).bse as Record<string, number>;
+    const idx = bseDict[cleaned];
+    if (idx !== undefined) {
+      const comp = (companyMaster as any).companies[idx];
+      const targetSym = comp[7] ? String(comp[7]).replace(/\s/g, '').toUpperCase() : cleaned;
+      return { symbol: targetSym, confidence: 1.0, flags: ['RESOLVED_BY_BSE_CODE'], candidates: [] };
+    }
+  }
+
+  // 4. Alias map
   if (cleaned && ALIAS_MAP[cleaned]) {
     return { symbol: ALIAS_MAP[cleaned], confidence: 0.9, flags: ['ALIAS_MATCH'], candidates: [] };
   }
 
-  // 4. Direct company-name map
+  // 5. Direct company-name map
   const upperName = rawInput.toUpperCase();
   if (COMPANY_NAME_DIRECT[upperName]) {
     return { symbol: COMPANY_NAME_DIRECT[upperName], confidence: 0.95, flags: ['COMPANY_DIRECT'], candidates: [] };
   }
 
-  // 5. sectorMap Company Name Match (exact match)
+  // 6. sectorMap Company Name Match (exact match)
   const resolved = resolveCompanyNameToNSE(companyName || symbol || '');
   if (resolved) {
     return { symbol: resolved, confidence: 0.85, flags: ['COMPANY_MASTER_MATCH'], candidates: [] };

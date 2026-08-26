@@ -51,6 +51,27 @@ const DEFAULT_META: StockMeta = {
  *
  * NO name-based heuristics. Sector is ALWAYS taken verbatim from the CSV masters.
  */
+// Fast O(1) company name & shortname lookup index for BSE-only & unlisted stocks
+const companyNameIndex: Record<string, number> = {};
+(() => {
+  const comps = ((companyMaster as any).companies || []) as CompanyTuple[];
+  for (let i = 0; i < comps.length; i++) {
+    const c = comps[i];
+    if (!c) continue;
+    if (c[7]) {
+      const k = String(c[7]).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (k && companyNameIndex[k] === undefined) companyNameIndex[k] = i;
+    }
+    if (c[0]) {
+      const k = String(c[0]).toUpperCase()
+        .replace(/LIMITED/g, '')
+        .replace(/LTD/g, '')
+        .replace(/[^A-Z0-9]/g, '');
+      if (k && companyNameIndex[k] === undefined) companyNameIndex[k] = i;
+    }
+  }
+})();
+
 export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol?: string | null | undefined): StockMeta {
   const cleanNse = symbolOrNse && symbolOrNse !== 'null' && symbolOrNse !== 'undefined' ? symbolOrNse.trim() : '';
   const cleanStock = stockSymbol && stockSymbol !== 'null' && stockSymbol !== 'undefined' ? stockSymbol.trim() : '';
@@ -59,6 +80,7 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
   if (!symbol) return DEFAULT_META;
 
   const upper = symbol.toUpperCase().replace(/-EQ$/, '').replace(/\.NS$/, '').replace(/\.BO$/, '');
+  const normKey = upper.replace(/[^A-Z0-9]/g, '');
 
   // ── 1. ETF Sector Map (exact NSE ticker → sector from CSV) ─────────────────
   const etfEntry = (etfSectorMap as Record<string, { name: string; category: string; sector: string; amc: string }>)[upper];
@@ -76,10 +98,17 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
     };
   }
 
-  // ── 2. Company Master (exact NSE/BSE symbol → sector from CSV) ──────────────
+  // ── 2. Company Master (exact NSE/BSE symbol or normalized Name/Shortname) ──
   let companyIdx = (companyMaster.nse as Record<string, number>)[upper];
   if (companyIdx === undefined) {
     companyIdx = (companyMaster.bse as Record<string, number>)[upper];
+  }
+  if (companyIdx === undefined && normKey) {
+    companyIdx = companyNameIndex[normKey];
+  }
+  if (companyIdx === undefined && cleanStock) {
+    const normStock = cleanStock.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    companyIdx = companyNameIndex[normStock];
   }
 
   if (companyIdx !== undefined) {
@@ -96,15 +125,18 @@ export function getStockMeta(symbolOrNse: string | null | undefined, stockSymbol
       let listingStatus: 'Active' | 'Delisted' | 'BSE Only' | 'Suspended' | 'Unlisted' = 'Active';
       let statusReason = 'Actively traded on exchange';
 
-      if (nseStatus === 'delisted' && bseStatus === 'delisted') {
+      if (nseStatus === 'active') {
+        listingStatus = 'Active';
+        statusReason  = 'Actively traded on NSE';
+      } else if ((nseStatus === 'not listed' || nseStatus === 'delisted') && bseStatus === 'active') {
+        listingStatus = 'BSE Only';
+        statusReason  = nseStatus === 'delisted' ? 'Delisted from NSE (traded on BSE)' : 'Not listed on NSE (traded on BSE)';
+      } else if (nseStatus === 'delisted' && (bseStatus === 'delisted' || bseStatus === 'not listed' || !bseStatus)) {
         listingStatus = 'Delisted';
-        statusReason  = 'Delisted from both NSE and BSE';
+        statusReason  = 'Delisted from exchange';
       } else if (nseStatus === 'suspended' || bseStatus === 'suspended') {
         listingStatus = 'Suspended';
         statusReason  = 'Trading temporarily suspended by exchange';
-      } else if (nseStatus === 'not listed' && bseStatus === 'active') {
-        listingStatus = 'BSE Only';
-        statusReason  = 'Not listed on NSE (traded on BSE)';
       } else if (nseStatus === 'not listed' && (bseStatus === 'not listed' || !bseStatus)) {
         listingStatus = 'Unlisted';
         statusReason  = 'Unlisted equity shares';
