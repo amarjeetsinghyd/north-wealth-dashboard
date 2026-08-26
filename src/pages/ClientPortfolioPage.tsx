@@ -1261,24 +1261,24 @@ export function ClientPortfolioPage() {
   return (
     <div className="container animate-fade-in" style={{ paddingBottom: 'var(--space-12)' }}>
       {/* ── Top Header Navigation ───────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-6)', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
         <button
           onClick={() => navigate('/')}
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)',
+            display: 'inline-flex', alignItems: 'center', gap: 8,
             color: 'var(--text-secondary)', background: 'none', border: 'none',
-            fontSize: 'var(--text-sm)', cursor: 'pointer', padding: 0,
+            fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: 0,
           }}
         >
           <ArrowLeft size={16} />
           Back to Clients
         </button>
 
-        <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => navigate('/client/' + id + '/dashboard')}
             className="btn-glass-gold"
-            style={{ padding: '8px 18px', fontSize: 13, fontWeight: 700 }}
+            style={{ padding: '10px 22px', fontSize: 13.5, fontWeight: 800, borderRadius: 12 }}
           >
             ✦ Portfolio Intelligence Report
           </button>
@@ -1286,36 +1286,46 @@ export function ClientPortfolioPage() {
       </div>
 
       {/* ── Client Master Header Card ────────────────────────────────────── */}
-      <div className="glass-card" style={{ padding: '20px 24px', marginBottom: 'var(--space-6)' }}>
+      <div className="glass-card" style={{
+        padding: '22px 28px',
+        marginBottom: 20,
+        borderRadius: 18,
+        border: 'none',
+        background: 'rgba(255, 255, 255, 0.88)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{
-              width: 50, height: 50, borderRadius: '50%',
-              background: 'linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)',
-              border: '1px solid var(--gold-border)',
+              width: 52, height: 52, borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(201,168,76,0.25) 0%, rgba(185,145,45,0.12) 100%)',
+              border: 'none',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 800, fontSize: 18, color: 'var(--gold)',
+              fontWeight: 800, fontSize: 19, color: '#624206',
+              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.9), 0 2px 8px rgba(201,168,76,0.12)',
             }}>
               {client.name.charAt(0).toUpperCase()}
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                <h1 style={{ fontSize: 23, fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.3px' }}>
                   {client.name}
                 </h1>
                 <span style={{
-                  padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
-                  background: 'rgba(201,168,76,0.1)', color: '#8c6314', border: '1px solid var(--gold-border)',
+                  padding: '3px 10px', borderRadius: 20, fontSize: 11.5, fontWeight: 700,
+                  background: 'rgba(201,168,76,0.16)', color: '#78530b', border: 'none',
+                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85)',
                 }}>
                   {client.risk_profile || 'Moderate'}
                 </span>
                 {client.rm_name && (
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
                     RM: <strong style={{ color: 'var(--text-secondary)' }}>{client.rm_name}</strong>
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 16 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 5, display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                 <span>Client ID: <strong style={{ color: 'var(--text-secondary)' }}>{client.id}</strong></span>
                 <span>Onboarded: <strong style={{ color: 'var(--text-secondary)' }}>{client.onboarding_date || '—'}</strong></span>
                 <span>Last Statement: <strong style={{ color: '#8c6314' }}>{client.client_portfolio_date || client.onboarding_date || 'Initial'}</strong></span>
@@ -1327,17 +1337,17 @@ export function ClientPortfolioPage() {
 
       {/* ── Top Master Asset Allocation Strip & AUA Buffer ────────────────── */}
       <div className="glass-card" style={{
-        padding: '18px 24px',
-        marginBottom: 'var(--space-6)',
+        padding: '22px 28px',
+        marginBottom: 24,
         border: 'none',
-        background: 'rgba(255, 255, 255, 0.72)',
+        background: 'rgba(255, 255, 255, 0.88)',
         backdropFilter: 'blur(20px) saturate(180%)',
         boxShadow: isAuaBreached 
-          ? '0 8px 30px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.9)' 
-          : '0 8px 30px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.9)',
-        borderRadius: 16,
+          ? '0 8px 30px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.95)' 
+          : '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
+        borderRadius: 18,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Landmark size={18} style={{ color: 'var(--gold)' }} />
             <h3 style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
@@ -1352,9 +1362,9 @@ export function ClientPortfolioPage() {
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
           {/* Total AUA */}
-          <div style={{ background: 'rgba(0,0,0,0.025)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: 'rgba(0,0,0,0.025)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total AUA (Master)</div>
             {editingAua ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -1378,14 +1388,14 @@ export function ClientPortfolioPage() {
           </div>
 
           {/* Equity */}
-          <div style={{ background: 'rgba(59,130,246,0.06)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(59,130,246,0.04)' }}>
+          <div style={{ background: 'rgba(59,130,246,0.06)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(59,130,246,0.04)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Equity Portfolio (Auto)</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{fmtCurrency(totalEquityValue)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{holdings.length} stocks/ETFs tracked</div>
           </div>
 
           {/* Mutual Funds */}
-          <div style={{ background: 'rgba(168,85,247,0.06)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(168,85,247,0.04)' }}>
+          <div style={{ background: 'rgba(168,85,247,0.06)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(168,85,247,0.04)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase' }}>Mutual Funds</div>
             {editingMutualFunds ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -1409,7 +1419,7 @@ export function ClientPortfolioPage() {
           </div>
 
           {/* Estimated Cash */}
-          <div style={{ background: 'rgba(34,197,94,0.06)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(34,197,94,0.04)' }}>
+          <div style={{ background: 'rgba(34,197,94,0.06)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(34,197,94,0.04)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase' }}>Estimated Free Cash</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>From ledger equation</div>
@@ -1419,9 +1429,9 @@ export function ClientPortfolioPage() {
           <div style={{
             background: auaBuffer < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(201,168,76,0.08)',
             border: 'none',
-            borderRadius: 12, padding: '14px 16px',
+            borderRadius: 14, padding: '16px 18px',
             backdropFilter: 'blur(16px)',
-            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(0,0,0,0.02)'
+            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(0,0,0,0.02)'
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', textTransform: 'uppercase' }}>
               {auaBuffer < 0 ? 'AUA Deficit' : 'Buffer Capital'}
@@ -1439,10 +1449,10 @@ export function ClientPortfolioPage() {
       {/* ── 4 Main Tabs Navigation Bar ───────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 'var(--space-6)', borderBottom: '1px solid var(--border-subtle)',
-        paddingBottom: 8, flexWrap: 'wrap', gap: 12,
+        marginBottom: 24, borderBottom: '1px solid rgba(229, 231, 235, 0.65)',
+        paddingBottom: 12, flexWrap: 'wrap', gap: 12,
       }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 10 }}>
           {[
             { key: 'working', label: 'Working Portfolio', badge: `${workingHoldings.length} Active` },
             { key: 'client', label: 'Client Portfolio', badge: `${clientHoldings.length} Base` },
@@ -1456,19 +1466,19 @@ export function ClientPortfolioPage() {
                 type="button"
                 onClick={() => setPortfolioTab(t.key as any)}
                 style={{
-                  padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
-                  border: isActive ? '1px solid var(--gold-border)' : '1px solid transparent',
-                  background: isActive ? 'rgba(201,168,76,0.14)' : 'transparent',
-                  color: isActive ? '#8c6314' : 'var(--text-secondary)',
+                  padding: '10px 20px', borderRadius: 12, fontSize: 13, fontWeight: 700,
+                  border: 'none',
+                  background: isActive ? 'linear-gradient(135deg, rgba(201, 168, 76, 0.28) 0%, rgba(185, 145, 45, 0.16) 100%)' : 'rgba(255, 255, 255, 0.65)',
+                  color: isActive ? '#5c3e04' : 'var(--text-secondary)',
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-                  transition: 'all 0.15s ease',
-                  boxShadow: isActive ? '0 2px 8px rgba(201,168,76,0.12)' : 'none',
+                  transition: 'all 0.18s ease',
+                  boxShadow: isActive ? 'inset 0 1px 1px rgba(255,255,255,0.95), 0 3px 10px rgba(160,124,45,0.14)' : 'none',
                 }}
               >
                 <span>{t.label}</span>
                 <span style={{
                   padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
-                  background: isActive ? '#8c6314' : 'rgba(0,0,0,0.06)',
+                  background: isActive ? '#624206' : 'rgba(0,0,0,0.06)',
                   color: isActive ? '#ffffff' : 'var(--text-muted)',
                 }}>
                   {t.badge}
