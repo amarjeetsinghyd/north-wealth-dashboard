@@ -79,6 +79,7 @@ export function AnalyticsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [clientSortCol, setClientSortCol] = useState<string>('value');
   const [clientSortOrder, setClientSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [clientDirectorySearch, setClientDirectorySearch] = useState('');
 
   // ── Smart Search ───────────────────────────────────────────────────────────
   const [searchMode, setSearchMode] = useState<'stock' | 'cash' | 'client' | 'sector' | 'rm' | 'risk' | 'settings'>('stock');
@@ -371,7 +372,17 @@ export function AnalyticsPage() {
 
   // Client Directory Sort
   const sortedClients = useMemo(() => {
-    const list = [...clients];
+    let list = [...clients];
+    if (clientDirectorySearch.trim()) {
+      const q = clientDirectorySearch.toLowerCase().trim();
+      list = list.filter(c =>
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.email && c.email.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.includes(q)) ||
+        (c.rm_name && c.rm_name.toLowerCase().includes(q)) ||
+        (c.id && c.id.toLowerCase().includes(q))
+      );
+    }
     list.sort((a, b) => {
       let aVal = a[clientSortCol];
       let bVal = b[clientSortCol];
@@ -389,7 +400,7 @@ export function AnalyticsPage() {
       return clientSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
     });
     return list;
-  }, [clients, clientSortCol, clientSortOrder]);
+  }, [clients, clientSortCol, clientSortOrder, clientDirectorySearch]);
 
   const handleSortClients = (col: string) => {
     if (clientSortCol === col) {
@@ -1269,9 +1280,11 @@ export function AnalyticsPage() {
                 style={{ padding: '8px 14px', borderRadius: 7, background: 'rgba(0,0,0,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(0,0,0,0.12)', fontSize: 13, fontWeight: 600, outline: 'none', cursor: 'pointer', flex: 1, maxWidth: 320 }}
               >
                 <option value="">— Select a Risk Profile —</option>
+                <option value="Very Aggressive" style={{ background: 'var(--bg-elevated)' }}>Very Aggressive</option>
                 <option value="Aggressive" style={{ background: 'var(--bg-elevated)' }}>Aggressive</option>
                 <option value="Moderate" style={{ background: 'var(--bg-elevated)' }}>Moderate</option>
                 <option value="Conservative" style={{ background: 'var(--bg-elevated)' }}>Conservative</option>
+                <option value="Very Conservative" style={{ background: 'var(--bg-elevated)' }}>Very Conservative</option>
                 <option value="Unassigned" style={{ background: 'var(--bg-elevated)' }}>Unassigned</option>
               </select>
             </div>
@@ -1660,11 +1673,32 @@ export function AnalyticsPage() {
 
       {/* Clients Portfolio Directory */}
       <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 16, padding: 24, marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-          <Users size={18} color="#C9A84C" />
-          <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Client Portfolios Directory
-          </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Users size={18} color="#C9A84C" />
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Client Portfolios Directory
+            </h3>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: 'rgba(201,168,76,0.15)', color: '#8c6314' }}>
+              {sortedClients.length} of {clients.length} clients
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', padding: '6px 12px', borderRadius: 8, minWidth: 280 }}>
+            <Search size={14} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Search client by name / email / RM..."
+              value={clientDirectorySearch}
+              onChange={e => setClientDirectorySearch(e.target.value)}
+              style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: 'var(--text-primary)', width: '100%' }}
+            />
+            {clientDirectorySearch && (
+              <button onClick={() => setClientDirectorySearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0 }}>
+                <XIcon size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ overflowX: 'auto' }}>

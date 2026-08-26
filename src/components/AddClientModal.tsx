@@ -503,9 +503,11 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
                       value={riskProfile} onChange={e => setRiskProfile(e.target.value)}
                       className="glass-input"
                     >
+                      <option value="Very Aggressive">Very Aggressive</option>
                       <option value="Aggressive">Aggressive</option>
                       <option value="Moderate">Moderate</option>
                       <option value="Conservative">Conservative</option>
+                      <option value="Very Conservative">Very Conservative</option>
                     </select>
                   </div>
                 </div>

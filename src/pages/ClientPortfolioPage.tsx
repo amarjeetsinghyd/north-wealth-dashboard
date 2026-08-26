@@ -113,6 +113,13 @@ export function ClientPortfolioPage() {
   const [reconReason, setReconReason] = useState('');
   const [savingReconReason, setSavingReconReason] = useState(false);
 
+  // Strategy Cash Allocation Modal (Cash Position Tab)
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [strategyMomentumInput, setStrategyMomentumInput] = useState('');
+  const [strategyLongInput, setStrategyLongInput] = useState('');
+  const [savingStrategy, setSavingStrategy] = useState(false);
+
+
   // Total AUA & Asset Allocation Master Strip
   const [totalAua, setTotalAua] = useState<number>(0);
   const [totalAuaInput, setTotalAuaInput] = useState<string>('');
@@ -300,7 +307,7 @@ export function ClientPortfolioPage() {
 
   const dynamicEstimatedCash = Math.round(baseClientCash - freshBuysTotal + freshSellsTotal + parkedLiquidAmount);
 
-  const momentumCash = client?.client_momentum_cash !== undefined ? client.client_momentum_cash : Math.round(dynamicEstimatedCash * 0.2);
+  const momentumCash = client?.client_momentum_cash !== undefined ? client.client_momentum_cash : 0;
   const longTermCash = client?.client_long_cash !== undefined ? client.client_long_cash : Math.max(0, dynamicEstimatedCash - momentumCash);
 
   const totalEquityValue = summary.currentValue > 0 ? summary.currentValue : summary.totalInvested;
@@ -491,7 +498,34 @@ export function ClientPortfolioPage() {
     }
   };
 
-  const saveAuditReconciliation = async () => {
+  const openStrategyModal = () => {
+    setStrategyMomentumInput(String(momentumCash));
+    setStrategyLongInput(String(longTermCash));
+    setShowStrategyModal(true);
+  };
+
+  const handleSaveStrategyAllocation = async () => {
+    if (!id) return;
+    const momNum = Math.max(0, parseFloat(strategyMomentumInput) || 0);
+    const longNum = Math.max(0, parseFloat(strategyLongInput) || 0);
+    setSavingStrategy(true);
+    try {
+      await updateDoc(doc(db, 'clients', id), {
+        client_momentum_cash: momNum,
+        client_long_cash: longNum,
+        updated_at: new Date().toISOString(),
+      });
+      setShowStrategyModal(false);
+      await load();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save strategy allocation');
+    } finally {
+      setSavingStrategy(false);
+    }
+  };
+
+    const saveAuditReconciliation = async () => {
     if (!id) return;
     setSavingReconReason(true);
     try {
@@ -2153,11 +2187,20 @@ export function ClientPortfolioPage() {
                     </div>
                   </div>
 
-                  <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.06)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Allocation</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                      Long-Term: {fmtCurrencyKPI(longTermCash)} | Momentum: {fmtCurrencyKPI(momentumCash)}
+                  <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.06)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Allocation</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                        Long-Term: <strong>{fmtCurrencyKPI(longTermCash)}</strong> | Momentum: <strong>{fmtCurrencyKPI(momentumCash)}</strong>
+                      </div>
                     </div>
+                    <button
+                      onClick={openStrategyModal}
+                      style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#2563eb', borderRadius: 4, cursor: 'pointer', padding: '3px 7px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                      title="Edit Strategy Allocation"
+                    >
+                      <Pencil size={11} /> Edit
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2664,6 +2707,98 @@ export function ClientPortfolioPage() {
               <button onClick={() => setShowNewRecoModal(false)} style={{ padding: '7px 16px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
               <button onClick={handleSaveRecommendation} disabled={savingReco || !recoSymbol.trim() || !recoPrice || !recoQty} className="btn-glass-gold" style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700 }}>
                 {savingReco ? 'Saving...' : 'Confirm Recommendation'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      
+      {/* 6. Strategy Cash Allocation Modal */}
+      {showStrategyModal && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) setShowStrategyModal(false); }}>
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: 'var(--shadow-xl)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2563eb', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Pencil size={16} /> Strategy Cash Allocation
+                </h3>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total Estimated Free Cash: ₹{dynamicEstimatedCash.toLocaleString('en-IN')}</span>
+              </div>
+              <button onClick={() => setShowStrategyModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
+            </div>
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  Momentum Cash Allocation (₹)
+                </label>
+                <input
+                  type="number"
+                  value={strategyMomentumInput}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setStrategyMomentumInput(val);
+                    const num = parseFloat(val) || 0;
+                    setStrategyLongInput(String(Math.max(0, dynamicEstimatedCash - num)));
+                  }}
+                  placeholder="0"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}
+                />
+              </div>
+
+              {/* Quick % Chips for Momentum */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Quick Split:</span>
+                {[0, 10, 20, 30, 50].map(pct => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => {
+                      const mom = Math.round((dynamicEstimatedCash * pct) / 100);
+                      setStrategyMomentumInput(String(mom));
+                      setStrategyLongInput(String(Math.max(0, dynamicEstimatedCash - mom)));
+                    }}
+                    style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', color: '#2563eb', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  Long-Term Cash Allocation (₹) (Default / Residual)
+                </label>
+                <input
+                  type="number"
+                  value={strategyLongInput}
+                  onChange={e => setStrategyLongInput(e.target.value)}
+                  placeholder="0"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}
+                />
+              </div>
+
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(59,130,246,0.06)', fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Long-Term Bucket:</span>
+                  <strong>₹{(parseFloat(strategyLongInput) || 0).toLocaleString('en-IN')}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+                  <span>Momentum Bucket:</span>
+                  <strong>₹{(parseFloat(strategyMomentumInput) || 0).toLocaleString('en-IN')}</strong>
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button onClick={() => setShowStrategyModal(false)} style={{ padding: '7px 16px', borderRadius: 6, background: 'transparent', border: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+              <button
+                onClick={handleSaveStrategyAllocation}
+                disabled={savingStrategy}
+                className="btn-glass-gold"
+                style={{ padding: '7px 18px', fontSize: 12, fontWeight: 700 }}
+              >
+                {savingStrategy ? 'Saving...' : 'Save Strategy Allocation'}
               </button>
             </div>
           </div>
