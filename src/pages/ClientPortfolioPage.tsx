@@ -1326,25 +1326,35 @@ export function ClientPortfolioPage() {
       </div>
 
       {/* ── Top Master Asset Allocation Strip & AUA Buffer ────────────────── */}
-      <div className="glass-card" style={{ padding: '16px 22px', marginBottom: 'var(--space-6)', border: isAuaBreached ? '1px solid rgba(239,68,68,0.5)' : '1px solid var(--gold-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+      <div className="glass-card" style={{
+        padding: '18px 24px',
+        marginBottom: 'var(--space-6)',
+        border: 'none',
+        background: 'rgba(255, 255, 255, 0.72)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        boxShadow: isAuaBreached 
+          ? '0 8px 30px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.9)' 
+          : '0 8px 30px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.9)',
+        borderRadius: 16,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Landmark size={18} style={{ color: 'var(--gold)' }} />
-            <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <h3 style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
               Master Asset Allocation & AUA Buffer
             </h3>
           </div>
           {isAuaBreached && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, color: '#dc2626', fontSize: 12, fontWeight: 700 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px', background: 'rgba(239,68,68,0.12)', border: 'none', borderRadius: 8, color: '#dc2626', fontSize: 12, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
               <ShieldAlert size={14} />
               <span>AUA Breached by ₹{auaBreachAmount.toLocaleString('en-IN')}!</span>
             </div>
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
           {/* Total AUA */}
-          <div style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(0,0,0,0.025)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total AUA (Master)</div>
             {editingAua ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -1353,7 +1363,7 @@ export function ClientPortfolioPage() {
                   value={totalAuaInput}
                   onChange={e => setTotalAuaInput(e.target.value)}
                   autoFocus
-                  style={{ width: '100%', padding: '4px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6, border: '1px solid var(--gold-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                  style={{ width: '100%', padding: '4px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.9)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)' }}
                 />
                 <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer' }}><Check size={16} /></button>
                 <button onClick={() => setEditingAua(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}><XIcon size={16} /></button>
@@ -1368,14 +1378,14 @@ export function ClientPortfolioPage() {
           </div>
 
           {/* Equity */}
-          <div style={{ background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(59,130,246,0.06)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(59,130,246,0.04)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Equity Portfolio (Auto)</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{fmtCurrency(totalEquityValue)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{holdings.length} stocks/ETFs tracked</div>
           </div>
 
           {/* Mutual Funds */}
-          <div style={{ background: 'rgba(168,85,247,0.04)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(168,85,247,0.06)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(168,85,247,0.04)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase' }}>Mutual Funds</div>
             {editingMutualFunds ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -1384,7 +1394,7 @@ export function ClientPortfolioPage() {
                   value={mutualFundsInput}
                   onChange={e => setMutualFundsInput(e.target.value)}
                   autoFocus
-                  style={{ width: '100%', padding: '4px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6, border: '1px solid var(--gold-border)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                  style={{ width: '100%', padding: '4px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.9)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)' }}
                 />
                 <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer' }}><Check size={16} /></button>
                 <button onClick={() => setEditingMutualFunds(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}><XIcon size={16} /></button>
@@ -1399,7 +1409,7 @@ export function ClientPortfolioPage() {
           </div>
 
           {/* Estimated Cash */}
-          <div style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '12px 14px' }}>
+          <div style={{ background: 'rgba(34,197,94,0.06)', border: 'none', borderRadius: 12, padding: '14px 16px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(34,197,94,0.04)' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase' }}>Estimated Free Cash</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>From ledger equation</div>
@@ -1407,9 +1417,11 @@ export function ClientPortfolioPage() {
 
           {/* Buffer */}
           <div style={{
-            background: auaBuffer < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(201,168,76,0.06)',
-            border: `1px solid ${auaBuffer < 0 ? 'rgba(239,68,68,0.3)' : 'var(--gold-border)'}`,
-            borderRadius: 10, padding: '12px 14px',
+            background: auaBuffer < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(201,168,76,0.08)',
+            border: 'none',
+            borderRadius: 12, padding: '14px 16px',
+            backdropFilter: 'blur(16px)',
+            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.8), 0 2px 8px rgba(0,0,0,0.02)'
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', textTransform: 'uppercase' }}>
               {auaBuffer < 0 ? 'AUA Deficit' : 'Buffer Capital'}
