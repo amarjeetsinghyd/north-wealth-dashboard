@@ -73,6 +73,12 @@ export function ClientPortfolioPage() {
   const [deleteConfirmHolding, setDeleteConfirmHolding] = useState<{ id: string; symbol: string } | null>(null);
   const [isDeletingHolding, setIsDeletingHolding] = useState(false);
 
+  // Pending Transaction Status Map & Save / Delete Confirmation State
+  const [pendingTxStatus, setPendingTxStatus] = useState<Record<string, 'Executed' | 'Avoid'>>({});
+  const [savingTxStatusId, setSavingTxStatusId] = useState<string | null>(null);
+  const [deleteConfirmTx, setDeleteConfirmTx] = useState<{ id: string; symbol: string } | null>(null);
+  const [isDeletingTx, setIsDeletingTx] = useState(false);
+
   // Dedicated Sell Stock Modal (for Working Portfolio & Recos)
   const [sellModalData, setSellModalData] = useState<{
     holdingId?: string | undefined;
@@ -1041,6 +1047,9 @@ export function ClientPortfolioPage() {
               realised_pnl: 0,
               source: 'Fresh',
               holding_tier: 'working',
+              sector: meta.sector || 'Unclassified',
+              market_cap_category: meta.marketCap || 'Small',
+              purchase_date: recoDate || nowIso.split('T')[0],
               created_at: nowIso,
             });
           }
@@ -1101,25 +1110,108 @@ export function ClientPortfolioPage() {
     }
   };
 
-  const handleToggleTxStatus = async (tx: Transaction, newStatus: 'Executed' | 'Avoid') => {
+  const handleSaveTxStatus = async (tx: Transaction, newStatus: 'Executed' | 'Avoid') => {
     if (!id) return;
+    setSavingTxStatusId(tx.id);
     try {
+      // 1. Update status on the transaction document in Firestore
       await updateDoc(doc(db, 'transactions', tx.id), { status: newStatus });
+
+      // 2. If changing to Executed and it's a BUY recommendation, sync/push to client's holdings!
+      if (newStatus === 'Executed' && (tx.action === 'BUY' || !tx.action)) {
+        const cleanSym = (tx.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+        const existing = holdings.find(h => {
+          const hSym = (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+          return hSym === cleanSym;
+        });
+
+        const meta = getStockMeta(cleanSym, tx.company_name || '');
+        const price = tx.reco_price || tx.price || 0;
+        const qty = tx.quantity || 0;
+        const totalVal = tx.total_value || (price * qty);
+        let currPrice = price;
+        try {
+          const priceSnap = await getDoc(doc(db, 'price_cache', cleanSym));
+          if (priceSnap.exists()) {
+            const p = Number(priceSnap.data()?.close);
+            if (p > 0) currPrice = p;
+          }
+        } catch { /* non-fatal */ }
+
+        const currVal = currPrice * qty;
+        const unrealPnl = currVal - totalVal;
+        const unrealPnlPct = totalVal > 0 ? (unrealPnl / totalVal) * 100 : 0;
+        const nowIso = new Date().toISOString();
+
+        if (existing) {
+          const newQty = existing.quantity + qty;
+          const newInvested = (existing.invested_amount || (existing.buy_price * existing.quantity)) + totalVal;
+          const newAvgPrice = newQty > 0 ? newInvested / newQty : existing.buy_price;
+          const updatedCurrVal = newQty * (existing.current_price || currPrice);
+          const updatedUnrealPnl = updatedCurrVal - newInvested;
+          const updatedUnrealPnlPct = newInvested > 0 ? (updatedUnrealPnl / newInvested) * 100 : 0;
+
+          await updateDoc(doc(db, 'holdings', existing.id), {
+            quantity: newQty,
+            buy_price: newAvgPrice,
+            invested_amount: newInvested,
+            current_value: updatedCurrVal,
+            unrealised_pnl: updatedUnrealPnl,
+            unrealised_pnl_pct: updatedUnrealPnlPct,
+            updated_at: nowIso,
+          });
+        } else {
+          await addDoc(collection(db, 'holdings'), {
+            client_id: id,
+            stock_symbol: cleanSym,
+            nse_symbol: cleanSym,
+            company_name: tx.company_name || meta.companyName || cleanSym,
+            buy_price: price,
+            quantity: qty,
+            invested_amount: totalVal,
+            current_price: currPrice,
+            current_value: currVal,
+            unrealised_pnl: unrealPnl,
+            unrealised_pnl_pct: unrealPnlPct,
+            realised_pnl: 0,
+            source: 'Fresh',
+            holding_tier: 'working',
+            sector: meta.sector || 'Unclassified',
+            market_cap_category: meta.marketCap || 'Small',
+            purchase_date: tx.date || nowIso.split('T')[0],
+            created_at: nowIso,
+          });
+        }
+      }
+
+      // Clear pending status for this tx
+      setPendingTxStatus(prev => {
+        const next = { ...prev };
+        delete next[tx.id];
+        return next;
+      });
+
       await load();
     } catch (err) {
       console.error(err);
-      alert('Failed to update status');
+      alert('Failed to save status & push to portfolio');
+    } finally {
+      setSavingTxStatusId(null);
     }
   };
 
-  const handleDeleteTransaction = async (txId: string) => {
-    if (!window.confirm('Are you sure you want to delete this recommendation record?')) return;
+  const handleConfirmDeleteTransaction = async () => {
+    if (!deleteConfirmTx) return;
+    setIsDeletingTx(true);
     try {
-      await deleteDoc(doc(db, 'transactions', txId));
+      await deleteDoc(doc(db, 'transactions', deleteConfirmTx.id));
+      setDeleteConfirmTx(null);
       await load();
     } catch (err) {
       console.error(err);
       alert('Failed to delete transaction');
+    } finally {
+      setIsDeletingTx(false);
     }
   };
 
@@ -1334,79 +1426,100 @@ export function ClientPortfolioPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
           {/* Total AUA */}
-          <div style={{ background: 'rgba(0,0,0,0.025)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(0,0,0,0.02)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total AUA (Master)</div>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.88)', border: 'none', borderRadius: 16,
+            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total AUA (Master)</div>
             {editingAua ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <input
                   type="number"
                   value={totalAuaInput}
                   onChange={e => setTotalAuaInput(e.target.value)}
                   autoFocus
-                  style={{ width: '100%', padding: '4px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.9)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)' }}
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 14, fontWeight: 700, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.95)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
                 />
                 <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer' }}><Check size={16} /></button>
                 <button onClick={() => setEditingAua(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}><XIcon size={16} /></button>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{fmtCurrency(totalAua)}</span>
-                <button onClick={() => setEditingAua(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Pencil size={11} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)' }}>{fmtCurrency(totalAua)}</span>
+                <button onClick={() => setEditingAua(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Pencil size={12} /></button>
               </div>
             )}
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Total client relationship asset</div>
           </div>
 
           {/* Equity */}
-          <div style={{ background: 'rgba(59,130,246,0.06)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(59,130,246,0.04)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase' }}>Equity Portfolio (Auto)</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{fmtCurrency(totalEquityValue)}</div>
+          <div style={{
+            background: 'rgba(59, 130, 246, 0.08)', border: 'none', borderRadius: 16,
+            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: '0 4px 20px rgba(59, 130, 246, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Equity Portfolio (Auto)</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#2563eb', marginTop: 6 }}>{fmtCurrency(totalEquityValue)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{holdings.length} stocks/ETFs tracked</div>
           </div>
 
           {/* Mutual Funds */}
-          <div style={{ background: 'rgba(168,85,247,0.06)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(168,85,247,0.04)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase' }}>Mutual Funds</div>
+          <div style={{
+            background: 'rgba(168, 85, 247, 0.08)', border: 'none', borderRadius: 16,
+            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: '0 4px 20px rgba(168, 85, 247, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Mutual Funds</div>
             {editingMutualFunds ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <input
                   type="number"
                   value={mutualFundsInput}
                   onChange={e => setMutualFundsInput(e.target.value)}
                   autoFocus
-                  style={{ width: '100%', padding: '4px 8px', fontSize: 14, fontWeight: 700, borderRadius: 6, border: 'none', background: 'rgba(255,255,255,0.9)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)' }}
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 14, fontWeight: 700, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.95)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
                 />
                 <button onClick={saveMutualFunds} disabled={savingMutualFunds} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer' }}><Check size={16} /></button>
                 <button onClick={() => setEditingMutualFunds(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}><XIcon size={16} /></button>
               </div>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <span style={{ fontSize: 18, fontWeight: 800, color: '#7e22ce' }}>{fmtCurrency(mutualFunds)}</span>
-                <button onClick={() => setEditingMutualFunds(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Pencil size={11} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <span style={{ fontSize: 20, fontWeight: 800, color: '#7e22ce' }}>{fmtCurrency(mutualFunds)}</span>
+                <button onClick={() => setEditingMutualFunds(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><Pencil size={12} /></button>
               </div>
             )}
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>External MF holdings</div>
           </div>
 
           {/* Estimated Cash */}
-          <div style={{ background: 'rgba(34,197,94,0.06)', border: 'none', borderRadius: 14, padding: '16px 18px', backdropFilter: 'blur(16px)', boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(34,197,94,0.04)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase' }}>Estimated Free Cash</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
+          <div style={{
+            background: 'rgba(34, 197, 94, 0.08)', border: 'none', borderRadius: 16,
+            padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: '0 4px 20px rgba(34, 197, 94, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Estimated Free Cash</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 6 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>From ledger equation</div>
           </div>
 
           {/* Buffer */}
           <div style={{
-            background: auaBuffer < 0 ? 'rgba(239,68,68,0.08)' : 'rgba(201,168,76,0.08)',
+            background: auaBuffer < 0 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(201, 168, 76, 0.12)',
             border: 'none',
-            borderRadius: 14, padding: '16px 18px',
-            backdropFilter: 'blur(16px)',
-            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85), 0 2px 8px rgba(0,0,0,0.02)'
+            borderRadius: 16, padding: '18px 20px',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            boxShadow: auaBuffer < 0 ? '0 4px 20px rgba(239, 68, 68, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 4px 20px rgba(201, 168, 76, 0.06), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
               {auaBuffer < 0 ? 'AUA Deficit' : 'Buffer Capital'}
             </div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', marginTop: 4 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: auaBuffer < 0 ? '#dc2626' : '#8c6314', marginTop: 6 }}>
               {auaBuffer < 0 ? `- ₹${Math.abs(auaBuffer).toLocaleString('en-IN')}` : fmtCurrency(auaBuffer)}
             </div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
@@ -1812,30 +1925,39 @@ export function ClientPortfolioPage() {
 
           {/* 3 KPI Summary Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
-            <div style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase' }}>Executed BUY Volume</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{fmtCurrency(freshBuysTotal)}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{executedBuys.length} buy orders executed</div>
-            </div>
-
-            <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '14px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase' }}>Executed SELL Proceeds</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626', marginTop: 4 }}>{fmtCurrency(freshSellsTotal)}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{executedSells.length} sell orders executed</div>
+            <div style={{
+              background: 'rgba(34, 197, 94, 0.08)', border: 'none', borderRadius: 16, padding: '18px 20px',
+              backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              boxShadow: '0 4px 20px rgba(34, 197, 94, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Executed BUY Volume</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 6 }}>{fmtCurrency(freshBuysTotal)}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedBuys.length} buy orders executed</div>
             </div>
 
             <div style={{
-              background: totalRealisedPnL >= 0 ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)',
-              border: '1px solid ' + (totalRealisedPnL >= 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'),
-              borderRadius: 10, padding: '14px 16px',
+              background: 'rgba(239, 68, 68, 0.08)', border: 'none', borderRadius: 16, padding: '18px 20px',
+              backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              boxShadow: '0 4px 20px rgba(239, 68, 68, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
             }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Executed SELL Proceeds</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626', marginTop: 6 }}>{fmtCurrency(freshSellsTotal)}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} sell orders executed</div>
+            </div>
+
+            <div style={{
+              background: totalRealisedPnL >= 0 ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+              border: 'none', borderRadius: 16, padding: '18px 20px',
+              backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                 Total Realised P&L
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4 }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 6 }}>
                 {totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Realised profit/loss locked in trade ledger</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Realised profit/loss locked in trade ledger</div>
             </div>
           </div>
 
@@ -1864,7 +1986,7 @@ export function ClientPortfolioPage() {
             <div style={{ overflowX: 'auto' }}>
               <div style={{ minWidth: 1050 }}>
                 <div style={{
-                  display: 'grid', gridTemplateColumns: '105px 165px 110px 120px 85px 120px 115px 85px 95px', gap: 10,
+                  display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
                   padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
                   fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
                 }}>
@@ -1874,7 +1996,7 @@ export function ClientPortfolioPage() {
                   <div>Target Range</div>
                   <div>Quantity</div>
                   <div>Amount (₹)</div>
-                  <div>Status</div>
+                  <div>Status & Action</div>
                   <div>Call</div>
                   <div>Act</div>
                 </div>
@@ -1892,14 +2014,16 @@ export function ClientPortfolioPage() {
 
                   return buyList.map((tx) => {
                     const meta = getStockMeta(tx.stock_symbol, tx.company_name || '');
-                    const isExecuted = tx.status === 'Executed' || !tx.status;
+                    const currentSt = pendingTxStatus[tx.id] || tx.status || 'Executed';
+                    const isExecuted = currentSt === 'Executed';
+                    const isPendingSave = pendingTxStatus[tx.id] && pendingTxStatus[tx.id] !== (tx.status || 'Executed');
                     const amt = tx.total_value || (tx.price * tx.quantity);
 
                     return (
                       <div
                         key={tx.id}
                         style={{
-                          display: 'grid', gridTemplateColumns: '105px 165px 110px 120px 85px 120px 115px 85px 95px', gap: 10,
+                          display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
                           alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
                           fontSize: 12.5,
                         }}
@@ -1931,22 +2055,40 @@ export function ClientPortfolioPage() {
                           {fmtCurrency(amt)}
                         </div>
 
-                        {/* Status Dropdown */}
-                        <div>
+                        {/* Status Dropdown & Save Button */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <select
-                            value={tx.status || 'Executed'}
-                            onChange={e => handleToggleTxStatus(tx, e.target.value as any)}
+                            value={currentSt}
+                            onChange={e => {
+                              const newSt = e.target.value as 'Executed' | 'Avoid';
+                              setPendingTxStatus(prev => ({ ...prev, [tx.id]: newSt }));
+                            }}
                             style={{
-                              padding: '3px 8px', borderRadius: 6, fontSize: 11.5, fontWeight: 700,
+                              padding: '4px 8px', borderRadius: 8, fontSize: 11.5, fontWeight: 700,
                               background: isExecuted ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)',
                               color: isExecuted ? '#16a34a' : '#475569',
-                              border: '1px solid ' + (isExecuted ? 'rgba(34,197,94,0.3)' : 'rgba(100,116,139,0.3)'),
+                              border: 'none',
+                              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85)',
                               cursor: 'pointer', outline: 'none',
                             }}
                           >
                             <option value="Executed">Executed</option>
                             <option value="Avoid">Avoid</option>
                           </select>
+                          {isPendingSave && (
+                            <button
+                              onClick={() => handleSaveTxStatus(tx, pendingTxStatus[tx.id] || 'Executed')}
+                              disabled={savingTxStatusId === tx.id}
+                              className="btn-glass-green"
+                              style={{
+                                padding: '3px 8px', fontSize: 11, fontWeight: 800, borderRadius: 6,
+                                display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+                              }}
+                              title="Save status and push to Client & Working Portfolio"
+                            >
+                              {savingTxStatusId === tx.id ? '…' : <><Check size={12} /> Save</>}
+                            </button>
+                          )}
                         </div>
 
                         <div>
@@ -1960,7 +2102,7 @@ export function ClientPortfolioPage() {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {isExecuted && tx.call_status !== 'Closed' && (
+                          {(tx.status === 'Executed' || !tx.status) && tx.call_status !== 'Closed' && (
                             <button
                               onClick={() => openSellModalForTx(tx)}
                               className="btn-glass-red"
@@ -1971,9 +2113,9 @@ export function ClientPortfolioPage() {
                             </button>
                           )}
                           <button
-                            onClick={() => handleDeleteTransaction(tx.id)}
+                            onClick={() => setDeleteConfirmTx({ id: tx.id, symbol: cleanSymbol(tx) })}
                             style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
-                            title="Delete transaction"
+                            title="Delete transaction record"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -2083,9 +2225,9 @@ export function ClientPortfolioPage() {
                         </div>
                         <div>
                           <button
-                            onClick={() => handleDeleteTransaction(tx.id)}
+                            onClick={() => setDeleteConfirmTx({ id: tx.id, symbol: cleanSymbol(tx) })}
                             style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
-                            title="Delete transaction"
+                            title="Delete transaction record"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -3035,6 +3177,64 @@ export function ClientPortfolioPage() {
                 style={{ flex: 1, padding: '10px 18px', fontSize: 13.5, fontWeight: 700 }}
               >
                 {isDeletingHolding ? 'Deleting…' : 'Delete Holding'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 5b. Centered Delete Transaction Confirmation Modal */}
+      {deleteConfirmTx && createPortal(
+        <div className="glass-modal-backdrop animate-fade-in" style={{
+          position: 'fixed', inset: 0, zIndex: 99999,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+        }}>
+          <div className="glass-modal animate-scale-up" style={{
+            maxWidth: 420, width: '100%', padding: '30px 28px 26px',
+            textAlign: 'center', borderRadius: 22,
+            background: '#ffffff',
+            border: 'none',
+            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
+          }}>
+            <div style={{
+              width: 54, height: 54, borderRadius: '50%',
+              background: 'rgba(239, 68, 68, 0.12)',
+              color: '#dc2626',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <Trash2 size={26} />
+            </div>
+
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+              Delete Transaction Record?
+            </h3>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 24px' }}>
+              Are you sure you want to remove the recommendation / trade record for <strong style={{ color: '#8c6314' }}>{deleteConfirmTx.symbol}</strong> from the trade ledger?
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmTx(null)}
+                disabled={isDeletingTx}
+                className="btn-glass-light"
+                style={{ flex: 1, padding: '10px 18px', fontSize: 13.5 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTransaction}
+                disabled={isDeletingTx}
+                className="btn-glass-red"
+                style={{ flex: 1, padding: '10px 18px', fontSize: 13.5, fontWeight: 700 }}
+              >
+                {isDeletingTx ? 'Deleting…' : 'Delete Record'}
               </button>
             </div>
           </div>
