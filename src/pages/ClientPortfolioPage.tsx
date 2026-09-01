@@ -297,7 +297,7 @@ export function ClientPortfolioPage() {
     return res;
   }, [workingHoldings]);
 
-  // ── Transactions Metrics & Classification ──────────────────────────────────
+  // ── Transactions Metrics & Classification (ALL transactions — display & realised P&L के लिए) ──
   const executedBuys = useMemo(() => {
     return transactions.filter(t => t.action === 'BUY' && (t.status === 'Executed' || !t.status));
   }, [transactions]);
@@ -331,31 +331,72 @@ export function ClientPortfolioPage() {
     return liquidHoldings.reduce((sum: number, h: Holding) => sum + (h.current_value || h.buy_price * h.quantity), 0);
   }, [liquidHoldings]);
 
-  // ── Dynamic Cash Position Ledger (Screenshot Formula) ─────────────────────
-  const baseClientCash = client?.client_cash_base_amount !== undefined && client.client_cash_base_amount !== null
+  // ── Dynamic Cash Position Ledger ──────────────────────────────────────────
+
+  // Base Cash Date — यह dynamic cutoff है।
+  // कोई backdated date सेट करे तो नीचे के सभी useMemo auto-recompute करेंगे।
+  const cashBaseDate = client?.client_cash_base_date || '';
+
+  // ── STEP 2 Inputs: Post-Base-Date Transactions (Dynamic Flow) ─────────────
+  // सिर्फ वो transactions जो client_cash_base_date के STRICTLY बाद की हैं।
+  // अगर base date बदली (backdated), तो ये automatically उस date के बाद की transactions pick करेंगे।
+  const postBaseDateBuys = useMemo(() => {
+    return transactions.filter(t =>
+      t.action === 'BUY' &&
+      (t.status === 'Executed' || !t.status) &&
+      (!cashBaseDate || t.date > cashBaseDate)
+    );
+  }, [transactions, cashBaseDate]);
+
+  const postBaseDateSells = useMemo(() => {
+    return transactions.filter(t =>
+      t.action === 'SELL' &&
+      (t.status === 'Executed' || !t.status) &&
+      (!cashBaseDate || t.date > cashBaseDate)
+    );
+  }, [transactions, cashBaseDate]);
+
+  const newBuysTotal = useMemo(() => {
+    return postBaseDateBuys.reduce((sum, t) => sum + (t.total_value || (t.price * t.quantity)), 0);
+  }, [postBaseDateBuys]);
+
+  const newSellsTotal = useMemo(() => {
+    return postBaseDateSells.reduce((sum, t) => sum + (t.total_value || (t.price * t.quantity)), 0);
+  }, [postBaseDateSells]);
+
+  // ── STEP 1: Opening Liquidity (As on Base Date) ────────────────────────────
+  // Base Cash = क्लाइंट का शुद्ध नकद (fresh cash brought in)
+  // Parked Liquid = Liquid ETF / Liquid Funds में रखा हुआ amount
+  const baseCash = client?.client_cash_base_amount !== undefined && client.client_cash_base_amount !== null
     ? client.client_cash_base_amount
     : (client?.asset_free_cash || 0);
 
-  const parkedLiquidAmount = client?.cash_parked_liquid !== undefined && client.cash_parked_liquid !== null
+  const parkedLiquid = client?.cash_parked_liquid !== undefined && client.cash_parked_liquid !== null
     ? client.cash_parked_liquid
     : liquidEtfTotalValue;
 
-  const dynamicEstimatedCash = Math.round(baseClientCash - freshBuysTotal + freshSellsTotal + parkedLiquidAmount);
+  const totalOpening = baseCash + parkedLiquid;
+
+  // ── STEP 2: Projected Cash (Live) ─────────────────────────────────────────
+  // Formula: Total Opening − New Buys (post-date only) + New Sells (post-date only)
+  const projectedCash = Math.round(totalOpening - newBuysTotal + newSellsTotal);
 
   const momentumCash = client?.client_momentum_cash !== undefined ? client.client_momentum_cash : 0;
-  const longTermCash = client?.client_long_cash !== undefined ? client.client_long_cash : Math.max(0, dynamicEstimatedCash - momentumCash);
+  const longTermCash = client?.client_long_cash !== undefined ? client.client_long_cash : Math.max(0, projectedCash - momentumCash);
 
-  const totalEquityValue = summary.currentValue > 0 ? summary.currentValue : summary.totalInvested;
-  const totalPortfolioValue = totalEquityValue + mutualFunds + dynamicEstimatedCash;
-  const freeCashRatio = totalPortfolioValue > 0 ? (dynamicEstimatedCash / totalPortfolioValue) * 100 : 0;
+  const totalEquityValue = workingSummary.currentValue > 0 ? workingSummary.currentValue : workingSummary.totalInvested;
+  const totalPortfolioValue = totalEquityValue + mutualFunds + projectedCash;
+  const freeCashRatio = totalPortfolioValue > 0 ? (projectedCash / totalPortfolioValue) * 100 : 0;
 
-  const allocatedAua = totalEquityValue + mutualFunds + dynamicEstimatedCash;
-  const auaBuffer = Math.round(totalAua - allocatedAua);
-  const isAuaBreached = totalAua > 0 && allocatedAua > totalAua;
-  const auaBreachAmount = Math.max(0, allocatedAua - totalAua);
+  // ── Buffer Capital (Spec-Aligned Formula) ──────────────────────────────────
+  // Buffer = AUA − (Portfolio Invested Value + Base Cash + Liquid Cash)
+  // Invested value (cost basis) use करते हैं — market fluctuation से independent
+  const bufferCapital = Math.round(totalAua - (workingSummary.totalInvested + baseCash + parkedLiquid));
+  const isAuaBreached = totalAua > 0 && bufferCapital < 0;
+  const auaBreachAmount = Math.max(0, -bufferCapital);
 
   const reportedCashNum = parseFloat(reportedCashAmount) || 0;
-  const differEstimate = reportedCashAmount.trim() !== '' ? dynamicEstimatedCash - reportedCashNum : 0;
+  const differEstimate = reportedCashAmount.trim() !== '' ? projectedCash - reportedCashNum : 0;
 
   const uniqueSectors = Array.from(new Set(activeTableHoldings.map(h => getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '').sector))).filter(Boolean).sort();
   const uniqueMCaps = Array.from(new Set(activeTableHoldings.map(h => getStockMeta(h.nse_symbol || h.stock_symbol || '', h.company_name || '').marketCap))).filter(Boolean).sort();
@@ -1384,6 +1425,7 @@ export function ClientPortfolioPage() {
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          {/* ── LHS: Avatar + Name + Meta ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             <div style={{
               width: 52, height: 52, borderRadius: '50%',
@@ -1418,6 +1460,57 @@ export function ClientPortfolioPage() {
                 <span>Onboarded: <strong style={{ color: 'var(--text-secondary)' }}>{client.onboarding_date || '—'}</strong></span>
                 <span>Last Statement: <strong style={{ color: '#8c6314' }}>{client.client_portfolio_date || client.onboarding_date || 'Initial'}</strong></span>
               </div>
+            </div>
+          </div>
+
+          {/* ── RHS: Total AUA + Current Value + Invested Value KPI boxes ── */}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+
+            {/* Total AUA box */}
+            <div style={{
+              padding: '12px 20px', borderRadius: 14, minWidth: 140,
+              background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(185,145,45,0.08) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 8px rgba(201,168,76,0.08)',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                Total AUA (Master)
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: '#5c3e04' }} className="tabular-nums">
+                {fmtCurrency(totalAua)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Total relationship asset</div>
+            </div>
+
+            {/* Current Value box */}
+            <div style={{
+              padding: '12px 20px', borderRadius: 14, minWidth: 140,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.45) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.04)',
+              backdropFilter: 'blur(12px)',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                Current Value
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: totalEquityValue >= workingSummary.totalInvested ? '#15803d' : '#dc2626' }} className="tabular-nums">
+                {fmtCurrency(totalEquityValue)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Working portfolio live</div>
+            </div>
+
+            {/* Invested Value box */}
+            <div style={{
+              padding: '12px 20px', borderRadius: 14, minWidth: 140,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.45) 100%)',
+              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.04)',
+              backdropFilter: 'blur(12px)',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                Invested Value
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }} className="tabular-nums">
+                {fmtCurrency(workingSummary.totalInvested)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Equity portfolio cost basis</div>
             </div>
           </div>
         </div>
@@ -1490,7 +1583,7 @@ export function ClientPortfolioPage() {
                 boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.95)',
                 color: '#8c6314', fontSize: 12, fontWeight: 700,
               }}>
-                <span>Buffer Capital: <strong>{fmtCurrency(auaBuffer)}</strong></span>
+                <span>Buffer Capital: <strong>{fmtCurrency(bufferCapital)}</strong></span>
               </div>
             )}
           </div>
@@ -1587,7 +1680,7 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          {/* Card 5: Estimated Free Cash */}
+          {/* Card 5: Projected Cash (Live) */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
             border: 'none', borderRadius: 16,
@@ -1595,9 +1688,9 @@ export function ClientPortfolioPage() {
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Estimated Free Cash</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: dynamicEstimatedCash >= 0 ? '#5c3e04' : '#dc2626', marginTop: 6 }}>{fmtCurrency(dynamicEstimatedCash)}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>From dynamic ledger</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Projected Cash (Live)</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: projectedCash >= 0 ? '#5c3e04' : '#dc2626', marginTop: 6 }}>{fmtCurrency(projectedCash)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Opening − New Buys + New Sells</div>
           </div>
         </div>
       </div>
@@ -1613,7 +1706,7 @@ export function ClientPortfolioPage() {
             { key: 'working', label: 'Working Portfolio', badge: `${workingHoldings.length} Active` },
             { key: 'client', label: 'Client Portfolio', badge: `${clientHoldings.length} Base` },
             { key: 'transactions', label: 'Transactions During Period', badge: `${transactions.length} Orders` },
-            { key: 'cash', label: 'Cash Position', badge: fmtCurrencyKPI(dynamicEstimatedCash) },
+            { key: 'cash', label: 'Cash Position', badge: fmtCurrencyKPI(projectedCash) },
           ].map((t) => {
             const isActive = portfolioTab === t.key;
             return (
@@ -2338,157 +2431,159 @@ export function ClientPortfolioPage() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20, marginBottom: 24 }}>
-            {/* Master Cash Ledger Card */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20, marginBottom: 24 }}>
+            {/* ── Cash Position Master Card (2-Step Breakdown) ── */}
             <div className="glass-card" style={{ padding: '22px 26px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
                 <h3 style={{ fontSize: 15, fontWeight: 800, color: '#8c6314', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   Cash Position Master
                 </h3>
                 <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(201,168,76,0.15)', color: '#8c6314' }}>
-                  As on {client.client_cash_base_date || client.onboarding_date || 'Initial'}
+                  Base Date: {client.client_cash_base_date || client.onboarding_date || 'Not set'}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* 1. Client cash as on date */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5 }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    Client cash as on date ({client.client_cash_base_date || client.onboarding_date || '—'}):
-                  </span>
-                  <strong style={{ fontSize: 16, color: 'var(--text-primary)' }} className="tabular-nums">
-                    {fmtCurrency(baseClientCash)}
-                  </strong>
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-                {/* 2. New stock given till date */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#dc2626' }}>
-                  <span>New stock given till date ({executedBuys.length} Buys):</span>
-                  <strong style={{ fontSize: 15 }} className="tabular-nums">
-                    - {fmtCurrency(freshBuysTotal)}
-                  </strong>
-                </div>
-
-                {/* 3. Sold old stocks as on date */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#16a34a' }}>
-                  <span>Sold old stocks as on date ({executedSells.length} Sells):</span>
-                  <strong style={{ fontSize: 15 }} className="tabular-nums">
-                    + {fmtCurrency(freshSellsTotal)}
-                  </strong>
-                </div>
-
-                {/* 4. Cash parked in liquid */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13.5, color: '#2563eb' }}>
-                  <span>Cash parked in liquid:</span>
-                  <strong style={{ fontSize: 15 }} className="tabular-nums">
-                    + {fmtCurrency(parkedLiquidAmount)}
-                  </strong>
-                </div>
-
-                <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
-
-                {/* 5. As on date estimated cash */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15, fontWeight: 800 }}>
-                  <span style={{ color: '#8c6314' }}>As on date estimated cash:</span>
-                  <strong style={{ fontSize: 20, color: '#8c6314' }} className="tabular-nums">
-                    {fmtCurrency(dynamicEstimatedCash)}
-                  </strong>
-                </div>
-
-                {/* Ratio and Buckets */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
-                  <div style={{ padding: '10px 12px', background: freeCashRatio < 10 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a' }}>Free Cash to Portfolio Ratio</div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a', marginTop: 2 }}>
-                      {freeCashRatio.toFixed(1)}% <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Target: 10%)</span>
-                    </div>
+                {/* ── STEP 1: Opening Liquidity ── */}
+                <div style={{ padding: '16px 18px', borderRadius: 12, background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
+                    Step 1 — Opening Liquidity (As on Base Date)
                   </div>
 
-                  <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.06)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Allocation</div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                        Long-Term: <strong>{fmtCurrencyKPI(longTermCash)}</strong> | Momentum: <strong>{fmtCurrencyKPI(momentumCash)}</strong>
-                      </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Base Cash */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Base Cash (Brought In)</span>
+                      <strong style={{ fontSize: 14, color: 'var(--text-primary)' }} className="tabular-nums">
+                        {fmtCurrency(baseCash)}
+                      </strong>
                     </div>
-                    <button
-                      onClick={openStrategyModal}
-                      style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#2563eb', borderRadius: 4, cursor: 'pointer', padding: '3px 7px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
-                      title="Edit Strategy Allocation"
-                    >
-                      <Pencil size={11} /> Edit
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Discrepancy & Reconciliation Card */}
-            <div className="glass-card" style={{ padding: '22px 26px' }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Discrepancy Audit & Reconciliation
-              </h3>
+                    {/* Liquid Cash */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#2563eb' }}>
+                      <span>+ Liquid Cash (Parked in Funds)</span>
+                      <strong style={{ fontSize: 14 }} className="tabular-nums">
+                        {fmtCurrency(parkedLiquid)}
+                      </strong>
+                    </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Client Reported Cash Date:
-                  </label>
-                  <input
-                    type="date"
-                    value={reportedCashDate}
-                    onChange={e => setReportedCashDate(e.target.value)}
-                    style={{ width: '100%', padding: '6px 10px', fontSize: 12.5, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
-                  />
-                </div>
+                    <div style={{ height: 1, background: 'rgba(201,168,76,0.3)', margin: '2px 0' }} />
 
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Actual Cash Balance Reported by Client (₹):
-                  </label>
-                  <input
-                    type="number"
-                    value={reportedCashAmount}
-                    onChange={e => setReportedCashAmount(e.target.value)}
-                    placeholder="e.g. 26000"
-                    style={{ width: '100%', padding: '6px 10px', fontSize: 13, fontWeight: 700, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
-                  />
-                </div>
-
-                {reportedCashAmount.trim() !== '' && (
-                  <div style={{ padding: '10px 14px', borderRadius: 8, background: differEstimate !== 0 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', border: '1px solid ' + (differEstimate !== 0 ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)') }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: differEstimate !== 0 ? '#dc2626' : '#16a34a' }}>Differ Estimate (Variance):</span>
-                      <strong style={{ fontSize: 15, color: differEstimate !== 0 ? '#dc2626' : '#16a34a' }}>
-                        {differEstimate !== 0 ? ('₹' + Math.abs(differEstimate).toLocaleString('en-IN') + ' discrepancy') : 'Fully Reconciled (₹0)'}
+                    {/* Total Opening */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, fontWeight: 800 }}>
+                      <span style={{ color: '#8c6314' }}>Total Opening Liquidity</span>
+                      <strong style={{ fontSize: 18, color: '#8c6314' }} className="tabular-nums">
+                        {fmtCurrency(totalOpening)}
                       </strong>
                     </div>
                   </div>
-                )}
-
-                <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Reason for Discrepancy / Variance:
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={reconReason}
-                    onChange={e => setReconReason(e.target.value)}
-                    placeholder="e.g. Client withdrew ₹46,000 for personal use / Direct unapproved investment"
-                    style={{ width: '100%', padding: '8px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
                 </div>
 
-                <button
-                  onClick={saveAuditReconciliation}
-                  disabled={savingReconReason}
-                  className="btn-glass-gold"
-                  style={{ width: '100%', padding: '8px', fontSize: 12, fontWeight: 700, marginTop: 4 }}
-                >
-                  {savingReconReason ? 'Saving Audit Trail...' : 'Save Reconciliation Audit'}
-                </button>
+                {/* ── STEP 2: Dynamic Flow + Projected Cash ── */}
+                <div style={{ padding: '16px 18px', borderRadius: 12, background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.15)' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
+                    Step 2 — Dynamic Flow (After Base Date)
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* New Buys */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#dc2626' }}>
+                      <span>− New Buys ({postBaseDateBuys.length} trades)</span>
+                      <strong style={{ fontSize: 14 }} className="tabular-nums">
+                        − {fmtCurrency(newBuysTotal)}
+                      </strong>
+                    </div>
+
+                    {/* New Sells */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#16a34a' }}>
+                      <span>+ New Sells ({postBaseDateSells.length} trades)</span>
+                      <strong style={{ fontSize: 14 }} className="tabular-nums">
+                        + {fmtCurrency(newSellsTotal)}
+                      </strong>
+                    </div>
+
+                    <div style={{ height: 1, background: 'rgba(59,130,246,0.25)', margin: '2px 0' }} />
+
+                    {/* Projected Cash */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, fontWeight: 800 }}>
+                      <span style={{ color: '#2563eb' }}>Projected Cash (Live)</span>
+                      <strong style={{ fontSize: 18, color: projectedCash >= 0 ? '#15803d' : '#dc2626' }} className="tabular-nums">
+                        {fmtCurrency(projectedCash)}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Ratios & Strategy Allocation (below the 2 step cards) ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+                <div style={{ padding: '10px 12px', background: freeCashRatio < 10 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a' }}>Free Cash to Portfolio Ratio</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a', marginTop: 2 }}>
+                    {freeCashRatio.toFixed(1)}% <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Target: 10%)</span>
+                  </div>
+                </div>
+
+                <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.06)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Allocation</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
+                      Long-Term: <strong>{fmtCurrencyKPI(longTermCash)}</strong> | Momentum: <strong>{fmtCurrencyKPI(momentumCash)}</strong>
+                    </div>
+                  </div>
+                  <button
+                    onClick={openStrategyModal}
+                    style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#2563eb', borderRadius: 4, cursor: 'pointer', padding: '3px 7px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                    title="Edit Strategy Allocation"
+                  >
+                    <Pencil size={11} /> Edit
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* ── Discrepancy Audit & Reconciliation — HIDDEN (Internal Use) ── */}
+            {false && (
+              <div className="glass-card" style={{ padding: '22px 26px' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Discrepancy Audit & Reconciliation
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Client Reported Cash Date:
+                    </label>
+                    <input type="date" value={reportedCashDate} onChange={e => setReportedCashDate(e.target.value)} style={{ width: '100%', padding: '6px 10px', fontSize: 12.5, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Actual Cash Balance Reported by Client (₹):
+                    </label>
+                    <input type="number" value={reportedCashAmount} onChange={e => setReportedCashAmount(e.target.value)} placeholder="e.g. 26000" style={{ width: '100%', padding: '6px 10px', fontSize: 13, fontWeight: 700, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)' }} />
+                  </div>
+                  {reportedCashAmount.trim() !== '' && (
+                    <div style={{ padding: '10px 14px', borderRadius: 8, background: differEstimate !== 0 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', border: '1px solid ' + (differEstimate !== 0 ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)') }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: differEstimate !== 0 ? '#dc2626' : '#16a34a' }}>Differ Estimate (Variance):</span>
+                        <strong style={{ fontSize: 15, color: differEstimate !== 0 ? '#dc2626' : '#16a34a' }}>
+                          {differEstimate !== 0 ? ('₹' + Math.abs(differEstimate).toLocaleString('en-IN') + ' discrepancy') : 'Fully Reconciled (₹0)'}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>
+                      Reason for Discrepancy / Variance:
+                    </label>
+                    <textarea rows={2} value={reconReason} onChange={e => setReconReason(e.target.value)} placeholder="e.g. Client withdrew ₹46,000 for personal use" style={{ width: '100%', padding: '8px 10px', fontSize: 12, borderRadius: 6, border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-primary)', outline: 'none' }} />
+                  </div>
+                  <button onClick={saveAuditReconciliation} disabled={savingReconReason} className="btn-glass-gold" style={{ width: '100%', padding: '8px', fontSize: 12, fontWeight: 700, marginTop: 4 }}>
+                    {savingReconReason ? 'Saving Audit Trail...' : 'Save Reconciliation Audit'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Parked Liquid Holdings Table */}
@@ -2941,7 +3036,7 @@ export function ClientPortfolioPage() {
                 <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2563eb', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Pencil size={16} /> Strategy Cash Allocation
                 </h3>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total Estimated Free Cash: ₹{dynamicEstimatedCash.toLocaleString('en-IN')}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total Projected Cash: ₹{projectedCash.toLocaleString('en-IN')}</span>
               </div>
               <button onClick={() => setShowStrategyModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             </div>
@@ -2957,7 +3052,7 @@ export function ClientPortfolioPage() {
                     const val = e.target.value;
                     setStrategyMomentumInput(val);
                     const num = parseFloat(val) || 0;
-                    setStrategyLongInput(String(Math.max(0, dynamicEstimatedCash - num)));
+                    setStrategyLongInput(String(Math.max(0, projectedCash - num)));
                   }}
                   placeholder="0"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}
@@ -2972,9 +3067,9 @@ export function ClientPortfolioPage() {
                     key={pct}
                     type="button"
                     onClick={() => {
-                      const mom = Math.round((dynamicEstimatedCash * pct) / 100);
+                      const mom = Math.round((projectedCash * pct) / 100);
                       setStrategyMomentumInput(String(mom));
-                      setStrategyLongInput(String(Math.max(0, dynamicEstimatedCash - mom)));
+                      setStrategyLongInput(String(Math.max(0, projectedCash - mom)));
                     }}
                     style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', color: '#2563eb', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                   >
