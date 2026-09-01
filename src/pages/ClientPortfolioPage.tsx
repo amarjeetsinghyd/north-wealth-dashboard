@@ -1472,9 +1472,24 @@ export function ClientPortfolioPage() {
               <div style={{ fontSize: 10, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
                 Total AUA (Master)
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: '#5c3e04' }} className="tabular-nums">
-                {fmtCurrency(totalAua)}
-              </div>
+              {editingAua ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <input
+                    type="number"
+                    value={totalAuaInput}
+                    onChange={e => setTotalAuaInput(e.target.value)}
+                    autoFocus
+                    style={{ width: 130, padding: '4px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.95)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
+                  />
+                  <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer', display: 'flex', padding: 2 }}><Check size={14} /></button>
+                  <button onClick={() => setEditingAua(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: 2 }}><XIcon size={14} /></button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: '#5c3e04' }} className="tabular-nums">{fmtCurrency(totalAua)}</span>
+                  <button onClick={() => { setTotalAuaInput(String(totalAua)); setEditingAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', display: 'flex', padding: 2 }} title="Edit Total AUA"><Pencil size={12} /></button>
+                </div>
+              )}
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Total relationship asset</div>
             </div>
           </div>
@@ -1556,47 +1571,30 @@ export function ClientPortfolioPage() {
 
         {/* ── 5 Key Master Metric Cards ───────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-          {/* Card 1: Total AUA */}
+          {/* Card 1: Current Value — auto, non-editable */}
           <div style={{
-            background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)',
             border: 'none', borderRadius: 16,
             padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total AUA (Master)</div>
-            {editingAua ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <input
-                  type="number"
-                  value={totalAuaInput}
-                  onChange={e => setTotalAuaInput(e.target.value)}
-                  autoFocus
-                  style={{ width: '100%', padding: '6px 10px', fontSize: 14, fontWeight: 700, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.95)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
-                />
-                <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer' }}><Check size={16} /></button>
-                <button onClick={() => setEditingAua(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer' }}><XIcon size={16} /></button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                <span style={{ fontSize: 20, fontWeight: 800, color: '#5c3e04' }}>{fmtCurrency(totalAua)}</span>
-                <button onClick={() => setEditingAua(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314' }}><Pencil size={12} /></button>
-              </div>
-            )}
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Total relationship asset</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(workingSummary.currentValue || totalEquityValue)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Working portfolio live</div>
           </div>
 
-          {/* Card 2: Equity Valuation (Auto) */}
+          {/* Card 2: Invested Value — auto, non-editable */}
           <div style={{
-            background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)',
             border: 'none', borderRadius: 16,
             padding: '18px 20px', backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Equity Portfolio (Auto)</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#5c3e04', marginTop: 6 }}>{fmtCurrency(workingSummary.currentValue || totalEquityValue)}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{workingHoldings.length} stocks/ETFs tracked</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(workingSummary.totalInvested)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Equity portfolio cost basis</div>
           </div>
 
           {/* Card 3: Unrealised P&L (Working Live) */}
