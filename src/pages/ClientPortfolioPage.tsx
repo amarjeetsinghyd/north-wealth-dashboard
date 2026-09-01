@@ -2307,12 +2307,13 @@ export function ClientPortfolioPage() {
                   </span>
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflow: 'auto', maxHeight: '62vh', position: 'relative' }}>
                   <div style={{ minWidth: 1180 }}>
                     <div style={{
                       display: 'grid', gridTemplateColumns: '105px 150px 90px 105px 70px 75px 100px 135px 65px 55px 65px', gap: 10,
-                      padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
+                      padding: '12px 16px', background: 'rgba(248,247,243,0.98)', borderBottom: '1px solid var(--border-subtle)',
                       fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
+                      position: 'sticky', top: 0, zIndex: 2, backdropFilter: 'blur(8px)',
                     }}>
                       <div style={{ cursor: 'pointer' }} onClick={() => handleTxSort('date')}>Date</div>
                       <div>Stock Name</div>
@@ -2573,12 +2574,13 @@ export function ClientPortfolioPage() {
                   </div>
                 </div>
 
-                <div style={{ overflowX: 'auto' }}>
+                <div style={{ overflow: 'auto', maxHeight: '62vh', position: 'relative' }}>
                   <div style={{ minWidth: 900 }}>
                     <div style={{
                       display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
-                      padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
+                      padding: '10px 16px', background: 'rgba(248,247,243,0.98)', borderBottom: '1px solid var(--border-subtle)',
                       fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
+                      position: 'sticky', top: 0, zIndex: 2, backdropFilter: 'blur(8px)',
                     }}>
                       <div>Date</div>
                       <div>Stock Name</div>
