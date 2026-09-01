@@ -634,12 +634,23 @@ export function ClientPortfolioPage() {
     const baseDateVal = cashBaseDateInput || new Date().toISOString().split('T')[0];
     setSavingCashBase(true);
     try {
+      const newBaseTs = toDayTs(baseDateVal);
+      const buyAmt = transactions
+        .filter(t => t.action === 'BUY' && (t.status === 'Executed' || !t.status) && toDayTs(t.date) > newBaseTs)
+        .reduce((s, t) => s + (t.total_value || (t.price * t.quantity)), 0);
+      const sellAmt = transactions
+        .filter(t => t.action === 'SELL' && (t.status === 'Executed' || !t.status) && toDayTs(t.date) > newBaseTs)
+        .reduce((s, t) => s + (t.total_value || (t.price * t.quantity)), 0);
+      const projectedAtEntry = Math.round((amt + liquidAmt) - buyAmt + sellAmt);
       const newEntry = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         base_date: baseDateVal,
         cash: amt,
         liquid: liquidAmt,
         total: amt + liquidAmt,
+        buy_amount: Math.round(buyAmt),
+        sell_amount: Math.round(sellAmt),
+        projected: projectedAtEntry,
         created_at: new Date().toISOString(),
       };
       const prevHistory = (client as any)?.cash_history || [];
@@ -2752,23 +2763,29 @@ export function ClientPortfolioPage() {
             </div>
             {(client as any)?.cash_history && (client as any).cash_history.length > 0 ? (
               <div style={{ overflowX: 'auto' }}>
-                <div style={{ minWidth: 640 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '150px 120px 130px 130px 140px', gap: 10, padding: '10px 16px', background: 'rgba(0,0,0,0.03)', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                <div style={{ minWidth: 860 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '140px 105px 105px 105px 110px 110px 110px 115px', gap: 10, padding: '10px 16px', background: 'rgba(0,0,0,0.03)', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                     <div>Updated On</div>
                     <div>As on Date</div>
                     <div>Cash</div>
                     <div>Liquid</div>
                     <div>Total Opening</div>
+                    <div>Buy Amount</div>
+                    <div>Sell Amount</div>
+                    <div>Total Free Cash</div>
                   </div>
                   {[...(client as any).cash_history].reverse().map((entry: any) => (
-                    <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '150px 120px 130px 130px 140px', gap: 10, alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)', fontSize: 12.5 }}>
+                    <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '140px 105px 105px 105px 110px 110px 110px 115px', gap: 10, alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)', fontSize: 12.5 }}>
                       <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                         {new Date(entry.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </div>
                       <div style={{ fontWeight: 600, color: '#8c6314' }}>{entry.base_date ? new Date(entry.base_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
                       <div className="tabular-nums" style={{ fontWeight: 600 }}>{fmtCurrency(entry.cash || 0)}</div>
                       <div className="tabular-nums" style={{ fontWeight: 600 }}>{fmtCurrency(entry.liquid || 0)}</div>
-                      <div className="tabular-nums" style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{fmtCurrency(entry.total || 0)}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 700 }}>{fmtCurrency(entry.total || 0)}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 600, color: '#dc2626' }}>{fmtCurrency(entry.buy_amount || 0)}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 600, color: '#16a34a' }}>{fmtCurrency(entry.sell_amount || 0)}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 800, color: ((entry.projected ?? entry.total) >= 0) ? '#15803d' : '#dc2626' }}>{fmtCurrency((entry.projected ?? entry.total) || 0)}</div>
                     </div>
                   ))}
                 </div>

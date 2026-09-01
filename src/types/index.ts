@@ -31,6 +31,9 @@ export interface Client {
     cash: number;
     liquid: number;
     total: number;
+    buy_amount: number;
+    sell_amount: number;
+    projected: number;
     created_at: string;
   }>;
   created_at: string;
