@@ -3,7 +3,7 @@ import ReactDOM, { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CircleAlert as AlertCircle, Pencil, Check, X as XIcon,
-  Landmark, Download, Upload, PlusCircle, Trash2, Sparkles, Wallet, TrendingUp
+  Landmark, Download, Upload, PlusCircle, Trash2, Sparkles, Wallet, TrendingUp, FileText
 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, getDoc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
@@ -2308,9 +2308,9 @@ export function ClientPortfolioPage() {
                 </div>
 
                 <div style={{ overflowX: 'auto' }}>
-                  <div style={{ minWidth: 1050 }}>
+                  <div style={{ minWidth: 1180 }}>
                     <div style={{
-                      display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
+                      display: 'grid', gridTemplateColumns: '105px 150px 90px 105px 70px 75px 100px 135px 65px 55px 65px', gap: 10,
                       padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
                       fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
                     }}>
@@ -2319,13 +2319,32 @@ export function ClientPortfolioPage() {
                       <div>Reco Price</div>
                       <div>Buying Price Range</div>
                       <div>Quantity</div>
+                      <div>Sold Qty</div>
                       <div>Amount (₹)</div>
                       <div>Status & Action</div>
                       <div>Call</div>
+                      <div>Report</div>
                       <div>Act</div>
                     </div>
 
                     {(() => {
+                      // FIFO allocation of sold qty per buy recommendation (per symbol, by buy date)
+                      const sellsBySymbol = new Map<string, number>();
+                      executedSells.forEach(s => {
+                        const k = cleanSymbol(s).toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+                        sellsBySymbol.set(k, (sellsBySymbol.get(k) || 0) + (Number(s.quantity) || 0));
+                      });
+                      const buysOrdered = [...transactions].filter(t => t.action === 'BUY' || !t.action).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                      const remaining = new Map(sellsBySymbol);
+                      const soldMap = new Map<string, number>();
+                      buysOrdered.forEach(b => {
+                        const k = cleanSymbol(b).toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+                        const rem = remaining.get(k) || 0;
+                        const sold = Math.min(Number(b.quantity) || 0, Math.max(0, rem));
+                        soldMap.set(b.id, sold);
+                        remaining.set(k, Math.max(0, rem - sold));
+                      });
+
                       const buyList = getSortedBuyTransactions();
 
                       if (buyList.length === 0) {
@@ -2343,11 +2362,14 @@ export function ClientPortfolioPage() {
                         const isPendingSave = pendingTxStatus[tx.id] && pendingTxStatus[tx.id] !== (tx.status || 'Executed');
                         const amt = tx.total_value || (tx.price * tx.quantity);
 
+                        const soldQty = soldMap.get(tx.id) ?? 0;
+                        const hasSold = soldQty > 0;
+
                         return (
                           <div
                             key={tx.id}
                             style={{
-                              display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
+                              display: 'grid', gridTemplateColumns: '105px 150px 90px 105px 70px 75px 100px 135px 65px 55px 65px', gap: 10,
                               alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
                               fontSize: 12.5,
                             }}
@@ -2373,6 +2395,10 @@ export function ClientPortfolioPage() {
 
                             <div className="tabular-nums">
                               {tx.quantity.toLocaleString('en-IN')}
+                            </div>
+
+                            <div className="tabular-nums" style={{ fontWeight: 700, color: hasSold ? '#b45309' : 'var(--text-muted)', textAlign: 'center' }}>
+                              {soldQty.toLocaleString('en-IN')}
                             </div>
 
                             <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -2421,6 +2447,20 @@ export function ClientPortfolioPage() {
                                 color: tx.call_status === 'Closed' ? 'var(--text-muted)' : '#2563eb',
                               }}>
                                 {tx.call_status || 'Open'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                              <span
+                                title="Report (PDF) — static placeholder"
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                  width: 28, height: 28, borderRadius: 7,
+                                  background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.14)',
+                                  color: '#dc2626',
+                                }}
+                              >
+                                <FileText size={14} />
                               </span>
                             </div>
 
