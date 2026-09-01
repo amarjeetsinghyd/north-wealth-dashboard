@@ -3,7 +3,7 @@ import ReactDOM, { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CircleAlert as AlertCircle, Pencil, Check, X as XIcon,
-  Landmark, Download, Upload, PlusCircle, Trash2, ShieldAlert, Sparkles, Wallet
+  Landmark, Download, Upload, PlusCircle, Trash2, Sparkles, Wallet
 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, getDoc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
@@ -103,7 +103,6 @@ export function ClientPortfolioPage() {
   const [recoRangeMax, setRecoRangeMax] = useState('');
   const [recoQty, setRecoQty] = useState('');
   const [recoStatus, setRecoStatus] = useState<'Executed' | 'Avoid'>('Executed');
-  const [recoBucket, setRecoBucket] = useState<'Long-Term' | 'Momentum'>('Long-Term');
   const [savingReco, setSavingReco] = useState(false);
 
   // Upload Statement Modal (Statement Parser)
@@ -424,6 +423,7 @@ export function ClientPortfolioPage() {
   const bufferCapital = Math.round(totalAua - (workingSummary.totalInvested + baseCash + parkedLiquid));
   const isAuaBreached = totalAua > 0 && bufferCapital < 0;
   const auaBreachAmount = Math.max(0, -bufferCapital);
+  void isAuaBreached; void auaBreachAmount;
 
   const reportedCashNum = parseFloat(reportedCashAmount) || 0;
   const differEstimate = reportedCashAmount.trim() !== '' ? projectedCash - reportedCashNum : 0;
@@ -1115,7 +1115,6 @@ export function ClientPortfolioPage() {
         total_value: totalVal,
         status: recoStatus,
         call_status: 'Open',
-        bucket: recoBucket,
         created_at: nowIso,
       });
 
@@ -1447,7 +1446,9 @@ export function ClientPortfolioPage() {
     );
   }
 
-  const gridCols = '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 75px';
+  const gridCols = portfolioTab === 'working'
+    ? '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px'
+    : '36px 170px 155px 80px 80px 115px 125px 115px 125px 130px 90px 75px 85px 75px';
 
   return (
     <div className="container animate-fade-in" style={{ paddingBottom: 'var(--space-12)' }}>
@@ -1556,38 +1557,33 @@ export function ClientPortfolioPage() {
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>Total relationship asset</div>
             </div>
 
-            {/* Premium Glass — Buffer Capital (Editable, shifted from strip) */}
+            {/* Premium Glass — Buffer Capital (Editable, neutral - no threshold) */}
             <div style={{
               padding: '14px 18px', borderRadius: 16, minWidth: 168,
-              background: isAuaBreached
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.92) 100%)'
-                : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.88) 100%)',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.88) 100%)',
               backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-              border: isAuaBreached ? '1.5px solid rgba(239,68,68,0.28)' : '1.5px solid rgba(16,185,129,0.24)',
-              boxShadow: isAuaBreached
-                ? '0 8px 24px rgba(239,68,68,0.13), inset 0 1px 1px rgba(255,255,255,0.95)'
-                : '0 8px 24px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(16,185,129,0.10)',
+              border: '1.5px solid rgba(16,185,129,0.24)',
+              boxShadow: '0 8px 24px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(16,185,129,0.10)',
               position: 'relative', overflow: 'hidden',
             }}>
-              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: isAuaBreached ? 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
+              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                {isAuaBreached ? <ShieldAlert size={13} style={{ color: '#dc2626' }} /> : <Wallet size={13} style={{ color: '#059669' }} />}
-                <span style={{ fontSize: 9.5, fontWeight: 800, color: isAuaBreached ? '#dc2626' : '#065f46', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Buffer Capital</span>
-                {isAuaBreached && <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#dc2626', padding: '1px 5px', borderRadius: 6 }}>BREACHED</span>}
+                <Wallet size={13} style={{ color: '#059669' }} />
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Buffer Capital</span>
               </div>
               {editingBuffer ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <input type="number" value={bufferInput} onChange={e => setBufferInput(e.target.value)} autoFocus style={{ width: 132, padding: '5px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: isAuaBreached ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(16,185,129,0.3)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }} />
+                  <input type="number" value={bufferInput} onChange={e => setBufferInput(e.target.value)} autoFocus style={{ width: 132, padding: '5px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }} />
                   <button onClick={saveBufferCapital} disabled={savingBuffer} style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><Check size={12} /></button>
                   <button onClick={() => setEditingBuffer(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><XIcon size={12} /></button>
                 </div>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 19, fontWeight: 800, color: isAuaBreached ? '#dc2626' : '#065f46', letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(bufferCapital)}</span>
-                  <button onClick={() => { setBufferInput(String(bufferCapital)); setEditingBuffer(true); }} style={{ background: isAuaBreached ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.14)', border: 'none', cursor: 'pointer', color: isAuaBreached ? '#dc2626' : '#059669', display: 'flex', padding: '4px 6px', borderRadius: 8 }} title="Edit Buffer Capital"><Pencil size={11} /></button>
+                  <span style={{ fontSize: 19, fontWeight: 800, color: '#065f46', letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(bufferCapital)}</span>
+                  <button onClick={() => { setBufferInput(String(bufferCapital)); setEditingBuffer(true); }} style={{ background: 'rgba(16,185,129,0.14)', border: 'none', cursor: 'pointer', color: '#059669', display: 'flex', padding: '4px 6px', borderRadius: 8 }} title="Edit Buffer Capital"><Pencil size={11} /></button>
                 </div>
               )}
-              <div style={{ fontSize: 10, color: isAuaBreached ? '#dc2626' : 'var(--text-muted)', marginTop: 3, fontWeight: 600 }}>{isAuaBreached ? `Breached by ${fmtCurrency(auaBreachAmount)}` : 'AUA − (Invested + Cash)'}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>AUA − (Invested + Cash)</div>
             </div>
           </div>
         </div>
@@ -1600,9 +1596,7 @@ export function ClientPortfolioPage() {
         border: 'none',
         background: 'rgba(255, 255, 255, 0.88)',
         backdropFilter: 'blur(20px) saturate(180%)',
-        boxShadow: isAuaBreached 
-          ? '0 8px 30px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.95)' 
-          : '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255,255,255,0.95)',
         borderRadius: 18,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
@@ -1902,7 +1896,7 @@ export function ClientPortfolioPage() {
                   <div>P&L %</div>
                   <div>Alloc %</div>
                   <div>Source</div>
-                  <div>Act</div>
+                  {portfolioTab !== 'working' && <div>Act</div>}
                 </div>
 
                 {getSortedHoldings().length === 0 ? (
@@ -2058,10 +2052,8 @@ export function ClientPortfolioPage() {
                           </span>
                         </div>
 
+                        {portfolioTab !== 'working' && (
                         <div>
-                          {portfolioTab === 'working' ? (
-                            <span style={{ color: 'var(--text-muted)', fontSize: 13, display: 'inline-block', paddingLeft: 4 }}>—</span>
-                          ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <button
                                 onClick={() => {
@@ -2084,17 +2076,17 @@ export function ClientPortfolioPage() {
                                 <Trash2 size={12} />
                               </button>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+                         </div>
+                        )}
+                       </div>
+                     );
+                   })
+                 )}
+               </div>
+             </div>
+           </div>
+         </section>
+       )}
       {/* ══════════════════════════════════════════════════════════════════════
           TAB 3: TRANSACTIONS DURING PERIOD (Recos, Status Dropdown & Realised P&L)
           ══════════════════════════════════════════════════════════════════════ */}
@@ -2128,7 +2120,7 @@ export function ClientPortfolioPage() {
                 className="btn-glass-gold"
                 style={{ padding: '7px 14px', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}
               >
-                <PlusCircle size={13} /> + New Buy Recommendation
+                <PlusCircle size={13} /> Add New Transaction
               </button>
             </div>
           </div>
@@ -2209,7 +2201,7 @@ export function ClientPortfolioPage() {
                   <div style={{ cursor: 'pointer' }} onClick={() => handleTxSort('date')}>Date</div>
                   <div>Stock Name</div>
                   <div>Reco Price</div>
-                  <div>Target Range</div>
+                  <div>Buying Price Range</div>
                   <div>Quantity</div>
                   <div>Amount (₹)</div>
                   <div>Status & Action</div>
@@ -2223,7 +2215,7 @@ export function ClientPortfolioPage() {
                   if (buyList.length === 0) {
                     return (
                       <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                        No Buy recommendations added yet. Click <strong>"+ New Buy Recommendation"</strong> to add a fresh buy call.
+                        No transactions yet. Click <strong>"Add New Transaction"</strong> to add a new transaction.
                       </div>
                     );
                   }
@@ -2622,10 +2614,10 @@ export function ClientPortfolioPage() {
 
               {/* ── Ratios & Strategy Allocation (below the 2 step cards) ── */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
-                <div style={{ padding: '10px 12px', background: freeCashRatio < 10 ? 'rgba(239,68,68,0.06)' : 'rgba(34,197,94,0.06)', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a' }}>Free Cash to Portfolio Ratio</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: freeCashRatio < 10 ? '#dc2626' : '#16a34a', marginTop: 2 }}>
-                    {freeCashRatio.toFixed(1)}% <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Target: 10%)</span>
+                <div style={{ padding: '10px 12px', background: 'rgba(201,168,76,0.06)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314' }}>Free Cash to Portfolio Ratio</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>
+                    {freeCashRatio.toFixed(1)}%
                   </div>
                 </div>
 
@@ -3050,7 +3042,7 @@ export function ClientPortfolioPage() {
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 14, width: '100%', maxWidth: 460, boxShadow: 'var(--shadow-xl)' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                New Trade Recommendation
+                Add New Transaction
               </h3>
               <button onClick={() => setShowNewRecoModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             </div>
@@ -3096,21 +3088,12 @@ export function ClientPortfolioPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Status *</label>
-                  <select value={recoStatus} onChange={e => setRecoStatus(e.target.value as any)} style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12 }}>
-                    <option value="Executed">Executed</option>
-                    <option value="Avoid">Avoid</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Strategy Bucket</label>
-                  <select value={recoBucket} onChange={e => setRecoBucket(e.target.value as any)} style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12 }}>
-                    <option value="Long-Term">Long-Term Core</option>
-                    <option value="Momentum">Momentum Tactical</option>
-                  </select>
-                </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>Status *</label>
+                <select value={recoStatus} onChange={e => setRecoStatus(e.target.value as any)} style={{ width: '100%', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 12 }}>
+                  <option value="Executed">Executed</option>
+                  <option value="Avoid">Avoid</option>
+                </select>
               </div>
 
               {recoPrice && recoQty && (
