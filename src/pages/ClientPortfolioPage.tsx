@@ -149,10 +149,11 @@ export function ClientPortfolioPage() {
   const [sectorFilter, setSectorFilter] = useState<string>('');
   const [mcapFilter, setMcapFilter] = useState<string>('');
 
-  // Transactions Tab Search and Sort
+  // Transactions Tab Search and Sort + Sub-tab state (Buy / Sell)
   const [txStockSearch, setTxStockSearch] = useState('');
   const [txSortColumn, setTxSortColumn] = useState<TxSortColumn>('date');
   const [txSortOrder, setTxSortOrder] = useState<SortOrder>('desc');
+  const [txSubTab, setTxSubTab] = useState<'buy' | 'sell'>('buy');
 
   // Inline table edits
   const [editingBuyPriceId, setEditingBuyPriceId] = useState<string | null>(null);
@@ -2205,338 +2206,382 @@ export function ClientPortfolioPage() {
             );
           })()}
 
-          {/* ════════════════════════════════════════════════════════════════════
-              SECTION 1: BUY RECOMMENDATIONS & ORDERS TABLE (TOP)
-              ════════════════════════════════════════════════════════════════════ */}
-          <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 28 }}>
-            <div style={{
-              padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: 'rgba(34,197,94,0.03)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: '#16a34a', color: '#fff' }}>
-                  1. BUY ORDERS
-                </span>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Buy Recommendations & Open Positions
-                </h3>
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-                {transactions.filter(t => t.action === 'BUY' || !t.action).length} recommendations
-              </span>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 1050 }}>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
-                  padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
-                  fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
-                }}>
-                  <div style={{ cursor: 'pointer' }} onClick={() => handleTxSort('date')}>Date</div>
-                  <div>Stock Name</div>
-                  <div>Reco Price</div>
-                  <div>Buying Price Range</div>
-                  <div>Quantity</div>
-                  <div>Amount (₹)</div>
-                  <div>Status & Action</div>
-                  <div>Call</div>
-                  <div>Act</div>
-                </div>
-
-                {(() => {
-                  const buyList = getSortedBuyTransactions();
-
-                  if (buyList.length === 0) {
-                    return (
-                      <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                        No transactions yet. Click <strong>"Add New Transaction"</strong> to add a new transaction.
-                      </div>
-                    );
-                  }
-
-                  return buyList.map((tx) => {
-                    const meta = getStockMeta(tx.stock_symbol, tx.company_name || '');
-                    const currentSt = pendingTxStatus[tx.id] || tx.status || 'Executed';
-                    const isExecuted = currentSt === 'Executed';
-                    const isPendingSave = pendingTxStatus[tx.id] && pendingTxStatus[tx.id] !== (tx.status || 'Executed');
-                    const amt = tx.total_value || (tx.price * tx.quantity);
-
-                    return (
-                      <div
-                        key={tx.id}
-                        style={{
-                          display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
-                          alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
-                          fontSize: 12.5,
-                        }}
-                      >
-                        <div style={{ color: 'var(--text-secondary)' }}>
-                          {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </div>
-
-                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          <div style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(tx)}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {meta.companyName || tx.company_name || '—'}
-                          </div>
-                        </div>
-
-                        <div className="tabular-nums" style={{ fontWeight: 500 }}>
-                          ₹{(tx.reco_price || tx.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </div>
-
-                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                          {tx.price_range || '—'}
-                        </div>
-
-                        <div className="tabular-nums">
-                          {tx.quantity.toLocaleString('en-IN')}
-                        </div>
-
-                        <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {fmtCurrency(amt)}
-                        </div>
-
-                        {/* Status Dropdown & Save Button */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <select
-                            value={currentSt}
-                            onChange={e => {
-                              const newSt = e.target.value as 'Executed' | 'Avoid';
-                              setPendingTxStatus(prev => ({ ...prev, [tx.id]: newSt }));
-                            }}
-                            style={{
-                              padding: '4px 8px', borderRadius: 8, fontSize: 11.5, fontWeight: 700,
-                              background: isExecuted ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)',
-                              color: isExecuted ? '#16a34a' : '#475569',
-                              border: 'none',
-                              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85)',
-                              cursor: 'pointer', outline: 'none',
-                            }}
-                          >
-                            <option value="Executed">Executed</option>
-                            <option value="Avoid">Avoid</option>
-                          </select>
-                          {isPendingSave && (
-                            <button
-                              onClick={() => handleSaveTxStatus(tx, pendingTxStatus[tx.id] || 'Executed')}
-                              disabled={savingTxStatusId === tx.id}
-                              className="btn-glass-green"
-                              style={{
-                                padding: '3px 8px', fontSize: 11, fontWeight: 800, borderRadius: 6,
-                                display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
-                              }}
-                              title="Save status and push to Client & Working Portfolio"
-                            >
-                              {savingTxStatusId === tx.id ? '…' : <><Check size={12} /> Save</>}
-                            </button>
-                          )}
-                        </div>
-
-                        <div>
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
-                            background: tx.call_status === 'Closed' ? 'rgba(0,0,0,0.06)' : 'rgba(59,130,246,0.08)',
-                            color: tx.call_status === 'Closed' ? 'var(--text-muted)' : '#2563eb',
-                          }}>
-                            {tx.call_status || 'Open'}
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {(tx.status === 'Executed' || !tx.status) && tx.call_status !== 'Closed' && (
-                            <button
-                              onClick={() => openSellModalForTx(tx)}
-                              className="btn-glass-red"
-                              style={{ padding: '2px 7px', fontSize: 11, fontWeight: 700, borderRadius: 4 }}
-                              title="Sell shares of this recommendation"
-                            >
-                              Sell
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setDeleteConfirmTx({ id: tx.id, symbol: cleanSymbol(tx) })}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
-                            title="Delete transaction record"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Buy Orders KPI — 3 Cards: Invested | Current | Unrealized ────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
-            <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Buy Orders cost basis</div>
-            </div>
-            <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{stripSummary.currentValue >= stripSummary.totalInvested ? '▲ Gain' : '▼ Loss'} live</div>
-            </div>
-            <div style={{
-              background: stripSummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
-              border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Unrealized P&L</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{stripSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(stripSummary.unrealisedPnL)}</div>
-              <div style={{ fontSize: 10.5, color: stripSummary.unrealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}%</div>
-            </div>
+          {/* ── Sub-tabs: Buy Orders / Sell Orders (below fixed top 3 KPI) ── */}
+          <div style={{
+            display: 'flex', gap: 10, marginBottom: 20,
+            borderBottom: '1px solid rgba(229,231,235,0.65)', paddingBottom: 12,
+          }}>
+            {[
+              { key: 'buy' as const, label: 'Buy Orders', count: transactions.filter(t => t.action === 'BUY' || !t.action).length, activeColor: '#16a34a' },
+              { key: 'sell' as const, label: 'Sell Orders', count: executedSells.length, activeColor: '#dc2626' },
+            ].map(tab => {
+              const isActive = txSubTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setTxSubTab(tab.key)}
+                  style={{
+                    padding: '9px 18px', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                    background: isActive ? (tab.key === 'buy' ? 'linear-gradient(135deg, rgba(34,197,94,0.18) 0%, rgba(22,163,74,0.10) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.16) 0%, rgba(220,38,38,0.08) 100%)') : 'rgba(255,255,255,0.65)',
+                    color: isActive ? tab.activeColor : 'var(--text-secondary)',
+                    boxShadow: isActive ? 'inset 0 1px 1px rgba(255,255,255,0.95), 0 3px 10px rgba(0,0,0,0.06)' : 'none',
+                    transition: 'all 0.18s ease',
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                    background: isActive ? tab.activeColor : 'rgba(0,0,0,0.06)',
+                    color: isActive ? '#fff' : 'var(--text-muted)',
+                  }}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* ════════════════════════════════════════════════════════════════════
-              SECTION 2: EXECUTED SELL ORDERS & REALISED P&L LEDGER (BOTTOM)
+              BUY ORDERS SUB-TAB
               ════════════════════════════════════════════════════════════════════ */}
-          <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
-            <div style={{
-              padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: 'rgba(239,68,68,0.03)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: '#dc2626', color: '#fff' }}>
-                  2. SELL LEDGER
-                </span>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Executed Sell Orders & Realised P&L Ledger
-                </h3>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-                  Total Realised: <strong style={{ color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626' }}>{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</strong>
-                </span>
-                <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
-                  {executedSells.length} positions closed
-                </span>
-              </div>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <div style={{ minWidth: 900 }}>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
-                  padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
-                  fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
-                }}>
-                  <div>Date</div>
-                  <div>Stock Name</div>
-                  <div>Qty Sold</div>
-                  <div>Buy Price</div>
-                  <div>Sales Price</div>
-                  <div>Sales Value (₹)</div>
-                  <div>Realised P&L (₹)</div>
-                  <div>P&L %</div>
-                  <div>Act</div>
-                </div>
-
-                {(() => {
-                  const sellList = getSortedSellTransactions();
-
-                  if (sellList.length === 0) {
-                    return (
-                      <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                        No Sell orders recorded yet. Click the <strong>"Sell"</strong> button on any active stock in the Working Portfolio or in the Buy table above to execute a sell order.
-                      </div>
-                    );
-                  }
-
-                  return sellList.map((tx) => {
-                    const pnl = tx.realised_pnl || 0;
-                    let buyPr = tx.buy_price && tx.buy_price > 0 ? tx.buy_price : 0;
-                    if (!buyPr && tx.price > 0 && tx.quantity > 0 && pnl !== 0) {
-                      buyPr = tx.price - (pnl / tx.quantity);
-                    }
-                    const pnlPct = buyPr > 0 ? ((tx.price - buyPr) / buyPr) * 100 : 0;
-                    const salesVal = tx.total_value || (tx.price * tx.quantity);
-
-                    return (
-                      <div
-                        key={tx.id}
-                        style={{
-                          display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
-                          alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
-                          fontSize: 12.5,
-                        }}
-                      >
-                        <div style={{ color: 'var(--text-secondary)' }}>
-                          {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </div>
-                        <div style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(tx)}</div>
-                        <div className="tabular-nums">{tx.quantity.toLocaleString('en-IN')}</div>
-                        <div className="tabular-nums" style={{ color: 'var(--text-muted)' }}>
-                          {buyPr > 0 ? ('₹' + buyPr.toLocaleString('en-IN', { minimumFractionDigits: 2 })) : '—'}
-                        </div>
-                        <div className="tabular-nums" style={{ fontWeight: 600 }}>
-                          ₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </div>
-                        <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {fmtCurrency(salesVal)}
-                        </div>
-                        <div className="tabular-nums" style={{ fontWeight: 700, color: pnl >= 0 ? '#16a34a' : '#dc2626' }}>
-                          {pnl >= 0 ? '+' : ''}{fmtCurrency(pnl)}
-                        </div>
-                        <div>
-                          <PnLBadge value={pnlPct} suffix="%" />
-                        </div>
-                        <div>
-                          <button
-                            onClick={() => setDeleteConfirmTx({ id: tx.id, symbol: cleanSymbol(tx) })}
-                            style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
-                            title="Delete transaction record"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Sell Ledger KPI — 3 Cards: Invested Amount | Sale Proceeds | Realized P&L ── */}
-          {(() => {
-            const sellInvestedAmount = executedSells.reduce((sum, t) => {
-              let buyPr = t.buy_price && t.buy_price > 0 ? t.buy_price : 0;
-              if (!buyPr && t.price > 0 && t.quantity > 0 && (t.realised_pnl || 0) !== 0) buyPr = t.price - ((t.realised_pnl || 0) / t.quantity);
-              const invested = buyPr > 0 ? buyPr * t.quantity : (t.total_value || 0) - (t.realised_pnl || 0);
-              return sum + (invested > 0 ? invested : 0);
-            }, 0);
-            return (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 14 }}>
+          {txSubTab === 'buy' && (
+            <>
+              {/* Buy Orders KPI — 3 Cards ABOVE table */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
                 <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Amount</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(sellInvestedAmount)}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} positions cost</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Buy Orders cost basis</div>
                 </div>
                 <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sale Proceeds</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(freshSellsTotal)}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Gross sales value</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{stripSummary.currentValue >= stripSummary.totalInvested ? '▲ Gain' : '▼ Loss'} live</div>
                 </div>
                 <div style={{
-                  background: totalRealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
+                  background: stripSummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
                   border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Realized P&L</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</div>
-                  <div style={{ fontSize: 10.5, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>Locked</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Unrealized P&L</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{stripSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(stripSummary.unrealisedPnL)}</div>
+                  <div style={{ fontSize: 10.5, color: stripSummary.unrealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}%</div>
                 </div>
               </div>
-            );
-          })()}
+
+              <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+                <div style={{
+                  padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'rgba(34,197,94,0.03)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: '#16a34a', color: '#fff' }}>
+                      BUY ORDERS
+                    </span>
+                    <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Buy Recommendations & Open Positions
+                    </h3>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    {transactions.filter(t => t.action === 'BUY' || !t.action).length} recommendations
+                  </span>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <div style={{ minWidth: 1050 }}>
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
+                      padding: '12px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
+                      fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
+                    }}>
+                      <div style={{ cursor: 'pointer' }} onClick={() => handleTxSort('date')}>Date</div>
+                      <div>Stock Name</div>
+                      <div>Reco Price</div>
+                      <div>Buying Price Range</div>
+                      <div>Quantity</div>
+                      <div>Amount (₹)</div>
+                      <div>Status & Action</div>
+                      <div>Call</div>
+                      <div>Act</div>
+                    </div>
+
+                    {(() => {
+                      const buyList = getSortedBuyTransactions();
+
+                      if (buyList.length === 0) {
+                        return (
+                          <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                            No transactions yet. Click <strong>"Add New Transaction"</strong> to add a new transaction.
+                          </div>
+                        );
+                      }
+
+                      return buyList.map((tx) => {
+                        const meta = getStockMeta(tx.stock_symbol, tx.company_name || '');
+                        const currentSt = pendingTxStatus[tx.id] || tx.status || 'Executed';
+                        const isExecuted = currentSt === 'Executed';
+                        const isPendingSave = pendingTxStatus[tx.id] && pendingTxStatus[tx.id] !== (tx.status || 'Executed');
+                        const amt = tx.total_value || (tx.price * tx.quantity);
+
+                        return (
+                          <div
+                            key={tx.id}
+                            style={{
+                              display: 'grid', gridTemplateColumns: '105px 160px 105px 105px 75px 110px 150px 70px 85px', gap: 10,
+                              alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
+                              fontSize: 12.5,
+                            }}
+                          >
+                            <div style={{ color: 'var(--text-secondary)' }}>
+                              {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </div>
+
+                            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <div style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(tx)}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {meta.companyName || tx.company_name || '—'}
+                              </div>
+                            </div>
+
+                            <div className="tabular-nums" style={{ fontWeight: 500 }}>
+                              ₹{(tx.reco_price || tx.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </div>
+
+                            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                              {tx.price_range || '—'}
+                            </div>
+
+                            <div className="tabular-nums">
+                              {tx.quantity.toLocaleString('en-IN')}
+                            </div>
+
+                            <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {fmtCurrency(amt)}
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <select
+                                value={currentSt}
+                                onChange={e => {
+                                  const newSt = e.target.value as 'Executed' | 'Avoid';
+                                  setPendingTxStatus(prev => ({ ...prev, [tx.id]: newSt }));
+                                }}
+                                style={{
+                                  padding: '4px 8px', borderRadius: 8, fontSize: 11.5, fontWeight: 700,
+                                  background: isExecuted ? 'rgba(34,197,94,0.12)' : 'rgba(100,116,139,0.12)',
+                                  color: isExecuted ? '#16a34a' : '#475569',
+                                  border: 'none',
+                                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.85)',
+                                  cursor: 'pointer', outline: 'none',
+                                }}
+                              >
+                                <option value="Executed">Executed</option>
+                                <option value="Avoid">Avoid</option>
+                              </select>
+                              {isPendingSave && (
+                                <button
+                                  onClick={() => handleSaveTxStatus(tx, pendingTxStatus[tx.id] || 'Executed')}
+                                  disabled={savingTxStatusId === tx.id}
+                                  className="btn-glass-green"
+                                  style={{
+                                    padding: '3px 8px', fontSize: 11, fontWeight: 800, borderRadius: 6,
+                                    display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+                                  }}
+                                  title="Save status and push to Client & Working Portfolio"
+                                >
+                                  {savingTxStatusId === tx.id ? '…' : <><Check size={12} /> Save</>}
+                                </button>
+                              )}
+                            </div>
+
+                            <div>
+                              <span style={{
+                                fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+                                background: tx.call_status === 'Closed' ? 'rgba(0,0,0,0.06)' : 'rgba(59,130,246,0.08)',
+                                color: tx.call_status === 'Closed' ? 'var(--text-muted)' : '#2563eb',
+                              }}>
+                                {tx.call_status || 'Open'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              {(tx.status === 'Executed' || !tx.status) && tx.call_status !== 'Closed' && (
+                                <button
+                                  onClick={() => openSellModalForTx(tx)}
+                                  className="btn-glass-red"
+                                  style={{ padding: '2px 7px', fontSize: 11, fontWeight: 700, borderRadius: 4 }}
+                                  title="Sell shares of this recommendation"
+                                >
+                                  Sell
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setDeleteConfirmTx({ id: tx.id, symbol: cleanSymbol(tx) })}
+                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
+                                title="Delete transaction record"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════════
+              SELL ORDERS SUB-TAB
+              ════════════════════════════════════════════════════════════════════ */}
+          {txSubTab === 'sell' && (
+            <>
+              {/* Sell Orders KPI — 3 Cards ABOVE table */}
+              {(() => {
+                const sellInvestedAmount = executedSells.reduce((sum, t) => {
+                  let buyPr = t.buy_price && t.buy_price > 0 ? t.buy_price : 0;
+                  if (!buyPr && t.price > 0 && t.quantity > 0 && (t.realised_pnl || 0) !== 0) buyPr = t.price - ((t.realised_pnl || 0) / t.quantity);
+                  const invested = buyPr > 0 ? buyPr * t.quantity : (t.total_value || 0) - (t.realised_pnl || 0);
+                  return sum + (invested > 0 ? invested : 0);
+                }, 0);
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
+                    <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Amount</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(sellInvestedAmount)}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} positions cost</div>
+                    </div>
+                    <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sale Proceeds</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(freshSellsTotal)}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Gross sales value</div>
+                    </div>
+                    <div style={{
+                      background: totalRealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
+                      border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Realized P&L</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</div>
+                      <div style={{ fontSize: 10.5, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>Locked</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="glass-card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
+                <div style={{
+                  padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'rgba(239,68,68,0.03)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 4, background: '#dc2626', color: '#fff' }}>
+                      SELL ORDERS
+                    </span>
+                    <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Executed Sell Orders & Realised P&L Ledger
+                    </h3>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                      Total Realised: <strong style={{ color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626' }}>{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</strong>
+                    </span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 8px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#dc2626' }}>
+                      {executedSells.length} positions closed
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <div style={{ minWidth: 900 }}>
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
+                      padding: '10px 16px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid var(--border-subtle)',
+                      fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
+                    }}>
+                      <div>Date</div>
+                      <div>Stock Name</div>
+                      <div>Qty Sold</div>
+                      <div>Buy Price</div>
+                      <div>Sales Price</div>
+                      <div>Sales Value (₹)</div>
+                      <div>Realised P&L (₹)</div>
+                      <div>P&L %</div>
+                      <div>Act</div>
+                    </div>
+
+                    {(() => {
+                      const sellList = getSortedSellTransactions();
+
+                      if (sellList.length === 0) {
+                        return (
+                          <div style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                            No Sell orders recorded yet. Click the <strong>"Sell"</strong> button on any active stock in the Working Portfolio or in the Buy table above to execute a sell order.
+                          </div>
+                        );
+                      }
+
+                      return sellList.map((tx) => {
+                        const pnl = tx.realised_pnl || 0;
+                        let buyPr = tx.buy_price && tx.buy_price > 0 ? tx.buy_price : 0;
+                        if (!buyPr && tx.price > 0 && tx.quantity > 0 && pnl !== 0) {
+                          buyPr = tx.price - (pnl / tx.quantity);
+                        }
+                        const pnlPct = buyPr > 0 ? ((tx.price - buyPr) / buyPr) * 100 : 0;
+                        const salesVal = tx.total_value || (tx.price * tx.quantity);
+
+                        return (
+                          <div
+                            key={tx.id}
+                            style={{
+                              display: 'grid', gridTemplateColumns: '110px 170px 85px 110px 110px 130px 130px 90px 45px', gap: 10,
+                              alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)',
+                              fontSize: 12.5,
+                            }}
+                          >
+                            <div style={{ color: 'var(--text-secondary)' }}>
+                              {new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </div>
+                            <div style={{ fontWeight: 700, color: '#8c6314' }}>{cleanSymbol(tx)}</div>
+                            <div className="tabular-nums">{tx.quantity.toLocaleString('en-IN')}</div>
+                            <div className="tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                              {buyPr > 0 ? ('₹' + buyPr.toLocaleString('en-IN', { minimumFractionDigits: 2 })) : '—'}
+                            </div>
+                            <div className="tabular-nums" style={{ fontWeight: 600 }}>
+                              ₹{tx.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {fmtCurrency(salesVal)}
+                            </div>
+                            <div className="tabular-nums" style={{ fontWeight: 700, color: pnl >= 0 ? '#16a34a' : '#dc2626' }}>
+                              {pnl >= 0 ? '+' : ''}{fmtCurrency(pnl)}
+                            </div>
+                            <div>
+                              <PnLBadge value={pnlPct} suffix="%" />
+                            </div>
+                            <div>
+                              <button
+                                onClick={() => setDeleteConfirmTx({ id: tx.id, symbol: cleanSymbol(tx) })}
+                                style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 2 }}
+                                title="Delete transaction record"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </section>
       )}
       {/* ══════════════════════════════════════════════════════════════════════
