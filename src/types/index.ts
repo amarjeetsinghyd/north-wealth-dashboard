@@ -25,6 +25,14 @@ export interface Client {
   cash_differ_reason?: string;
   client_momentum_cash?: number;
   client_long_cash?: number;
+  cash_history?: Array<{
+    id: string;
+    base_date: string;
+    cash: number;
+    liquid: number;
+    total: number;
+    created_at: string;
+  }>;
   created_at: string;
 }
 

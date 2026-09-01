@@ -366,24 +366,37 @@ export function ClientPortfolioPage() {
   // कोई backdated date सेट करे तो नीचे के सभी useMemo auto-recompute करेंगे।
   const cashBaseDate = client?.client_cash_base_date || '';
 
+  // Robust day-level compare: handles YYYY-MM-DD, DD/MM/YYYY, ISO with time
+  const toDayTs = (s: any) => {
+    if (!s) return 0;
+    const str = String(s);
+    const iso = str.split('T')[0] as string;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return new Date(iso).setHours(0, 0, 0, 0);
+    const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m && m[1] && m[2] && m[3]) return new Date(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`).setHours(0, 0, 0, 0);
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? 0 : d.setHours(0, 0, 0, 0);
+  };
+  const baseDayTs = useMemo(() => (cashBaseDate ? toDayTs(cashBaseDate) : 0), [cashBaseDate]);
+
   // ── STEP 2 Inputs: Post-Base-Date Transactions (Dynamic Flow) ─────────────
   // सिर्फ वो transactions जो client_cash_base_date के STRICTLY बाद की हैं।
-  // अगर base date बदली (backdated), तो ये automatically उस date के बाद की transactions pick करेंगे।
+  // अगर base date बदली (backdated/future), तो ये automatically उस date के बाद की transactions pick करेंगे।
   const postBaseDateBuys = useMemo(() => {
     return transactions.filter(t =>
       t.action === 'BUY' &&
       (t.status === 'Executed' || !t.status) &&
-      (!cashBaseDate || t.date > cashBaseDate)
+      (!cashBaseDate || toDayTs(t.date) > baseDayTs)
     );
-  }, [transactions, cashBaseDate]);
+  }, [transactions, cashBaseDate, baseDayTs]);
 
   const postBaseDateSells = useMemo(() => {
     return transactions.filter(t =>
       t.action === 'SELL' &&
       (t.status === 'Executed' || !t.status) &&
-      (!cashBaseDate || t.date > cashBaseDate)
+      (!cashBaseDate || toDayTs(t.date) > baseDayTs)
     );
-  }, [transactions, cashBaseDate]);
+  }, [transactions, cashBaseDate, baseDayTs]);
 
   const newBuysTotal = useMemo(() => {
     return postBaseDateBuys.reduce((sum, t) => sum + (t.total_value || (t.price * t.quantity)), 0);
@@ -618,13 +631,24 @@ export function ClientPortfolioPage() {
     if (!id) return;
     const amt = parseFloat(cashBaseAmountInput) || 0;
     const liquidAmt = parseFloat(cashParkedLiquidInput) || 0;
+    const baseDateVal = cashBaseDateInput || new Date().toISOString().split('T')[0];
     setSavingCashBase(true);
     try {
+      const newEntry = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        base_date: baseDateVal,
+        cash: amt,
+        liquid: liquidAmt,
+        total: amt + liquidAmt,
+        created_at: new Date().toISOString(),
+      };
+      const prevHistory = (client as any)?.cash_history || [];
       await updateDoc(doc(db, 'clients', id), {
-        client_cash_base_date: cashBaseDateInput || new Date().toISOString().split('T')[0],
+        client_cash_base_date: baseDateVal,
         client_cash_base_amount: amt,
         cash_parked_liquid: liquidAmt,
         asset_free_cash: amt,
+        cash_history: [...prevHistory, newEntry],
       });
       setShowCashUpdateModal(false);
       await load();
@@ -2713,9 +2737,50 @@ export function ClientPortfolioPage() {
                 </div>
               </div>
             </div>
-          )}
-        </section>
-      )}
+           )}
+
+          {/* ── Cash Ledger — Base Cash Update History ──────────────────────── */}
+          <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb', display: 'inline-block' }} />
+                Cash Ledger — Base Cash History
+              </h3>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'rgba(37,99,235,0.08)', padding: '3px 8px', borderRadius: 6 }}>
+                {(client as any)?.cash_history?.length || 0} updates
+              </span>
+            </div>
+            {(client as any)?.cash_history && (client as any).cash_history.length > 0 ? (
+              <div style={{ overflowX: 'auto' }}>
+                <div style={{ minWidth: 640 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '150px 120px 130px 130px 140px', gap: 10, padding: '10px 16px', background: 'rgba(0,0,0,0.03)', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    <div>Updated On</div>
+                    <div>As on Date</div>
+                    <div>Cash</div>
+                    <div>Liquid</div>
+                    <div>Total Opening</div>
+                  </div>
+                  {[...(client as any).cash_history].reverse().map((entry: any) => (
+                    <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: '150px 120px 130px 130px 140px', gap: 10, alignItems: 'center', padding: '10px 16px', borderBottom: '1px solid rgba(0,0,0,0.04)', fontSize: 12.5 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                        {new Date(entry.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      <div style={{ fontWeight: 600, color: '#8c6314' }}>{entry.base_date ? new Date(entry.base_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 600 }}>{fmtCurrency(entry.cash || 0)}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 600 }}>{fmtCurrency(entry.liquid || 0)}</div>
+                      <div className="tabular-nums" style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{fmtCurrency(entry.total || 0)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: '28px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                No base cash updates yet. Jab bhi base cash update karoge, yahan ledger mein entry aati rahegi — pura history yahan dikhega.
+              </div>
+            )}
+          </div>
+         </section>
+       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
           MODALS (Portaled via createPortal)
