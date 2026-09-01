@@ -1463,10 +1463,7 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          {/* ── RHS: Total AUA + Current Value + Invested Value KPI boxes ── */}
           <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
-
-            {/* Total AUA box */}
             <div style={{
               padding: '12px 20px', borderRadius: 14, minWidth: 140,
               background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(185,145,45,0.08) 100%)',
@@ -1479,38 +1476,6 @@ export function ClientPortfolioPage() {
                 {fmtCurrency(totalAua)}
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Total relationship asset</div>
-            </div>
-
-            {/* Current Value box */}
-            <div style={{
-              padding: '12px 20px', borderRadius: 14, minWidth: 140,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.45) 100%)',
-              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.04)',
-              backdropFilter: 'blur(12px)',
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-                Current Value
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: totalEquityValue >= workingSummary.totalInvested ? '#15803d' : '#dc2626' }} className="tabular-nums">
-                {fmtCurrency(totalEquityValue)}
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Working portfolio live</div>
-            </div>
-
-            {/* Invested Value box */}
-            <div style={{
-              padding: '12px 20px', borderRadius: 14, minWidth: 140,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.45) 100%)',
-              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 8px rgba(0,0,0,0.04)',
-              backdropFilter: 'blur(12px)',
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-                Invested Value
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }} className="tabular-nums">
-                {fmtCurrency(workingSummary.totalInvested)}
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Equity portfolio cost basis</div>
             </div>
           </div>
         </div>
