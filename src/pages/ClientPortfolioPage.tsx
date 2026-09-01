@@ -2670,10 +2670,10 @@ export function ClientPortfolioPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-5)', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                Dynamic Cash Position & Discrepancy Reconciliation
+                Cash Position
               </h2>
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'block', marginTop: 3 }}>
-                Continuous arithmetic tracking of client onboarding cash, fresh trade flows, and discrepancy audit trail.
+                Opening liquidity, trade cash flows, and projected cash as on base date.
               </span>
             </div>
 
@@ -2700,70 +2700,74 @@ export function ClientPortfolioPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-                {/* ── STEP 1: Opening Liquidity ── */}
-                <div style={{ padding: '16px 18px', borderRadius: 12, background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)' }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
-                    Step 1 — Opening Liquidity (As on Base Date)
+                {/* ── Opening Liquidity (Premium Glass) ── */}
+                <div style={{
+                  padding: '16px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.88) 100%)',
+                  backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                  border: '1.5px solid rgba(201,168,76,0.28)',
+                  boxShadow: '0 8px 24px rgba(201,168,76,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
+                }}>
+                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.13) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Wallet size={12} style={{ color: '#8c6314' }} /> Opening Liquidity
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>As on Base Date</span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {/* Base Cash */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Base Cash (Brought In)</span>
+                      <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c9a84c' }} /> Base Cash (Brought In)</span>
                       <strong style={{ fontSize: 14, color: 'var(--text-primary)' }} className="tabular-nums">
                         {fmtCurrency(baseCash)}
                       </strong>
                     </div>
-
-                    {/* Liquid Cash */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#2563eb' }}>
-                      <span>+ Liquid Cash (Parked in Funds)</span>
-                      <strong style={{ fontSize: 14 }} className="tabular-nums">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} /> Liquid Cash (Parked in Funds)</span>
+                      <strong style={{ fontSize: 14, color: 'var(--text-primary)' }} className="tabular-nums">
                         {fmtCurrency(parkedLiquid)}
                       </strong>
                     </div>
-
-                    <div style={{ height: 1, background: 'rgba(201,168,76,0.3)', margin: '2px 0' }} />
-
-                    {/* Total Opening */}
+                    <div style={{ height: 1, background: 'rgba(201,168,76,0.22)', margin: '2px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, fontWeight: 800 }}>
                       <span style={{ color: '#8c6314' }}>Total Opening Liquidity</span>
-                      <strong style={{ fontSize: 18, color: '#8c6314' }} className="tabular-nums">
+                      <strong style={{ fontSize: 18, color: '#5c3e04' }} className="tabular-nums">
                         {fmtCurrency(totalOpening)}
                       </strong>
                     </div>
                   </div>
                 </div>
 
-                {/* ── STEP 2: Dynamic Flow + Projected Cash ── */}
-                <div style={{ padding: '16px 18px', borderRadius: 12, background: 'rgba(59,130,246,0.04)', border: '1px solid rgba(59,130,246,0.15)' }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>
-                    Step 2 — Dynamic Flow (After Base Date)
+                {/* ── Trade Cash Flow + Projected Cash (Premium Glass - Neutral) ── */}
+                <div style={{
+                  padding: '16px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.90) 100%)',
+                  backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                  border: '1.5px solid rgba(148,163,184,0.22)',
+                  boxShadow: '0 8px 24px rgba(148,163,184,0.10), inset 0 1px 1px rgba(255,255,255,0.95)',
+                }}>
+                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(148,163,184,0.12) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 10.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <TrendingUp size={12} style={{ color: '#475569' }} /> Trade Cash Flow
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0, marginLeft: 6 }}>After Base Date</span>
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {/* New Buys */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#dc2626' }}>
-                      <span>− New Buys ({postBaseDateBuys.length} trades)</span>
-                      <strong style={{ fontSize: 14 }} className="tabular-nums">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} /> New Buys ({postBaseDateBuys.length} trades)</span>
+                      <strong style={{ fontSize: 14, color: '#dc2626' }} className="tabular-nums">
                         − {fmtCurrency(newBuysTotal)}
                       </strong>
                     </div>
-
-                    {/* New Sells */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#16a34a' }}>
-                      <span>+ New Sells ({postBaseDateSells.length} trades)</span>
-                      <strong style={{ fontSize: 14 }} className="tabular-nums">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} /> New Sells ({postBaseDateSells.length} trades)</span>
+                      <strong style={{ fontSize: 14, color: '#16a34a' }} className="tabular-nums">
                         + {fmtCurrency(newSellsTotal)}
                       </strong>
                     </div>
-
-                    <div style={{ height: 1, background: 'rgba(59,130,246,0.25)', margin: '2px 0' }} />
-
-                    {/* Projected Cash */}
+                    <div style={{ height: 1, background: 'rgba(148,163,184,0.18)', margin: '2px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, fontWeight: 800 }}>
-                      <span style={{ color: '#2563eb' }}>Projected Cash (Live)</span>
-                      <strong style={{ fontSize: 18, color: projectedCash >= 0 ? '#15803d' : '#dc2626' }} className="tabular-nums">
+                      <span style={{ color: '#475569' }}>Projected Cash (Live)</span>
+                      <strong style={{ fontSize: 18, color: projectedCash >= 0 ? '#065f46' : '#991b1b' }} className="tabular-nums">
                         {fmtCurrency(projectedCash)}
                       </strong>
                     </div>
@@ -2771,25 +2775,43 @@ export function ClientPortfolioPage() {
                 </div>
               </div>
 
-              {/* ── Ratios & Strategy Allocation (below the 2 step cards) ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
-                <div style={{ padding: '10px 12px', background: 'rgba(201,168,76,0.06)', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314' }}>Free Cash to Portfolio Ratio</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>
+              {/* ── Ratios & Strategy Allocation — premium sync ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
+                <div style={{
+                  padding: '14px 16px', borderRadius: 14, position: 'relative', overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(255,251,235,0.86) 100%)',
+                  backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+                  border: '1.2px solid rgba(201,168,76,0.22)',
+                  boxShadow: '0 6px 20px rgba(201,168,76,0.10), inset 0 1px 1px rgba(255,255,255,0.95)',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                }}>
+                  <div style={{ position: 'absolute', top: -14, right: -14, width: 44, height: 44, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.10) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Free Cash to Portfolio Ratio</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }} className="tabular-nums">
                     {freeCashRatio.toFixed(1)}%
                   </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Cash weight in overall portfolio</div>
                 </div>
 
-                <div style={{ padding: '10px 12px', background: 'rgba(59,130,246,0.06)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{
+                  padding: '14px 16px', borderRadius: 14, position: 'relative', overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.90) 100%)',
+                  backdropFilter: 'blur(16px) saturate(160%)', WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+                  border: '1.2px solid rgba(148,163,184,0.20)',
+                  boxShadow: '0 6px 20px rgba(148,163,184,0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                }}>
+                  <div style={{ position: 'absolute', top: -14, right: -14, width: 44, height: 44, borderRadius: '50%', background: 'radial-gradient(circle, rgba(148,163,184,0.08) 0%, transparent 70%)' }} />
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#2563eb' }}>Strategy Allocation</div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 2 }}>
-                      Long-Term: <strong>{fmtCurrencyKPI(longTermCash)}</strong> | Momentum: <strong>{fmtCurrencyKPI(momentumCash)}</strong>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Strategy Allocation</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 4 }} className="tabular-nums">
+                      Long-Term: <strong style={{ color: 'var(--text-primary)' }}>{fmtCurrencyKPI(longTermCash)}</strong> <span style={{ color: 'var(--text-muted)', fontWeight: 500, margin: '0 4px' }}>|</span> Momentum: <strong style={{ color: 'var(--text-primary)' }}>{fmtCurrencyKPI(momentumCash)}</strong>
                     </div>
                   </div>
                   <button
                     onClick={openStrategyModal}
-                    style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#2563eb', borderRadius: 4, cursor: 'pointer', padding: '3px 7px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}
+                    className="btn-glass-light"
+                    style={{ flexShrink: 0, padding: '6px 12px', fontSize: 11, fontWeight: 700, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 5, color: '#475569', border: '1px solid rgba(148,163,184,0.22)', background: 'rgba(255,255,255,0.75)' }}
                     title="Edit Strategy Allocation"
                   >
                     <Pencil size={11} /> Edit
@@ -2874,14 +2896,14 @@ export function ClientPortfolioPage() {
             </div>
            )}
 
-          {/* ── Cash Ledger — Base Cash Update History ──────────────────────── */}
+          {/* ── Cash Ledger — Base Cash Update History (premium sync) ── */}
           <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.55)' }}>
               <h3 style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563eb', display: 'inline-block' }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c9a84c', display: 'inline-block' }} />
                 Cash Ledger — Base Cash History
               </h3>
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', background: 'rgba(37,99,235,0.08)', padding: '3px 8px', borderRadius: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', background: 'rgba(201,168,76,0.12)', padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(201,168,76,0.18)' }}>
                 {(client as any)?.cash_history?.length || 0} updates
               </span>
             </div>
