@@ -3,7 +3,7 @@ import ReactDOM, { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CircleAlert as AlertCircle, Pencil, Check, X as XIcon,
-  Landmark, Download, Upload, PlusCircle, Trash2, Sparkles, Wallet
+  Landmark, Download, Upload, PlusCircle, Trash2, Sparkles, Wallet, TrendingUp
 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, getDoc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
@@ -2248,25 +2248,43 @@ export function ClientPortfolioPage() {
               ════════════════════════════════════════════════════════════════════ */}
           {txSubTab === 'buy' && (
             <>
-              {/* Buy Orders KPI — 3 Cards ABOVE table */}
+              {/* Buy Orders KPI — PREMIUM Glassmorphism (contrasts with top standard KPI) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
-                <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Buy Orders cost basis</div>
-                </div>
-                <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{stripSummary.currentValue >= stripSummary.totalInvested ? '▲ Gain' : '▼ Loss'} live</div>
+                <div style={{
+                  padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.88) 100%)',
+                  backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                  border: '1.5px solid rgba(201,168,76,0.32)',
+                  boxShadow: '0 8px 24px rgba(201,168,76,0.14), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(201,168,76,0.12)',
+                }}>
+                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Wallet size={12} style={{ color: '#8c6314' }} /> Invested Value</div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: '#5c3e04', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>Buy Orders cost basis</div>
                 </div>
                 <div style={{
-                  background: stripSummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
-                  border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
+                  padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                  background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.88) 100%)',
+                  backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                  border: '1.5px solid rgba(148,163,184,0.22)',
+                  boxShadow: '0 8px 24px rgba(148,163,184,0.10), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(148,163,184,0.10)',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Unrealized P&L</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{stripSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(stripSummary.unrealisedPnL)}</div>
-                  <div style={{ fontSize: 10.5, color: stripSummary.unrealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}%</div>
+                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(148,163,184,0.12) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 9.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><TrendingUp size={12} style={{ color: '#475569' }} /> Current Value</div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>{stripSummary.currentValue >= stripSummary.totalInvested ? '▲ Gain' : '▼ Loss'} live</div>
+                </div>
+                <div style={{
+                  padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                  background: stripSummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.90) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.90) 100%)',
+                  backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                  border: stripSummary.unrealisedPnL >= 0 ? '1.5px solid rgba(34,197,94,0.28)' : '1.5px solid rgba(239,68,68,0.28)',
+                  boxShadow: stripSummary.unrealisedPnL >= 0 ? '0 8px 24px rgba(34,197,94,0.12), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 8px 24px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
+                }}>
+                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: stripSummary.unrealisedPnL >= 0 ? 'radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 9.5, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Sparkles size={12} style={{ color: stripSummary.unrealisedPnL >= 0 ? '#059669' : '#dc2626' }} /> Unrealized P&L</div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#065f46' : '#991b1b', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{stripSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(stripSummary.unrealisedPnL)}</div>
+                  <div style={{ fontSize: 10, color: stripSummary.unrealisedPnL >= 0 ? '#059669' : '#dc2626', marginTop: 3, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}%</div>
                 </div>
               </div>
 
@@ -2440,7 +2458,7 @@ export function ClientPortfolioPage() {
               ════════════════════════════════════════════════════════════════════ */}
           {txSubTab === 'sell' && (
             <>
-              {/* Sell Orders KPI — 3 Cards ABOVE table */}
+              {/* Sell Orders KPI — PREMIUM Glassmorphism (contrasts with top standard KPI) */}
               {(() => {
                 const sellInvestedAmount = executedSells.reduce((sum, t) => {
                   let buyPr = t.buy_price && t.buy_price > 0 ? t.buy_price : 0;
@@ -2450,23 +2468,41 @@ export function ClientPortfolioPage() {
                 }, 0);
                 return (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 18 }}>
-                    <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Amount</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(sellInvestedAmount)}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} positions cost</div>
-                    </div>
-                    <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sale Proceeds</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(freshSellsTotal)}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Gross sales value</div>
+                    <div style={{
+                      padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                      background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.88) 100%)',
+                      backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                      border: '1.5px solid rgba(201,168,76,0.32)',
+                      boxShadow: '0 8px 24px rgba(201,168,76,0.14), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(201,168,76,0.12)',
+                    }}>
+                      <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 70%)' }} />
+                      <div style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Wallet size={12} style={{ color: '#8c6314' }} /> Invested Amount</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: '#5c3e04', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(sellInvestedAmount)}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>{executedSells.length} positions cost</div>
                     </div>
                     <div style={{
-                      background: totalRealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
-                      border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
+                      padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                      background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(239,246,255,0.90) 100%)',
+                      backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                      border: '1.5px solid rgba(59,130,246,0.22)',
+                      boxShadow: '0 8px 24px rgba(59,130,246,0.10), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(59,130,246,0.10)',
                     }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Realized P&L</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</div>
-                      <div style={{ fontSize: 10.5, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>Locked</div>
+                      <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.10) 0%, transparent 70%)' }} />
+                      <div style={{ fontSize: 9.5, fontWeight: 800, color: '#1e40af', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Landmark size={12} style={{ color: '#2563eb' }} /> Sale Proceeds</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: '#1e3a5f', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(freshSellsTotal)}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>Gross sales value</div>
+                    </div>
+                    <div style={{
+                      padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
+                      background: totalRealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.90) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.90) 100%)',
+                      backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                      border: totalRealisedPnL >= 0 ? '1.5px solid rgba(34,197,94,0.28)' : '1.5px solid rgba(239,68,68,0.28)',
+                      boxShadow: totalRealisedPnL >= 0 ? '0 8px 24px rgba(34,197,94,0.12), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 8px 24px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
+                    }}>
+                      <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: totalRealisedPnL >= 0 ? 'radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)' }} />
+                      <div style={{ fontSize: 9.5, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Sparkles size={12} style={{ color: totalRealisedPnL >= 0 ? '#059669' : '#dc2626' }} /> Realized P&L</div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#065f46' : '#991b1b', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</div>
+                      <div style={{ fontSize: 10, color: totalRealisedPnL >= 0 ? '#059669' : '#dc2626', marginTop: 3, fontWeight: 600 }}>Locked</div>
                     </div>
                   </div>
                 );
