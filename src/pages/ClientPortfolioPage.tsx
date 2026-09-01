@@ -3,7 +3,7 @@ import ReactDOM, { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CircleAlert as AlertCircle, Pencil, Check, X as XIcon,
-  Landmark, Download, Upload, PlusCircle, Trash2, ShieldAlert, Sparkles
+  Landmark, Download, Upload, PlusCircle, Trash2, ShieldAlert, Sparkles, Wallet
 } from 'lucide-react';
 import { fetchClient, fetchHoldings, fetchTransactions } from '../lib/queries';
 import { doc, getDoc, updateDoc, addDoc, collection, deleteDoc } from 'firebase/firestore';
@@ -134,6 +134,9 @@ export function ClientPortfolioPage() {
   const [totalAuaInput, setTotalAuaInput] = useState<string>('');
   const [editingAua, setEditingAua] = useState(false);
   const [savingAua, setSavingAua] = useState(false);
+  const [editingBuffer, setEditingBuffer] = useState(false);
+  const [bufferInput, setBufferInput] = useState<string>('');
+  const [savingBuffer, setSavingBuffer] = useState(false);
 
   const [mutualFunds, setMutualFunds] = useState<number>(0);
   const [mutualFundsInput, setMutualFundsInput] = useState<string>('');
@@ -297,6 +300,32 @@ export function ClientPortfolioPage() {
     return res;
   }, [workingHoldings]);
 
+  // ── Dedicated Client Portfolio Summary (for tab-dynamic Master Strip) ──────
+  const clientSummary: PortfolioSummary = useMemo(() => {
+    const res = clientHoldings.reduce(
+      (acc: PortfolioSummary, h: Holding) => {
+        const hasPrice = h.current_price > 0;
+        const inv = h.invested_amount || (h.buy_price * h.quantity);
+        const val = hasPrice ? (h.current_value || h.buy_price * h.quantity) : inv;
+        return {
+          totalInvested: acc.totalInvested + inv,
+          currentValue: acc.currentValue + val,
+          unrealisedPnL: acc.unrealisedPnL + (h.unrealised_pnl || 0),
+          realisedPnL: acc.realisedPnL + (h.realised_pnl || 0),
+          unrealisedPnLPct: 0,
+        };
+      },
+      { totalInvested: 0, currentValue: 0, unrealisedPnL: 0, realisedPnL: 0, unrealisedPnLPct: 0 }
+    );
+    if (res.totalInvested > 0) {
+      res.unrealisedPnLPct = (res.unrealisedPnL / res.totalInvested) * 100;
+    }
+    return res;
+  }, [clientHoldings]);
+
+  // Tab-dynamic strip summary: Working vs Client
+  const stripSummary = portfolioTab === 'client' ? clientSummary : workingSummary;
+
   // ── Transactions Metrics & Classification (ALL transactions — display & realised P&L के लिए) ──
   const executedBuys = useMemo(() => {
     return transactions.filter(t => t.action === 'BUY' && (t.status === 'Executed' || !t.status));
@@ -305,6 +334,7 @@ export function ClientPortfolioPage() {
   const freshBuysTotal = useMemo(() => {
     return executedBuys.reduce((sum, t) => sum + (t.total_value || (t.price * t.quantity)), 0);
   }, [executedBuys]);
+  void freshBuysTotal;
 
   const executedSells = useMemo(() => {
     return transactions.filter(t => t.action === 'SELL' && (t.status === 'Executed' || !t.status));
@@ -525,6 +555,38 @@ export function ClientPortfolioPage() {
       alert('Failed to save Total AUA');
     } finally {
       setSavingAua(false);
+    }
+  };
+
+  const saveBufferCapital = async () => {
+    if (!id) return;
+    const val = parseFloat(bufferInput);
+    if (isNaN(val)) {
+      alert('Please enter a valid Buffer Capital');
+      return;
+    }
+    setSavingBuffer(true);
+    try {
+      // Buffer = AUA - (Invested + baseCash + parkedLiquid)
+      // So editing Buffer -> back-calculate new AUA
+      const baseCash = client?.client_cash_base_amount !== undefined ? Number(client.client_cash_base_amount) : (client?.asset_free_cash || 0);
+      const parkedLiquid = client?.cash_parked_liquid || 0;
+      const newAua = Math.round(val + stripSummary.totalInvested + Number(baseCash) + Number(parkedLiquid));
+      if (newAua < 0) {
+        alert('Buffer too low — results in negative AUA');
+        return;
+      }
+      await updateDoc(doc(db, 'clients', id), {
+        total_aua: newAua,
+        total_capital: newAua,
+      });
+      setTotalAua(newAua);
+      setEditingBuffer(false);
+    } catch (err) {
+      console.warn('Error saving Buffer Capital:', err);
+      alert('Failed to save Buffer Capital');
+    } finally {
+      setSavingBuffer(false);
     }
   };
 
@@ -1463,34 +1525,69 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
+            {/* Premium Glass — Total AUA (Editable) */}
             <div style={{
-              padding: '12px 20px', borderRadius: 14, minWidth: 140,
-              background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(185,145,45,0.08) 100%)',
-              boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 8px rgba(201,168,76,0.08)',
+              padding: '14px 18px', borderRadius: 16, minWidth: 168,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.88) 100%)',
+              backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+              border: '1.5px solid rgba(201,168,76,0.32)',
+              boxShadow: '0 8px 24px rgba(201,168,76,0.14), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(201,168,76,0.12)',
+              position: 'relative', overflow: 'hidden',
             }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
-                Total AUA (Master)
+              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 70%)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Landmark size={13} style={{ color: '#8c6314' }} />
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Total AUA</span>
+                <span style={{ fontSize: 8, fontWeight: 700, color: '#a08030', background: 'rgba(201,168,76,0.14)', padding: '1px 5px', borderRadius: 6, marginLeft: 2 }}>MASTER</span>
               </div>
               {editingAua ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                  <input
-                    type="number"
-                    value={totalAuaInput}
-                    onChange={e => setTotalAuaInput(e.target.value)}
-                    autoFocus
-                    style={{ width: 130, padding: '4px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', background: 'rgba(255,255,255,0.95)', color: 'var(--text-primary)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
-                  />
-                  <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'none', border: 'none', color: '#16a34a', cursor: 'pointer', display: 'flex', padding: 2 }}><Check size={14} /></button>
-                  <button onClick={() => setEditingAua(false)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: 2 }}><XIcon size={14} /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <input type="number" value={totalAuaInput} onChange={e => setTotalAuaInput(e.target.value)} autoFocus style={{ width: 132, padding: '5px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: '1px solid rgba(201,168,76,0.3)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }} />
+                  <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><Check size={12} /></button>
+                  <button onClick={() => setEditingAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><XIcon size={12} /></button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                  <span style={{ fontSize: 18, fontWeight: 800, color: '#5c3e04' }} className="tabular-nums">{fmtCurrency(totalAua)}</span>
-                  <button onClick={() => { setTotalAuaInput(String(totalAua)); setEditingAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', display: 'flex', padding: 2 }} title="Edit Total AUA"><Pencil size={12} /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <span style={{ fontSize: 19, fontWeight: 800, color: '#5c3e04', letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(totalAua)}</span>
+                  <button onClick={() => { setTotalAuaInput(String(totalAua)); setEditingAua(true); }} style={{ background: 'rgba(201,168,76,0.14)', border: 'none', cursor: 'pointer', color: '#8c6314', display: 'flex', padding: '4px 6px', borderRadius: 8 }} title="Edit Total AUA"><Pencil size={11} /></button>
                 </div>
               )}
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Total relationship asset</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>Total relationship asset</div>
+            </div>
+
+            {/* Premium Glass — Buffer Capital (Editable, shifted from strip) */}
+            <div style={{
+              padding: '14px 18px', borderRadius: 16, minWidth: 168,
+              background: isAuaBreached
+                ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.92) 100%)'
+                : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.88) 100%)',
+              backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+              border: isAuaBreached ? '1.5px solid rgba(239,68,68,0.28)' : '1.5px solid rgba(16,185,129,0.24)',
+              boxShadow: isAuaBreached
+                ? '0 8px 24px rgba(239,68,68,0.13), inset 0 1px 1px rgba(255,255,255,0.95)'
+                : '0 8px 24px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(16,185,129,0.10)',
+              position: 'relative', overflow: 'hidden',
+            }}>
+              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: isAuaBreached ? 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                {isAuaBreached ? <ShieldAlert size={13} style={{ color: '#dc2626' }} /> : <Wallet size={13} style={{ color: '#059669' }} />}
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: isAuaBreached ? '#dc2626' : '#065f46', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Buffer Capital</span>
+                {isAuaBreached && <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', background: '#dc2626', padding: '1px 5px', borderRadius: 6 }}>BREACHED</span>}
+              </div>
+              {editingBuffer ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <input type="number" value={bufferInput} onChange={e => setBufferInput(e.target.value)} autoFocus style={{ width: 132, padding: '5px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: isAuaBreached ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(16,185,129,0.3)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }} />
+                  <button onClick={saveBufferCapital} disabled={savingBuffer} style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><Check size={12} /></button>
+                  <button onClick={() => setEditingBuffer(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><XIcon size={12} /></button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                  <span style={{ fontSize: 19, fontWeight: 800, color: isAuaBreached ? '#dc2626' : '#065f46', letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(bufferCapital)}</span>
+                  <button onClick={() => { setBufferInput(String(bufferCapital)); setEditingBuffer(true); }} style={{ background: isAuaBreached ? 'rgba(239,68,68,0.12)' : 'rgba(16,185,129,0.14)', border: 'none', cursor: 'pointer', color: isAuaBreached ? '#dc2626' : '#059669', display: 'flex', padding: '4px 6px', borderRadius: 8 }} title="Edit Buffer Capital"><Pencil size={11} /></button>
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: isAuaBreached ? '#dc2626' : 'var(--text-muted)', marginTop: 3, fontWeight: 600 }}>{isAuaBreached ? `Breached by ${fmtCurrency(auaBreachAmount)}` : 'AUA − (Invested + Cash)'}</div>
             </div>
           </div>
         </div>
@@ -1549,29 +1646,13 @@ export function ClientPortfolioPage() {
               )}
             </div>
 
-            {/* AUA Deficit / Buffer Pill */}
-            {isAuaBreached ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: 'none', borderRadius: 10, color: '#dc2626', fontSize: 12, fontWeight: 700, backdropFilter: 'blur(10px)' }}>
-                <ShieldAlert size={14} />
-                <span>AUA Breached by ₹{auaBreachAmount.toLocaleString('en-IN')}!</span>
-              </div>
-            ) : (
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '6px 14px', borderRadius: 10,
-                background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.12) 0%, rgba(185, 145, 45, 0.06) 100%)',
-                boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.95)',
-                color: '#8c6314', fontSize: 12, fontWeight: 700,
-              }}>
-                <span>Buffer Capital: <strong>{fmtCurrency(bufferCapital)}</strong></span>
-              </div>
-            )}
+
           </div>
         </div>
 
         {/* ── 5 Key Master Metric Cards ───────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-          {/* Card 1: Current Value — auto, non-editable */}
+          {/* Card 1: Current Value — tab-dynamic, non-editable */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)',
             border: 'none', borderRadius: 16,
@@ -1579,12 +1660,12 @@ export function ClientPortfolioPage() {
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(workingSummary.currentValue || totalEquityValue)}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Working portfolio live</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value {portfolioTab === 'client' ? '· Client' : '· Working'}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{portfolioTab === 'client' ? 'Client baseline live' : 'Working portfolio live'}</div>
           </div>
 
-          {/* Card 2: Invested Value — auto, non-editable */}
+          {/* Card 2: Invested Value — tab-dynamic, non-editable */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)',
             border: 'none', borderRadius: 16,
@@ -1592,8 +1673,8 @@ export function ClientPortfolioPage() {
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(workingSummary.totalInvested)}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value {portfolioTab === 'client' ? '· Client' : '· Working'}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Equity portfolio cost basis</div>
           </div>
 
@@ -2052,43 +2133,49 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          {/* 3 KPI Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
-            <div style={{
-              background: 'rgba(34, 197, 94, 0.08)', border: 'none', borderRadius: 16, padding: '18px 20px',
-              backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              boxShadow: '0 4px 20px rgba(34, 197, 94, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Executed BUY Volume</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#16a34a', marginTop: 6 }}>{fmtCurrency(freshBuysTotal)}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedBuys.length} buy orders executed</div>
-            </div>
-
-            <div style={{
-              background: 'rgba(239, 68, 68, 0.08)', border: 'none', borderRadius: 16, padding: '18px 20px',
-              backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              boxShadow: '0 4px 20px rgba(239, 68, 68, 0.06), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Executed SELL Proceeds</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#dc2626', marginTop: 6 }}>{fmtCurrency(freshSellsTotal)}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} sell orders executed</div>
-            </div>
-
-            <div style={{
-              background: totalRealisedPnL >= 0 ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-              border: 'none', borderRadius: 16, padding: '18px 20px',
-              backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.035), inset 0 1px 1px rgba(255, 255, 255, 0.95)',
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                Total Realised P&L
+          {/* 3 KPI — Transactions During Service Period: Total P&L | Unrealized | Realized */}
+          {(() => {
+            const unrealised = stripSummary.unrealisedPnL;
+            const realised = totalRealisedPnL;
+            const totalPnL = unrealised + realised;
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
+                {/* LHS: Total P&L */}
+                <div style={{
+                  background: totalPnL >= 0 ? 'linear-gradient(135deg, rgba(201,168,76,0.14) 0%, rgba(185,145,45,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.10) 0%, rgba(220,38,38,0.05) 100%)',
+                  border: 'none', borderRadius: 16, padding: '18px 20px',
+                  backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: totalPnL >= 0 ? '#8c6314' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total P&L</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: totalPnL >= 0 ? (totalPnL === 0 ? 'var(--text-primary)' : '#8c6314') : '#dc2626', marginTop: 6 }} className="tabular-nums">{totalPnL >= 0 ? '+' : ''}{fmtCurrency(totalPnL)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Unrealized + Realized</div>
+                </div>
+                {/* Middle: Unrealized P&L */}
+                <div style={{
+                  background: unrealised >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
+                  border: 'none', borderRadius: 16, padding: '18px 20px',
+                  backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: unrealised >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Unrealized P&L</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: unrealised >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{unrealised >= 0 ? '+' : ''}{fmtCurrency(unrealised)}</div>
+                  <div style={{ fontSize: 10.5, color: unrealised >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}% · {(portfolioTab as string) === 'client' ? 'Client' : 'Working'}</div>
+                </div>
+                {/* RHS: Realized P&L */}
+                <div style={{
+                  background: realised >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
+                  border: 'none', borderRadius: 16, padding: '18px 20px',
+                  backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: realised >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Realized P&L</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: realised >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{realised >= 0 ? '+' : ''}{fmtCurrency(realised)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} sells executed</div>
+                </div>
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 6 }}>
-                {totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}
-              </div>
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Realised profit/loss locked in trade ledger</div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* ════════════════════════════════════════════════════════════════════
               SECTION 1: BUY RECOMMENDATIONS & ORDERS TABLE (TOP)
@@ -2257,6 +2344,28 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
+          {/* ── Buy Orders KPI — 3 Cards: Invested | Current | Unrealized ────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
+            <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Value</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Buy Orders cost basis</div>
+            </div>
+            <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Current Value</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{stripSummary.currentValue >= stripSummary.totalInvested ? '▲ Gain' : '▼ Loss'} live</div>
+            </div>
+            <div style={{
+              background: stripSummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
+              border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Unrealized P&L</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{stripSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(stripSummary.unrealisedPnL)}</div>
+              <div style={{ fontSize: 10.5, color: stripSummary.unrealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}%</div>
+            </div>
+          </div>
+
           {/* ════════════════════════════════════════════════════════════════════
               SECTION 2: EXECUTED SELL ORDERS & REALISED P&L LEDGER (BOTTOM)
               ════════════════════════════════════════════════════════════════════ */}
@@ -2368,6 +2477,38 @@ export function ClientPortfolioPage() {
               </div>
             </div>
           </div>
+
+          {/* ── Sell Ledger KPI — 3 Cards: Invested Amount | Sale Proceeds | Realized P&L ── */}
+          {(() => {
+            const sellInvestedAmount = executedSells.reduce((sum, t) => {
+              let buyPr = t.buy_price && t.buy_price > 0 ? t.buy_price : 0;
+              if (!buyPr && t.price > 0 && t.quantity > 0 && (t.realised_pnl || 0) !== 0) buyPr = t.price - ((t.realised_pnl || 0) / t.quantity);
+              const invested = buyPr > 0 ? buyPr * t.quantity : (t.total_value || 0) - (t.realised_pnl || 0);
+              return sum + (invested > 0 ? invested : 0);
+            }, 0);
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 14 }}>
+                <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Invested Amount</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(sellInvestedAmount)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>{executedSells.length} positions cost</div>
+                </div>
+                <div style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 100%)', border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Sale Proceeds</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6 }} className="tabular-nums">{fmtCurrency(freshSellsTotal)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Gross sales value</div>
+                </div>
+                <div style={{
+                  background: totalRealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(22,163,74,0.07) 100%)' : 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(220,38,38,0.07) 100%)',
+                  border: 'none', borderRadius: 16, padding: '16px 18px', backdropFilter: 'blur(20px) saturate(180%)', boxShadow: '0 4px 20px rgba(0,0,0,0.04), inset 0 1px 1px rgba(255,255,255,0.95)'
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Realized P&L</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: totalRealisedPnL >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{totalRealisedPnL >= 0 ? '+' : ''}{fmtCurrency(totalRealisedPnL)}</div>
+                  <div style={{ fontSize: 10.5, color: totalRealisedPnL >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>Locked</div>
+                </div>
+              </div>
+            );
+          })()}
         </section>
       )}
       {/* ══════════════════════════════════════════════════════════════════════
