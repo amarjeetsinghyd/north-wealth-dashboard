@@ -131,8 +131,8 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
 
     try {
       const isoNow = new Date().toISOString();
-      const onboardingDate = new Date().toISOString().split('T')[0];
-      
+      const effectiveOnboardingDate = onboardingDate || new Date().toISOString().split('T')[0];
+
       const today = new Date();
       const dd = String(today.getDate()).padStart(2, '0');
       const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -149,7 +149,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
           rm_name: rmName.trim(),
           phone: phone.trim(),
           email: email.trim(),
-          onboarding_date: onboardingDate,
+          onboarding_date: effectiveOnboardingDate,
           risk_profile: riskProfile,
           billed_amount: parseFloat(billedAmount) || 0,
           amount_paid: parseFloat(amountPaid) || 0,
@@ -161,7 +161,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
           rm_name: rmName.trim(),
           phone: phone.trim(),
           email: email.trim(),
-          onboarding_date: onboardingDate,
+          onboarding_date: effectiveOnboardingDate,
           risk_profile: riskProfile,
           billed_amount: parseFloat(billedAmount) || 0,
           amount_paid: parseFloat(amountPaid) || 0,

@@ -1892,15 +1892,16 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          {/* Holdings Grid Table */}
+          {/* Holdings Grid Table — sticky header (Client & Working Portfolio) */}
           <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflow: 'auto', maxHeight: '62vh', position: 'relative' }}>
               <div style={{ minWidth: 1250 }}>
                 <div style={{
                   display: 'grid', gridTemplateColumns: gridCols, gap: 8,
-                  padding: '12px 16px', background: 'rgba(0,0,0,0.03)',
+                  padding: '12px 16px', background: 'rgba(248,247,243,0.98)',
                   borderBottom: '1px solid var(--border-subtle)',
                   fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px',
+                  position: 'sticky', top: 0, zIndex: 2, backdropFilter: 'blur(8px)',
                 }}>
                   <div>#</div>
                   <div style={{ cursor: 'pointer' }} onClick={() => handleSort('scrip')}>
