@@ -65,6 +65,12 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
   const [holdingsValue, setHoldingsValue] = useState('');
   const [mutualFunds, setMutualFunds] = useState(existingClient?.mutual_funds?.toString() || '');
   const [cashBalance, setCashBalance] = useState('');
+  const [billedAua, setBilledAua] = useState(
+    existingClient?.billed_aua?.toString() || existingClient?.total_aua?.toString() || existingClient?.total_capital?.toString() || ''
+  );
+  const [complementaryAua, setComplementaryAua] = useState(
+    existingClient?.complementary_aua !== undefined ? existingClient.complementary_aua.toString() : '0'
+  );
   const [billedAmount, setBilledAmount] = useState(existingClient?.billed_amount?.toString() || '');
   const [amountPaid, setAmountPaid] = useState(existingClient?.amount_paid?.toString() || '');
   const [files, setFiles] = useState<File[]>([]);
@@ -152,6 +158,10 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
         }
       }
 
+      const bAua = parseFloat(billedAua) || 0;
+      const cAua = parseFloat(complementaryAua) || 0;
+      const tAua = bAua + cAua;
+
       if (existingClient) {
         await updateDoc(doc(db, 'clients', clientId), {
           name: name.trim(),
@@ -163,6 +173,10 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
           billed_amount: parseFloat(billedAmount) || 0,
           amount_paid: parseFloat(amountPaid) || 0,
           mutual_funds: parseFloat(mutualFunds) || 0,
+          billed_aua: bAua,
+          complementary_aua: cAua,
+          total_aua: tAua,
+          total_capital: tAua,
         });
       } else {
         await setDoc(doc(db, 'clients', clientId), {
@@ -175,7 +189,12 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
           billed_amount: parseFloat(billedAmount) || 0,
           amount_paid: parseFloat(amountPaid) || 0,
           mutual_funds: parseFloat(mutualFunds) || 0,
-          total_capital: (parseFloat(holdingsValue) || 0) + (parseFloat(mutualFunds) || 0) + (parseFloat(cashBalance) || 0),
+          billed_aua: bAua,
+          complementary_aua: cAua,
+          total_aua: tAua,
+          total_capital: tAua,
+          asset_equity: parseFloat(holdingsValue) || 0,
+          asset_free_cash: parseFloat(cashBalance) || 0,
           created_at: isoNow,
         });
       }
@@ -522,68 +541,80 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
                 </div>
               </div>
 
-              {/* SECTION 2: Capital Allocation */}
+              {/* SECTION 2: Capital Allocation & AUA Breakdown */}
               <div>
-                <div className="form-section-title">Capital Allocation (₹)</div>
-                {!existingClient ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.1fr', gap: 14 }}>
-                    <div>
-                      <label className="form-label">Equity Holdings (₹)</label>
-                      <input 
-                        type="number"
-                        placeholder="E.g. 1000000"
-                        value={holdingsValue}
-                        onChange={e => setHoldingsValue(e.target.value)}
-                        className="glass-input tabular-nums"
-                      />
+                <div className="form-section-title">Capital Allocation & AUA Breakdown (₹)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.1fr', gap: 14, marginBottom: 14 }}>
+                  <div>
+                    <label className="form-label">Billed AUA (₹)</label>
+                    <input 
+                      type="number"
+                      placeholder="E.g. 5000000"
+                      value={billedAua}
+                      onChange={e => setBilledAua(e.target.value)}
+                      className="glass-input tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Complementary AUA (₹)</label>
+                    <input 
+                      type="number"
+                      placeholder="E.g. 0"
+                      value={complementaryAua}
+                      onChange={e => setComplementaryAua(e.target.value)}
+                      className="glass-input tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label">Total AUA (₹)</label>
+                    <div style={{
+                      padding: '10px 14px', borderRadius: 8,
+                      border: '1px solid rgba(201, 168, 76, 0.45)',
+                      background: 'rgba(201, 168, 76, 0.08)',
+                      fontSize: 14, fontWeight: 700, color: '#8c6314',
+                      boxSizing: 'border-box', height: 42, display: 'flex', alignItems: 'center'
+                    }} className="tabular-nums">
+                      ₹{Math.round((parseFloat(billedAua) || 0) + (parseFloat(complementaryAua) || 0)).toLocaleString('en-IN')}
                     </div>
-                    <div>
-                      <label className="form-label">Mutual Funds (₹)</label>
-                      <input 
-                        type="number"
-                        placeholder="E.g. 1500000"
-                        value={mutualFunds}
-                        onChange={e => setMutualFunds(e.target.value)}
-                        className="glass-input tabular-nums"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Cash Brought In (₹)</label>
-                      <input 
-                        type="number"
-                        placeholder="E.g. 500000"
-                        value={cashBalance}
-                        onChange={e => setCashBalance(e.target.value)}
-                        className="glass-input tabular-nums"
-                      />
-                    </div>
-                    <div>
-                      <label className="form-label">Total AUA (₹)</label>
-                      <div style={{
-                        padding: '10px 14px', borderRadius: 8,
-                        border: '1px solid rgba(201, 168, 76, 0.45)',
-                        background: 'rgba(201, 168, 76, 0.08)',
-                        fontSize: 14, fontWeight: 700, color: '#8c6314',
-                        boxSizing: 'border-box', height: 42, display: 'flex', alignItems: 'center'
-                      }} className="tabular-nums">
-                        ₹{Math.round((parseFloat(holdingsValue) || 0) + (parseFloat(mutualFunds) || 0) + (parseFloat(cashBalance) || 0)).toLocaleString('en-IN')}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: !existingClient ? '1fr 1fr 1fr' : '1fr', gap: 14 }}>
+                  <div>
+                    <label className="form-label">Mutual Funds (₹) <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(Tracked Separately)</span></label>
+                    <input 
+                      type="number"
+                      placeholder="E.g. 1500000"
+                      value={mutualFunds}
+                      onChange={e => setMutualFunds(e.target.value)}
+                      className="glass-input tabular-nums"
+                    />
+                  </div>
+                  {!existingClient && (
+                    <>
+                      <div>
+                        <label className="form-label">Initial Equity Holdings (₹)</label>
+                        <input 
+                          type="number"
+                          placeholder="E.g. 1000000"
+                          value={holdingsValue}
+                          onChange={e => setHoldingsValue(e.target.value)}
+                          className="glass-input tabular-nums"
+                        />
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                    <div>
-                      <label className="form-label">Mutual Funds (₹)</label>
-                      <input 
-                        type="number"
-                        placeholder="E.g. 1500000"
-                        value={mutualFunds}
-                        onChange={e => setMutualFunds(e.target.value)}
-                        className="glass-input tabular-nums"
-                      />
-                    </div>
-                  </div>
-                )}
+                      <div>
+                        <label className="form-label">Opening Free Cash (₹)</label>
+                        <input 
+                          type="number"
+                          placeholder="E.g. 500000"
+                          value={cashBalance}
+                          onChange={e => setCashBalance(e.target.value)}
+                          className="glass-input tabular-nums"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* SECTION 3: Commercials & Billing */}

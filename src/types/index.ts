@@ -4,6 +4,8 @@ export interface Client {
   onboarding_date: string;
   total_capital?: number;
   total_aua?: number;
+  billed_aua?: number;
+  complementary_aua?: number;
   mutual_funds?: number;
   rm_name?: string;
   phone?: string;

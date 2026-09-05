@@ -26,6 +26,18 @@ type SortColumn = 'scrip' | 'sector' | 'marketCap' | 'qty' | 'buy_price' | 'curr
 type SortOrder = 'asc' | 'desc';
 type TxSortColumn = 'date' | 'stock_symbol' | 'action' | 'quantity' | 'price' | 'total_value' | 'status' | null;
 
+// Robust day-level compare: handles YYYY-MM-DD, DD/MM/YYYY, ISO with time
+function toDayTs(s: any): number {
+  if (!s) return 0;
+  const str = String(s);
+  const iso = str.split('T')[0] as string;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return new Date(iso).setHours(0, 0, 0, 0);
+  const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m && m[1] && m[2] && m[3]) return new Date(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`).setHours(0, 0, 0, 0);
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? 0 : d.setHours(0, 0, 0, 0);
+}
+
 export function ClientPortfolioPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -35,11 +47,11 @@ export function ClientPortfolioPage() {
   const [loading, setLoading] = useState(true);
 
   // ── 4 Main Tabs ────────────────────────────────────────────────────────────
-  // 'working'      -> Layer 2: Working Portfolio (Live Active Model)
-  // 'client'       -> Layer 1: Client Portfolio (Base / Initial)
+  // 'client'       -> Layer 1: Client Portfolio (Base / Initial Declared Statement)
+  // 'working'      -> Layer 2: Working Portfolio (Live Active Model = Base + Post-Declaration Trades)
   // 'transactions' -> Layer 3: Transactions During Period (Recos & Realised P&L)
   // 'cash'         -> Layer 4: Cash Position & Ledger (Ledger Reconciliation)
-  const [portfolioTab, setPortfolioTab] = useState<'working' | 'client' | 'transactions' | 'cash'>('working');
+  const [portfolioTab, setPortfolioTab] = useState<'client' | 'working' | 'transactions' | 'cash'>('client');
 
   // Add Stock Modal
   const [showAddStockModal, setShowAddStockModal] = useState(false);
@@ -128,14 +140,18 @@ export function ClientPortfolioPage() {
   const [savingStrategy, setSavingStrategy] = useState(false);
 
 
-  // Total AUA & Asset Allocation Master Strip
+  // ── Total AUA, Billed AUA & Complementary AUA ────────────────────────────
+  const [billedAua, setBilledAua] = useState<number>(0);
+  const [billedAuaInput, setBilledAuaInput] = useState<string>('');
+  const [editingBilledAua, setEditingBilledAua] = useState(false);
+  const [savingBilledAua, setSavingBilledAua] = useState(false);
+
+  const [complementaryAua, setComplementaryAua] = useState<number>(0);
+  const [compAuaInput, setCompAuaInput] = useState<string>('');
+  const [editingCompAua, setEditingCompAua] = useState(false);
+  const [savingCompAua, setSavingCompAua] = useState(false);
+
   const [totalAua, setTotalAua] = useState<number>(0);
-  const [totalAuaInput, setTotalAuaInput] = useState<string>('');
-  const [editingAua, setEditingAua] = useState(false);
-  const [savingAua, setSavingAua] = useState(false);
-  const [editingBuffer, setEditingBuffer] = useState(false);
-  const [bufferInput, setBufferInput] = useState<string>('');
-  const [savingBuffer, setSavingBuffer] = useState(false);
 
   const [mutualFunds, setMutualFunds] = useState<number>(0);
   const [mutualFundsInput, setMutualFundsInput] = useState<string>('');
@@ -175,8 +191,14 @@ export function ClientPortfolioPage() {
         fetchTransactions(id),
       ]);
       setClient(c);
-      setTotalAua(c?.total_aua || c?.total_capital || 0);
-      setTotalAuaInput(String(c?.total_aua || c?.total_capital || ''));
+      const bAua = c?.billed_aua !== undefined ? c.billed_aua : (c?.total_aua || c?.total_capital || 0);
+      const cAua = c?.complementary_aua !== undefined ? c.complementary_aua : 0;
+      const tAua = bAua + cAua;
+      setBilledAua(bAua);
+      setBilledAuaInput(String(bAua || ''));
+      setComplementaryAua(cAua);
+      setCompAuaInput(String(cAua || ''));
+      setTotalAua(tAua);
       setMutualFunds(c?.asset_mutual_funds || c?.mutual_funds || 0);
       setMutualFundsInput(String(c?.asset_mutual_funds || c?.mutual_funds || ''));
 
@@ -258,14 +280,133 @@ export function ClientPortfolioPage() {
     return () => window.removeEventListener('nw:prices-refreshed', onGlobalRefresh);
   }, [id]);
 
-  // ── Separation of Holdings: Client Portfolio vs Working Portfolio ──────────
+  // ── Separation of Holdings: Client Portfolio (Base) vs Working Portfolio (Dynamic) ──
   const clientHoldings = useMemo(() => {
     return holdings.filter((h: Holding) => h.source === 'Existing' || h.holding_tier === 'client' || (!h.source && !h.holding_tier));
   }, [holdings]);
 
   const workingHoldings = useMemo(() => {
-    return holdings;
-  }, [holdings]);
+    // 1. Cutoff: Declaration Date (fallback to Onboarding Date)
+    const declarationDate = client?.client_portfolio_date || client?.onboarding_date || '';
+    const declarationDayTs = declarationDate ? toDayTs(declarationDate) : 0;
+
+    // 2. Baseline: Seed map from Client Portfolio (Base holdings)
+    const map = new Map<string, Holding>();
+    clientHoldings.forEach(h => {
+      const symKey = cleanSymbol(h).toUpperCase();
+      if (!symKey) return;
+      const qty = Number(h.quantity) || 0;
+      const buyPrice = Number(h.buy_price) || 0;
+      const invested = Number(h.invested_amount) > 0 ? Number(h.invested_amount) : qty * buyPrice;
+      if (map.has(symKey)) {
+        const existing = map.get(symKey)!;
+        const combQty = existing.quantity + qty;
+        const combInvested = existing.invested_amount + invested;
+        const combAvg = combQty > 0 ? combInvested / combQty : existing.buy_price;
+        map.set(symKey, {
+          ...existing,
+          quantity: combQty,
+          buy_price: Number(combAvg.toFixed(2)),
+          invested_amount: combInvested,
+        });
+      } else {
+        map.set(symKey, {
+          ...h,
+          quantity: qty,
+          buy_price: buyPrice,
+          invested_amount: invested,
+          holding_tier: 'working',
+        });
+      }
+    });
+
+    // 3. Post-declaration executed transactions sorted chronologically
+    const postDeclTx = [...transactions]
+      .filter(t => (t.status === 'Executed' || (!t.status && (t as any).status !== 'Avoid')) && toDayTs(t.date) > declarationDayTs)
+      .sort((a, b) => toDayTs(a.date) - toDayTs(b.date));
+
+    // 4. Apply transactions sequentially
+    postDeclTx.forEach(t => {
+      const symKey = cleanSymbol(t).toUpperCase();
+      if (!symKey) return;
+      const tQty = Number(t.quantity) || 0;
+      const tPrice = Number(t.reco_price || t.price) || 0;
+      const tVal = Number(t.total_value) || (tQty * tPrice);
+
+      if (t.action === 'BUY' || !t.action) {
+        if (map.has(symKey)) {
+          const existing = map.get(symKey)!;
+          const newQty = existing.quantity + tQty;
+          const newInvested = existing.invested_amount + tVal;
+          const newAvgBuyPrice = newQty > 0 ? newInvested / newQty : existing.buy_price;
+          map.set(symKey, {
+            ...existing,
+            quantity: newQty,
+            invested_amount: Math.round(newInvested),
+            buy_price: Number(newAvgBuyPrice.toFixed(2)),
+          });
+        } else {
+          const meta = getStockMeta(symKey, t.company_name || '');
+          const newHolding: Holding = {
+            id: `dyn-${t.id}`,
+            client_id: client?.id || id || '',
+            stock_symbol: t.stock_symbol,
+            nse_symbol: t.stock_symbol,
+            company_name: t.company_name || meta.companyName || symKey,
+            quantity: tQty,
+            buy_price: tPrice,
+            invested_amount: Math.round(tVal),
+            current_price: 0,
+            current_value: 0,
+            unrealised_pnl: 0,
+            unrealised_pnl_pct: 0,
+            realised_pnl: 0,
+            rebalancing_date: null,
+            last_price_update: null,
+            purchase_date: t.date,
+            source: 'Fresh',
+            holding_tier: 'working',
+            created_at: t.created_at || t.date,
+          };
+          map.set(symKey, newHolding);
+        }
+      } else if (t.action === 'SELL') {
+        if (map.has(symKey)) {
+          const existing = map.get(symKey)!;
+          const newQty = Math.max(0, existing.quantity - tQty);
+          if (newQty <= 0) {
+            map.delete(symKey); // Fully sold position
+          } else {
+            const newInvested = existing.buy_price * newQty;
+            map.set(symKey, {
+              ...existing,
+              quantity: newQty,
+              invested_amount: Math.round(newInvested),
+            });
+          }
+        }
+      }
+    });
+
+    // 5. Valuation with live CMP
+    return Array.from(map.values()).map(h => {
+      const sym = cleanSymbol(h);
+      const cmp = (txPriceMap[sym] && txPriceMap[sym] > 0) ? txPriceMap[sym] : (h.current_price > 0 ? h.current_price : h.buy_price);
+      const qty = h.quantity;
+      const invested = h.invested_amount || (h.buy_price * qty);
+      const currVal = Math.round(qty * cmp);
+      const unrealPnl = Math.round(currVal - invested);
+      const unrealPnlPct = invested > 0 ? (unrealPnl / invested) * 100 : 0;
+      return {
+        ...h,
+        current_price: cmp,
+        current_value: currVal,
+        unrealised_pnl: unrealPnl,
+        unrealised_pnl_pct: unrealPnlPct,
+        invested_amount: Math.round(invested),
+      };
+    });
+  }, [client, clientHoldings, transactions, txPriceMap, id]);
 
   const activeTableHoldings = portfolioTab === 'client' ? clientHoldings : workingHoldings;
 
@@ -425,18 +566,6 @@ export function ClientPortfolioPage() {
   // Base Cash Date — यह dynamic cutoff है।
   // कोई backdated date सेट करे तो नीचे के सभी useMemo auto-recompute करेंगे।
   const cashBaseDate = client?.client_cash_base_date || '';
-
-  // Robust day-level compare: handles YYYY-MM-DD, DD/MM/YYYY, ISO with time
-  const toDayTs = (s: any) => {
-    if (!s) return 0;
-    const str = String(s);
-    const iso = str.split('T')[0] as string;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return new Date(iso).setHours(0, 0, 0, 0);
-    const m = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-    if (m && m[1] && m[2] && m[3]) return new Date(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`).setHours(0, 0, 0, 0);
-    const d = new Date(str);
-    return isNaN(d.getTime()) ? 0 : d.setHours(0, 0, 0, 0);
-  };
   const baseDayTs = useMemo(() => (cashBaseDate ? toDayTs(cashBaseDate) : 0), [cashBaseDate]);
 
   // ── STEP 2 Inputs: Post-Base-Date Transactions (Dynamic Flow) ─────────────
@@ -479,21 +608,20 @@ export function ClientPortfolioPage() {
 
   const totalOpening = baseCash + parkedLiquid;
 
-  // ── STEP 2: Projected Cash (Live) ─────────────────────────────────────────
+  // ── STEP 2: Free Cash / Live Liquidity ─────────────────────────────────────
   // Formula: Total Opening − New Buys (post-date only) + New Sells (post-date only)
   const projectedCash = Math.round(totalOpening - newBuysTotal + newSellsTotal);
 
+  // ── Momentum Cash & Long-Term Cash (Rule 3: Isolated from Base Cash) ───────
   const momentumCash = client?.client_momentum_cash !== undefined ? client.client_momentum_cash : 0;
-  const longTermCash = client?.client_long_cash !== undefined ? client.client_long_cash : Math.max(0, projectedCash - momentumCash);
+  const longTermCash = client?.client_long_cash !== undefined ? client.client_long_cash : projectedCash;
 
   const totalEquityValue = workingSummary.currentValue > 0 ? workingSummary.currentValue : workingSummary.totalInvested;
   const totalPortfolioValue = totalEquityValue + mutualFunds + projectedCash;
   const freeCashRatio = totalPortfolioValue > 0 ? (projectedCash / totalPortfolioValue) * 100 : 0;
 
-  // ── Buffer Capital (Spec-Aligned Formula) ──────────────────────────────────
-  // Buffer = AUA − (Portfolio Invested Value + Base Cash + Liquid Cash)
-  // Invested value (cost basis) use करते हैं — market fluctuation से independent
-  const bufferCapital = Math.round(totalAua - (workingSummary.totalInvested + baseCash + parkedLiquid));
+  // ── Buffer Capital (Rule 2: Buffer Capital = Total AUA − (Working Portfolio Current Value + Free Cash)) ──
+  const bufferCapital = Math.round(totalAua - (workingSummary.currentValue + projectedCash));
   const isAuaBreached = totalAua > 0 && bufferCapital < 0;
   const auaBreachAmount = Math.max(0, -bufferCapital);
   void isAuaBreached; void auaBreachAmount;
@@ -607,59 +735,50 @@ export function ClientPortfolioPage() {
     }
   };
 
-  // ── Master Strip Save ─────────────────────────────────────────────────────
-  const saveTotalAua = async () => {
+  // ── Master Strip Save: Billed & Complementary AUA ─────────────────────────
+  const saveBilledAua = async () => {
     if (!id) return;
-    const val = parseFloat(totalAuaInput);
-    if (isNaN(val) || val < 0) {
-      alert('Please enter a valid Total AUA');
-      return;
-    }
-    setSavingAua(true);
+    const val = Math.max(0, parseFloat(billedAuaInput) || 0);
+    setSavingBilledAua(true);
     try {
+      const newTotal = val + complementaryAua;
       await updateDoc(doc(db, 'clients', id), {
-        total_aua: val,
-        total_capital: val,
+        billed_aua: val,
+        total_aua: newTotal,
+        total_capital: newTotal,
       });
-      setTotalAua(val);
-      setEditingAua(false);
+      setBilledAua(val);
+      setTotalAua(newTotal);
+      setEditingBilledAua(false);
+      setClient(prev => prev ? { ...prev, billed_aua: val, total_aua: newTotal, total_capital: newTotal } : null);
     } catch (err) {
-      console.warn('Error saving Total AUA:', err);
-      alert('Failed to save Total AUA');
+      console.error('Error saving Billed AUA:', err);
+      alert('Failed to save Billed AUA');
     } finally {
-      setSavingAua(false);
+      setSavingBilledAua(false);
     }
   };
 
-  const saveBufferCapital = async () => {
+  const saveCompAua = async () => {
     if (!id) return;
-    const val = parseFloat(bufferInput);
-    if (isNaN(val)) {
-      alert('Please enter a valid Buffer Capital');
-      return;
-    }
-    setSavingBuffer(true);
+    const val = Math.max(0, parseFloat(compAuaInput) || 0);
+    setSavingCompAua(true);
     try {
-      // Buffer = AUA - (Invested + baseCash + parkedLiquid)
-      // So editing Buffer -> back-calculate new AUA
-      const baseCash = client?.client_cash_base_amount !== undefined ? Number(client.client_cash_base_amount) : (client?.asset_free_cash || 0);
-      const parkedLiquid = client?.cash_parked_liquid || 0;
-      const newAua = Math.round(val + stripSummary.totalInvested + Number(baseCash) + Number(parkedLiquid));
-      if (newAua < 0) {
-        alert('Buffer too low — results in negative AUA');
-        return;
-      }
+      const newTotal = billedAua + val;
       await updateDoc(doc(db, 'clients', id), {
-        total_aua: newAua,
-        total_capital: newAua,
+        complementary_aua: val,
+        total_aua: newTotal,
+        total_capital: newTotal,
       });
-      setTotalAua(newAua);
-      setEditingBuffer(false);
+      setComplementaryAua(val);
+      setTotalAua(newTotal);
+      setEditingCompAua(false);
+      setClient(prev => prev ? { ...prev, complementary_aua: val, total_aua: newTotal, total_capital: newTotal } : null);
     } catch (err) {
-      console.warn('Error saving Buffer Capital:', err);
-      alert('Failed to save Buffer Capital');
+      console.error('Error saving Complementary AUA:', err);
+      alert('Failed to save Complementary AUA');
     } finally {
-      setSavingBuffer(false);
+      setSavingCompAua(false);
     }
   };
 
@@ -1623,64 +1742,103 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
-            {/* Premium Glass — Total AUA (Editable) */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Total AUA Pill */}
             <div style={{
-              padding: '14px 18px', borderRadius: 16, minWidth: 168,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.88) 100%)',
-              backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-              border: '1.5px solid rgba(201,168,76,0.32)',
-              boxShadow: '0 8px 24px rgba(201,168,76,0.14), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(201,168,76,0.12)',
-              position: 'relative', overflow: 'hidden',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.92) 100%)',
+              border: '1.2px solid rgba(201,168,76,0.32)',
+              boxShadow: '0 4px 14px rgba(201,168,76,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
             }}>
-              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 70%)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Landmark size={13} style={{ color: '#8c6314' }} />
-                <span style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Total AUA</span>
-                <span style={{ fontSize: 8, fontWeight: 700, color: '#a08030', background: 'rgba(201,168,76,0.14)', padding: '1px 5px', borderRadius: 6, marginLeft: 2 }}>MASTER</span>
+              <Landmark size={14} style={{ color: '#8c6314' }} />
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total AUA</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: '#5c3e04' }} className="tabular-nums">{fmtCurrency(totalAua)}</span>
               </div>
-              {editingAua ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <input type="number" value={totalAuaInput} onChange={e => setTotalAuaInput(e.target.value)} autoFocus style={{ width: 132, padding: '5px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: '1px solid rgba(201,168,76,0.3)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }} />
-                  <button onClick={saveTotalAua} disabled={savingAua} style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><Check size={12} /></button>
-                  <button onClick={() => setEditingAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><XIcon size={12} /></button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 19, fontWeight: 800, color: '#5c3e04', letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(totalAua)}</span>
-                  <button onClick={() => { setTotalAuaInput(String(totalAua)); setEditingAua(true); }} style={{ background: 'rgba(201,168,76,0.14)', border: 'none', cursor: 'pointer', color: '#8c6314', display: 'flex', padding: '4px 6px', borderRadius: 8 }} title="Edit Total AUA"><Pencil size={11} /></button>
-                </div>
-              )}
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>Total relationship asset</div>
             </div>
 
-            {/* Premium Glass — Buffer Capital (Editable, neutral - no threshold) */}
+            {/* Billed AUA Pill (Inline Editable) */}
             <div style={{
-              padding: '14px 18px', borderRadius: 16, minWidth: 168,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.88) 100%)',
-              backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-              border: '1.5px solid rgba(16,185,129,0.24)',
-              boxShadow: '0 8px 24px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95), inset 0 -1px 0 rgba(16,185,129,0.10)',
-              position: 'relative', overflow: 'hidden',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px', borderRadius: 12,
+              background: 'rgba(255,255,255,0.85)',
+              border: '1px solid rgba(201,168,76,0.22)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.9)',
             }}>
-              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Wallet size={13} style={{ color: '#059669' }} />
-                <span style={{ fontSize: 9.5, fontWeight: 800, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Buffer Capital</span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Billed AUA</span>
+                {editingBilledAua ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <input
+                      type="number"
+                      value={billedAuaInput}
+                      onChange={e => setBilledAuaInput(e.target.value)}
+                      autoFocus
+                      style={{ width: 100, padding: '2px 6px', fontSize: 12.5, fontWeight: 700, borderRadius: 6, border: '1px solid rgba(201,168,76,0.4)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                    <button onClick={saveBilledAua} disabled={savingBilledAua} style={{ background: '#16a34a', border: 'none', color: '#fff', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><Check size={11} /></button>
+                    <button onClick={() => setEditingBilledAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><XIcon size={11} /></button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }} className="tabular-nums">{fmtCurrency(billedAua)}</span>
+                    <button onClick={() => { setBilledAuaInput(String(billedAua)); setEditingBilledAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', padding: 2, display: 'flex' }} title="Edit Billed AUA"><Pencil size={10} /></button>
+                  </div>
+                )}
               </div>
-              {editingBuffer ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <input type="number" value={bufferInput} onChange={e => setBufferInput(e.target.value)} autoFocus style={{ width: 132, padding: '5px 8px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: '1px solid rgba(16,185,129,0.3)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }} />
-                  <button onClick={saveBufferCapital} disabled={savingBuffer} style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><Check size={12} /></button>
-                  <button onClick={() => setEditingBuffer(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', display: 'flex', padding: '4px 6px', borderRadius: 7 }}><XIcon size={12} /></button>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <span style={{ fontSize: 19, fontWeight: 800, color: '#065f46', letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(bufferCapital)}</span>
-                  <button onClick={() => { setBufferInput(String(bufferCapital)); setEditingBuffer(true); }} style={{ background: 'rgba(16,185,129,0.14)', border: 'none', cursor: 'pointer', color: '#059669', display: 'flex', padding: '4px 6px', borderRadius: 8 }} title="Edit Buffer Capital"><Pencil size={11} /></button>
-                </div>
-              )}
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>AUA − (Invested + Cash)</div>
+            </div>
+
+            {/* Complementary AUA Pill (Inline Editable) */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px', borderRadius: 12,
+              background: 'rgba(255,255,255,0.85)',
+              border: '1px solid rgba(201,168,76,0.22)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.9)',
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Complementary</span>
+                {editingCompAua ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <input
+                      type="number"
+                      value={compAuaInput}
+                      onChange={e => setCompAuaInput(e.target.value)}
+                      autoFocus
+                      style={{ width: 90, padding: '2px 6px', fontSize: 12.5, fontWeight: 700, borderRadius: 6, border: '1px solid rgba(201,168,76,0.4)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                    <button onClick={saveCompAua} disabled={savingCompAua} style={{ background: '#16a34a', border: 'none', color: '#fff', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><Check size={11} /></button>
+                    <button onClick={() => setEditingCompAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><XIcon size={11} /></button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-secondary)' }} className="tabular-nums">{fmtCurrency(complementaryAua)}</span>
+                    <button onClick={() => { setCompAuaInput(String(complementaryAua)); setEditingCompAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', padding: 2, display: 'flex' }} title="Edit Complementary AUA"><Pencil size={10} /></button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Buffer Capital Pill (Live Auto-Computed) */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 16px', borderRadius: 12,
+              background: bufferCapital >= 0
+                ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.92) 100%)'
+                : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.92) 100%)',
+              border: bufferCapital >= 0 ? '1.2px solid rgba(16,185,129,0.28)' : '1.2px solid rgba(239,68,68,0.28)',
+              boxShadow: bufferCapital >= 0 ? '0 4px 14px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 4px 14px rgba(239,68,68,0.10), inset 0 1px 1px rgba(255,255,255,0.95)',
+            }}>
+              <Wallet size={14} style={{ color: bufferCapital >= 0 ? '#059669' : '#dc2626' }} />
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 9.5, fontWeight: 800, color: bufferCapital >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Buffer Capital
+                </span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: bufferCapital >= 0 ? '#065f46' : '#dc2626' }} className="tabular-nums">
+                  {bufferCapital >= 0 ? '' : '-'}{fmtCurrency(Math.abs(bufferCapital))}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -1815,7 +1973,7 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          {/* Card 5: Projected Cash (Live) */}
+          {/* Card 5: Free Cash (Live) */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.20) 0%, rgba(185, 145, 45, 0.10) 100%)',
             border: 'none', borderRadius: 16,
@@ -1823,7 +1981,7 @@ export function ClientPortfolioPage() {
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             boxShadow: '0 4px 20px rgba(201, 168, 76, 0.08), inset 0 1px 1px rgba(255,255,255,0.95)',
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Projected Cash (Live)</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Free Cash (Live)</div>
             <div style={{ fontSize: 20, fontWeight: 800, color: projectedCash >= 0 ? '#5c3e04' : '#dc2626', marginTop: 6 }}>{fmtCurrency(projectedCash)}</div>
             <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>Opening − New Buys + New Sells</div>
           </div>
@@ -1838,8 +1996,8 @@ export function ClientPortfolioPage() {
       }}>
         <div style={{ display: 'flex', gap: 10 }}>
           {[
-            { key: 'working', label: 'Working Portfolio', badge: `${workingHoldings.length} Active` },
             { key: 'client', label: 'Client Portfolio', badge: `${clientHoldings.length} Base` },
+            { key: 'working', label: 'Working Portfolio', badge: `${workingHoldings.length} Active` },
             { key: 'transactions', label: 'Transactions During Period', badge: `${transactions.length} Orders` },
             { key: 'cash', label: 'Cash Position', badge: fmtCurrencyKPI(projectedCash) },
           ].map((t) => {
@@ -2734,7 +2892,7 @@ export function ClientPortfolioPage() {
                 Cash Position
               </h2>
               <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'block', marginTop: 3 }}>
-                Opening liquidity, trade cash flows, and projected cash as on base date.
+                Opening liquidity, trade cash flows, and free cash as on base date.
               </span>
             </div>
 
@@ -2798,7 +2956,7 @@ export function ClientPortfolioPage() {
                   </div>
                 </div>
 
-                {/* ── Trade Cash Flow + Projected Cash (Premium Glass - Neutral) ── */}
+                {/* ── Trade Cash Flow + Free Cash (Premium Glass - Neutral) ── */}
                 <div style={{
                   padding: '16px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
                   background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.90) 100%)',
@@ -2827,7 +2985,7 @@ export function ClientPortfolioPage() {
                     </div>
                     <div style={{ height: 1, background: 'rgba(148,163,184,0.18)', margin: '2px 0' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, fontWeight: 800 }}>
-                      <span style={{ color: '#475569' }}>Projected Cash (Live)</span>
+                      <span style={{ color: '#475569' }}>Free Cash (Live)</span>
                       <strong style={{ fontSize: 18, color: projectedCash >= 0 ? '#065f46' : '#991b1b' }} className="tabular-nums">
                         {fmtCurrency(projectedCash)}
                       </strong>
@@ -3412,27 +3570,25 @@ export function ClientPortfolioPage() {
                 <h3 style={{ fontSize: 16, fontWeight: 800, color: '#2563eb', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Pencil size={16} /> Strategy Cash Allocation
                 </h3>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total Projected Cash: ₹{projectedCash.toLocaleString('en-IN')}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total Free Cash: ₹{projectedCash.toLocaleString('en-IN')}</span>
               </div>
               <button onClick={() => setShowStrategyModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             </div>
             <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                  Momentum Cash Allocation (₹)
+                  Momentum Cash Allocation (₹) <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>(Isolated Strategy Allocation)</span>
                 </label>
                 <input
                   type="number"
                   value={strategyMomentumInput}
-                  onChange={e => {
-                    const val = e.target.value;
-                    setStrategyMomentumInput(val);
-                    const num = parseFloat(val) || 0;
-                    setStrategyLongInput(String(Math.max(0, projectedCash - num)));
-                  }}
+                  onChange={e => setStrategyMomentumInput(e.target.value)}
                   placeholder="0"
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-default)', background: 'var(--bg-surface)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}
                 />
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Momentum cash is isolated and tracked independently without subtracting from Base Free Cash.
+                </div>
               </div>
 
               {/* Quick % Chips for Momentum */}
@@ -3445,7 +3601,6 @@ export function ClientPortfolioPage() {
                     onClick={() => {
                       const mom = Math.round((projectedCash * pct) / 100);
                       setStrategyMomentumInput(String(mom));
-                      setStrategyLongInput(String(Math.max(0, projectedCash - mom)));
                     }}
                     style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', color: '#2563eb', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                   >
@@ -3456,7 +3611,7 @@ export function ClientPortfolioPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                  Long-Term Cash Allocation (₹) (Default / Residual)
+                  Long-Term Cash Allocation (₹)
                 </label>
                 <input
                   type="number"
@@ -3469,11 +3624,11 @@ export function ClientPortfolioPage() {
 
               <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(59,130,246,0.06)', fontSize: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Long-Term Bucket:</span>
+                  <span>Long-Term Cash:</span>
                   <strong>₹{(parseFloat(strategyLongInput) || 0).toLocaleString('en-IN')}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                  <span>Momentum Bucket:</span>
+                  <span>Momentum Cash (Isolated):</span>
                   <strong>₹{(parseFloat(strategyMomentumInput) || 0).toLocaleString('en-IN')}</strong>
                 </div>
               </div>
