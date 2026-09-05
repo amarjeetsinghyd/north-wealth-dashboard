@@ -1742,103 +1742,145 @@ export function ClientPortfolioPage() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Total AUA Pill */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'stretch', flexWrap: 'wrap' }}>
+            {/* Grand Enclosing Card for Total AUA & Breakdown */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 16px', borderRadius: 12,
+              padding: '12px 18px',
+              borderRadius: 18,
+              minWidth: 290,
               background: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,251,235,0.92) 100%)',
-              border: '1.2px solid rgba(201,168,76,0.32)',
-              boxShadow: '0 4px 14px rgba(201,168,76,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              border: '1.5px solid rgba(201,168,76,0.35)',
+              boxShadow: '0 8px 24px rgba(201,168,76,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+              gap: 8,
             }}>
-              <Landmark size={14} style={{ color: '#8c6314' }} />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total AUA</span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: '#5c3e04' }} className="tabular-nums">{fmtCurrency(totalAua)}</span>
+              {/* Soft ambient glow */}
+              <div style={{ position: 'absolute', top: -20, right: -20, width: 68, height: 68, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+
+              {/* Top Row: Mini Pills for Billed & Complementary (Mutual Fund pill style) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center', flexWrap: 'wrap', zIndex: 1 }}>
+                {/* Billed AUA Mini Pill */}
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 10,
+                  background: 'linear-gradient(135deg, rgba(201,168,76,0.16) 0%, rgba(185,145,45,0.08) 100%)',
+                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 6px rgba(201,168,76,0.08)',
+                  border: 'none',
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Billed:
+                  </span>
+                  {editingBilledAua ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <input
+                        type="number"
+                        value={billedAuaInput}
+                        onChange={e => setBilledAuaInput(e.target.value)}
+                        autoFocus
+                        style={{ width: 85, padding: '2px 4px', fontSize: 11.5, fontWeight: 700, borderRadius: 5, border: '1px solid rgba(201,168,76,0.5)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }}
+                      />
+                      <button onClick={saveBilledAua} disabled={savingBilledAua} style={{ background: '#16a34a', border: 'none', color: '#fff', cursor: 'pointer', padding: '2px 4px', borderRadius: 4, display: 'flex' }}><Check size={10} /></button>
+                      <button onClick={() => setEditingBilledAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '2px 4px', borderRadius: 4, display: 'flex' }}><XIcon size={10} /></button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <strong style={{ fontSize: 12.5, fontWeight: 800, color: '#8c6314' }} className="tabular-nums">{fmtCurrency(billedAua)}</strong>
+                      <button onClick={() => { setBilledAuaInput(String(billedAua)); setEditingBilledAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', padding: 0, display: 'flex' }} title="Edit Billed AUA"><Pencil size={10} /></button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Complementary AUA Mini Pill */}
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '5px 12px', borderRadius: 10,
+                  background: 'linear-gradient(135deg, rgba(148,163,184,0.18) 0%, rgba(100,116,139,0.08) 100%)',
+                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.95), 0 2px 6px rgba(100,116,139,0.08)',
+                  border: 'none',
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                    Complementary:
+                  </span>
+                  {editingCompAua ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <input
+                        type="number"
+                        value={compAuaInput}
+                        onChange={e => setCompAuaInput(e.target.value)}
+                        autoFocus
+                        style={{ width: 80, padding: '2px 4px', fontSize: 11.5, fontWeight: 700, borderRadius: 5, border: '1px solid rgba(148,163,184,0.5)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }}
+                      />
+                      <button onClick={saveCompAua} disabled={savingCompAua} style={{ background: '#16a34a', border: 'none', color: '#fff', cursor: 'pointer', padding: '2px 4px', borderRadius: 4, display: 'flex' }}><Check size={10} /></button>
+                      <button onClick={() => setEditingCompAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '2px 4px', borderRadius: 4, display: 'flex' }}><XIcon size={10} /></button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <strong style={{ fontSize: 12.5, fontWeight: 800, color: '#475569' }} className="tabular-nums">{fmtCurrency(complementaryAua)}</strong>
+                      <button onClick={() => { setCompAuaInput(String(complementaryAua)); setEditingCompAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: 0, display: 'flex' }} title="Edit Complementary AUA"><Pencil size={10} /></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Center: Big Total AUA Encompassing Both */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1, marginTop: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                  <Landmark size={13} style={{ color: '#8c6314' }} />
+                  <span style={{ fontSize: 10.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                    Total AUA
+                  </span>
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#5c3e04', letterSpacing: '-0.4px', lineHeight: 1.15 }} className="tabular-nums">
+                  {fmtCurrency(totalAua)}
+                </div>
+                <span style={{ fontSize: 9.5, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>
+                  Total Relationship Asset
+                </span>
               </div>
             </div>
 
-            {/* Billed AUA Pill (Inline Editable) */}
+            {/* Premium Glass — Buffer Capital (Matching Enclosed Height & Radius) */}
             <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 14px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.85)',
-              border: '1px solid rgba(201,168,76,0.22)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.9)',
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Billed AUA</span>
-                {editingBilledAua ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                    <input
-                      type="number"
-                      value={billedAuaInput}
-                      onChange={e => setBilledAuaInput(e.target.value)}
-                      autoFocus
-                      style={{ width: 100, padding: '2px 6px', fontSize: 12.5, fontWeight: 700, borderRadius: 6, border: '1px solid rgba(201,168,76,0.4)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }}
-                    />
-                    <button onClick={saveBilledAua} disabled={savingBilledAua} style={{ background: '#16a34a', border: 'none', color: '#fff', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><Check size={11} /></button>
-                    <button onClick={() => setEditingBilledAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><XIcon size={11} /></button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }} className="tabular-nums">{fmtCurrency(billedAua)}</span>
-                    <button onClick={() => { setBilledAuaInput(String(billedAua)); setEditingBilledAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', padding: 2, display: 'flex' }} title="Edit Billed AUA"><Pencil size={10} /></button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Complementary AUA Pill (Inline Editable) */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 14px', borderRadius: 12,
-              background: 'rgba(255,255,255,0.85)',
-              border: '1px solid rgba(201,168,76,0.22)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.03), inset 0 1px 1px rgba(255,255,255,0.9)',
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Complementary</span>
-                {editingCompAua ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                    <input
-                      type="number"
-                      value={compAuaInput}
-                      onChange={e => setCompAuaInput(e.target.value)}
-                      autoFocus
-                      style={{ width: 90, padding: '2px 6px', fontSize: 12.5, fontWeight: 700, borderRadius: 6, border: '1px solid rgba(201,168,76,0.4)', background: '#fff', color: 'var(--text-primary)', outline: 'none' }}
-                    />
-                    <button onClick={saveCompAua} disabled={savingCompAua} style={{ background: '#16a34a', border: 'none', color: '#fff', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><Check size={11} /></button>
-                    <button onClick={() => setEditingCompAua(false)} style={{ background: 'rgba(0,0,0,0.06)', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '3px 5px', borderRadius: 5 }}><XIcon size={11} /></button>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-secondary)' }} className="tabular-nums">{fmtCurrency(complementaryAua)}</span>
-                    <button onClick={() => { setCompAuaInput(String(complementaryAua)); setEditingCompAua(true); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8c6314', padding: 2, display: 'flex' }} title="Edit Complementary AUA"><Pencil size={10} /></button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Buffer Capital Pill (Live Auto-Computed) */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 16px', borderRadius: 12,
+              padding: '12px 20px',
+              borderRadius: 18,
+              minWidth: 180,
               background: bufferCapital >= 0
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.92) 100%)'
-                : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.92) 100%)',
-              border: bufferCapital >= 0 ? '1.2px solid rgba(16,185,129,0.28)' : '1.2px solid rgba(239,68,68,0.28)',
-              boxShadow: bufferCapital >= 0 ? '0 4px 14px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 4px 14px rgba(239,68,68,0.10), inset 0 1px 1px rgba(255,255,255,0.95)',
+                ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.90) 100%)'
+                : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.90) 100%)',
+              backdropFilter: 'blur(20px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+              border: bufferCapital >= 0 ? '1.5px solid rgba(16,185,129,0.30)' : '1.5px solid rgba(239,68,68,0.30)',
+              boxShadow: bufferCapital >= 0
+                ? '0 8px 24px rgba(16,185,129,0.10), inset 0 1px 1px rgba(255,255,255,0.95)'
+                : '0 8px 24px rgba(239,68,68,0.10), inset 0 1px 1px rgba(255,255,255,0.95)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              position: 'relative',
+              overflow: 'hidden',
             }}>
-              <Wallet size={14} style={{ color: bufferCapital >= 0 ? '#059669' : '#dc2626' }} />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 9.5, fontWeight: 800, color: bufferCapital >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: bufferCapital >= 0 ? 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Wallet size={13} style={{ color: bufferCapital >= 0 ? '#059669' : '#dc2626' }} />
+                <span style={{ fontSize: 10, fontWeight: 800, color: bufferCapital >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                   Buffer Capital
                 </span>
-                <span style={{ fontSize: 16, fontWeight: 800, color: bufferCapital >= 0 ? '#065f46' : '#dc2626' }} className="tabular-nums">
-                  {bufferCapital >= 0 ? '' : '-'}{fmtCurrency(Math.abs(bufferCapital))}
-                </span>
               </div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: bufferCapital >= 0 ? '#065f46' : '#dc2626', letterSpacing: '-0.4px', lineHeight: 1.15 }} className="tabular-nums">
+                {bufferCapital >= 0 ? '' : '-'}{fmtCurrency(Math.abs(bufferCapital))}
+              </div>
+              <span style={{ fontSize: 9.5, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>
+                AUA − (Working Val + Cash)
+              </span>
             </div>
           </div>
         </div>
