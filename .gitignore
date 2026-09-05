@@ -32,3 +32,6 @@ serviceAccountKey.json
 *.mp4
 *.docx
 transcript_extracted.txt
+backups/
+~$*
+

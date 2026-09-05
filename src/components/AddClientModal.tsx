@@ -133,15 +133,24 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
       const isoNow = new Date().toISOString();
       const effectiveOnboardingDate = onboardingDate || new Date().toISOString().split('T')[0];
 
-      const today = new Date();
-      const dd = String(today.getDate()).padStart(2, '0');
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const yyyy = today.getFullYear();
-      const dateStr = `${dd}${mm}${yyyy}`;
-      
-      const alphaName = name.replace(/[^A-Za-z]/g, '').toUpperCase();
-      const namePrefix = alphaName.slice(0, 5).padEnd(5, 'X');
-      const clientId = existingClient?.id || `${namePrefix}${dateStr}`;
+      let clientId = existingClient?.id;
+      if (!clientId) {
+        try {
+          const allClientsSnap = await getDocs(collection(db, 'clients'));
+          let maxNum = 0;
+          allClientsSnap.docs.forEach(d => {
+            const m = d.id.match(/^NW(\d+)$/i);
+            if (m && m[1]) {
+              const num = parseInt(m[1], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          });
+          const nextNum = maxNum > 0 ? maxNum + 1 : 41;
+          clientId = `NW${String(nextNum).padStart(2, '0')}`;
+        } catch {
+          clientId = `NW${Date.now()}`;
+        }
+      }
 
       if (existingClient) {
         await updateDoc(doc(db, 'clients', clientId), {

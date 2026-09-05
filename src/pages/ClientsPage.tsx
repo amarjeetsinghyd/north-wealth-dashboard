@@ -33,9 +33,17 @@ export function ClientsPage() {
   }, []);
 
   const filteredClients = useMemo(() => {
-    if (!searchQuery.trim()) return clients;
+    let list = [...clients];
+    // Sort sequentially by NW numeric code ascending (NW01, NW02, ... NW40)
+    list.sort((a, b) => {
+      const numA = parseInt((a.id || '').replace(/\D/g, ''), 10) || 9999;
+      const numB = parseInt((b.id || '').replace(/\D/g, ''), 10) || 9999;
+      return numA - numB;
+    });
+
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
-    return clients.filter(c =>
+    return list.filter(c =>
       c.name?.toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q) ||
       c.phone?.toLowerCase().includes(q) ||

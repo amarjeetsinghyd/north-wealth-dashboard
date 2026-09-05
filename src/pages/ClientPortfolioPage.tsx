@@ -1277,12 +1277,14 @@ export function ClientPortfolioPage() {
   const handleSaveTxStatus = async (tx: Transaction, newStatus: 'Executed' | 'Avoid') => {
     if (!id) return;
     setSavingTxStatusId(tx.id);
-    try {
+    try {      
       // 1. Update status on the transaction document in Firestore
       await updateDoc(doc(db, 'transactions', tx.id), { status: newStatus });
 
-      // 2. If changing to Executed and it's a BUY recommendation, sync/push to client's holdings!
-      if (newStatus === 'Executed' && (tx.action === 'BUY' || !tx.action)) {
+      // 2. Verification Mode: Transactions are strictly isolated from Holdings during review/verification
+      // Once verification is complete, this flag can be re-enabled.
+      const SYNC_TX_TO_HOLDINGS = false;
+      if (SYNC_TX_TO_HOLDINGS && newStatus === 'Executed' && (tx.action === 'BUY' || !tx.action)) {
         const cleanSym = (tx.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
         const existing = holdings.find(h => {
           const hSym = (h.nse_symbol || h.stock_symbol || '').trim().toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
