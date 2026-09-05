@@ -938,7 +938,7 @@ export function BulkOrderWizardModal({
                         <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-primary)' }}>{o.client.name}</td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-primary)' }}>{o.qty.toLocaleString('en-IN')} shares</td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: 'var(--text-primary)' }}>
-                          ₹{(o.qty * effectivePrice).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          ₹{Math.round(o.qty * effectivePrice).toLocaleString('en-IN')}
                         </td>
                       </tr>
                     ))}

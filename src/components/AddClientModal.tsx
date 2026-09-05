@@ -566,7 +566,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
                         fontSize: 14, fontWeight: 700, color: '#8c6314',
                         boxSizing: 'border-box', height: 42, display: 'flex', alignItems: 'center'
                       }} className="tabular-nums">
-                        ₹{((parseFloat(holdingsValue) || 0) + (parseFloat(mutualFunds) || 0) + (parseFloat(cashBalance) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{Math.round((parseFloat(holdingsValue) || 0) + (parseFloat(mutualFunds) || 0) + (parseFloat(cashBalance) || 0)).toLocaleString('en-IN')}
                       </div>
                     </div>
                   </div>
@@ -613,7 +613,7 @@ export function AddClientModal({ onClose, onSuccess, existingClient }: AddClient
                       fontSize: 14, fontWeight: 700, color: '#dc2626',
                       boxSizing: 'border-box', height: 42, display: 'flex', alignItems: 'center'
                     }} className="tabular-nums">
-                      ₹{((parseFloat(billedAmount) || 0) - (parseFloat(amountPaid) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      ₹{Math.round((parseFloat(billedAmount) || 0) - (parseFloat(amountPaid) || 0)).toLocaleString('en-IN')}
                     </div>
                   </div>
                 </div>

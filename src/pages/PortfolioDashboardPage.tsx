@@ -20,7 +20,7 @@ import { BenchmarkComparison, StockLevelAnalysis, RiskAndVolatilityTable, Transa
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCurrency(v: number) {
-  return `₹${v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `₹${Math.round(v || 0).toLocaleString('en-IN')}`;
 }
 
 function fmtPct(v: number) {

@@ -15,11 +15,11 @@ import { Spinner } from '../components/Spinner';
 import { getStockMeta, cleanSymbol } from '../lib/sectorMap';
 
 function fmtCurrency(v: number) {
-  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '₹' + Math.round(v || 0).toLocaleString('en-IN');
 }
 
 function fmtCurrencyKPI(v: number) {
-  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return '₹' + Math.round(v || 0).toLocaleString('en-IN');
 }
 
 type SortColumn = 'scrip' | 'sector' | 'marketCap' | 'qty' | 'buy_price' | 'current_price' | 'invested_amount' | 'current_value' | 'unrealised_pnl' | 'unrealised_pnl_pct' | 'alloc' | 'source' | null;
@@ -2125,7 +2125,7 @@ export function ClientPortfolioPage() {
                         </div>
 
                         <div className="tabular-nums" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                          {currVal > 0 ? fmtCurrency(currVal) : '₹0.00'}
+                          {currVal > 0 ? fmtCurrency(currVal) : '₹0'}
                         </div>
 
                         <div className="tabular-nums" style={{ fontWeight: 700, color: unrealPnl > 0 ? '#16a34a' : unrealPnl < 0 ? '#dc2626' : 'var(--text-muted)' }}>
@@ -3047,7 +3047,7 @@ export function ClientPortfolioPage() {
 
               {editModalQty && editModalPrice && parseFloat(editModalQty) > 0 && parseFloat(editModalPrice) > 0 && (
                 <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(201,168,76,0.1)', color: '#8c6314', fontSize: 12.5, fontWeight: 700 }}>
-                  Total Invested: ₹{(parseFloat(editModalQty) * parseFloat(editModalPrice)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Total Invested: ₹{Math.round(parseFloat(editModalQty) * parseFloat(editModalPrice)).toLocaleString('en-IN')}
                 </div>
               )}
             </div>
@@ -3191,7 +3191,7 @@ export function ClientPortfolioPage() {
 
                   {wizardStockQty && wizardStockPrice && parseFloat(wizardStockQty) > 0 && parseFloat(wizardStockPrice) > 0 && (
                     <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(201,168,76,0.1)', color: '#8c6314', fontSize: 12, fontWeight: 700 }}>
-                      Invested Total: ₹{(parseFloat(wizardStockQty) * parseFloat(wizardStockPrice)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      Invested Total: ₹{Math.round(parseFloat(wizardStockQty) * parseFloat(wizardStockPrice)).toLocaleString('en-IN')}
                     </div>
                   )}
 
@@ -3387,7 +3387,7 @@ export function ClientPortfolioPage() {
 
               {recoPrice && recoQty && (
                 <div style={{ padding: '8px 12px', borderRadius: 6, background: 'rgba(201,168,76,0.1)', color: '#8c6314', fontSize: 12.5, fontWeight: 700 }}>
-                  Order Total: ₹{(parseFloat(recoPrice) * parseFloat(recoQty)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  Order Total: ₹{Math.round(parseFloat(recoPrice) * parseFloat(recoQty)).toLocaleString('en-IN')}
                 </div>
               )}
             </div>

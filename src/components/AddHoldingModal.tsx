@@ -192,7 +192,7 @@ export function AddHoldingModal({ clientId, onClose, onSuccess }: AddHoldingModa
                 fontSize: 'var(--text-sm)',
                 color: 'var(--color-primary-400)',
               }}>
-                Invested Amount: ₹{(parseFloat(buyPrice || '0') * parseFloat(quantity || '0')).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                Invested Amount: ₹{Math.round(parseFloat(buyPrice || '0') * parseFloat(quantity || '0')).toLocaleString('en-IN')}
               </div>
             )}
 
