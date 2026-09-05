@@ -154,6 +154,7 @@ export function ClientPortfolioPage() {
   const [txSortColumn, setTxSortColumn] = useState<TxSortColumn>('date');
   const [txSortOrder, setTxSortOrder] = useState<SortOrder>('desc');
   const [txSubTab, setTxSubTab] = useState<'buy' | 'sell'>('buy');
+  const [txPriceMap, setTxPriceMap] = useState<Record<string, number>>({});
 
   // Inline table edits
   const [editingBuyPriceId, setEditingBuyPriceId] = useState<string | null>(null);
@@ -211,6 +212,20 @@ export function ClientPortfolioPage() {
 
       setHoldings(resolvedHoldings);
       setTransactions(tx);
+
+      // Real-time CMP lookup for transactions
+      const txPriceCache: Record<string, number> = {};
+      const uniqueTxSymbols = Array.from(new Set(tx.map(t => cleanSymbol(t)).filter(Boolean)));
+      await Promise.all(uniqueTxSymbols.map(async (sym) => {
+        try {
+          const priceSnap = await getDoc(doc(db, 'price_cache', sym));
+          if (priceSnap.exists()) {
+            const p = Number(priceSnap.data()?.close);
+            if (p > 0) txPriceCache[sym] = p;
+          }
+        } catch { /* non-fatal */ }
+      }));
+      setTxPriceMap(txPriceCache);
 
       if (c) {
         setCashBaseDateInput(c.client_cash_base_date || c.onboarding_date || '');
@@ -347,6 +362,50 @@ export function ClientPortfolioPage() {
   const totalRealisedPnL = useMemo(() => {
     return executedSells.reduce((sum, t) => sum + (t.realised_pnl || 0), 0);
   }, [executedSells]);
+
+  // ── Transactions Buy Orders Summary (cost basis, live current value & unrealised P&L) ──
+  const txBuySummary = useMemo(() => {
+    // FIFO allocation of sold qty per buy recommendation (per symbol, by buy date)
+    const sellsBySymbol = new Map<string, number>();
+    executedSells.forEach(s => {
+      const k = cleanSymbol(s).toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+      sellsBySymbol.set(k, (sellsBySymbol.get(k) || 0) + (Number(s.quantity) || 0));
+    });
+    const buysOrdered = [...executedBuys].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const remainingSells = new Map(sellsBySymbol);
+
+    let invested = 0;
+    let currentVal = 0;
+
+    buysOrdered.forEach(t => {
+      const k = cleanSymbol(t).toUpperCase().replace(/\.NS$/, '').replace(/\.BO$/, '');
+      const remSold = remainingSells.get(k) || 0;
+      const totalQty = Number(t.quantity) || 0;
+      const soldQty = Math.min(totalQty, Math.max(0, remSold));
+      remainingSells.set(k, Math.max(0, remSold - soldQty));
+
+      const openQty = Math.max(0, totalQty - soldQty);
+      if (openQty <= 0) return; // Fully exited
+
+      const buyPrice = Number(t.reco_price || t.price) || 0;
+      const openInvested = buyPrice * openQty;
+      const sym = cleanSymbol(t);
+      const cmp = txPriceMap[sym] || buyPrice;
+      const openVal = (cmp > 0 ? cmp : buyPrice) * openQty;
+
+      invested += openInvested;
+      currentVal += openVal;
+    });
+
+    const unrealisedPnL = currentVal - invested;
+    const unrealisedPnLPct = invested > 0 ? (unrealisedPnL / invested) * 100 : 0;
+    return {
+      invested,
+      currentValue: currentVal,
+      unrealisedPnL,
+      unrealisedPnLPct,
+    };
+  }, [executedBuys, executedSells, txPriceMap]);
 
   // ── Liquid Fund / Liquid BeES Holdings ─────────────────────────────────────
   const liquidHoldings = useMemo(() => {
@@ -2166,7 +2225,7 @@ export function ClientPortfolioPage() {
 
           {/* 3 KPI — Transactions During Service Period: Total P&L | Unrealized | Realized */}
           {(() => {
-            const unrealised = stripSummary.unrealisedPnL;
+            const unrealised = txBuySummary.unrealisedPnL;
             const realised = totalRealisedPnL;
             const totalPnL = unrealised + realised;
             return (
@@ -2191,7 +2250,7 @@ export function ClientPortfolioPage() {
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: unrealised >= 0 ? '#15803d' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Unrealized P&L</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: unrealised >= 0 ? '#15803d' : '#dc2626', marginTop: 6 }} className="tabular-nums">{unrealised >= 0 ? '+' : ''}{fmtCurrency(unrealised)}</div>
-                  <div style={{ fontSize: 10.5, color: unrealised >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}% · {(portfolioTab as string) === 'client' ? 'Client' : 'Working'}</div>
+                  <div style={{ fontSize: 10.5, color: unrealised >= 0 ? '#16a34a' : '#dc2626', marginTop: 4, fontWeight: 600 }}>{txBuySummary.unrealisedPnLPct >= 0 ? '+' : ''}{txBuySummary.unrealisedPnLPct.toFixed(2)}% · Transactions</div>
                 </div>
                 {/* RHS: Realized P&L */}
                 <div style={{
@@ -2261,7 +2320,7 @@ export function ClientPortfolioPage() {
                 }}>
                   <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(201,168,76,0.14) 0%, transparent 70%)' }} />
                   <div style={{ fontSize: 9.5, fontWeight: 800, color: '#8c6314', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Wallet size={12} style={{ color: '#8c6314' }} /> Invested Value</div>
-                  <div style={{ fontSize: 19, fontWeight: 800, color: '#5c3e04', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(stripSummary.totalInvested)}</div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: '#5c3e04', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(txBuySummary.invested)}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>Buy Orders cost basis</div>
                 </div>
                 <div style={{
@@ -2273,20 +2332,20 @@ export function ClientPortfolioPage() {
                 }}>
                   <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: 'radial-gradient(circle, rgba(148,163,184,0.12) 0%, transparent 70%)' }} />
                   <div style={{ fontSize: 9.5, fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><TrendingUp size={12} style={{ color: '#475569' }} /> Current Value</div>
-                  <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(stripSummary.currentValue)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>{stripSummary.currentValue >= stripSummary.totalInvested ? '▲ Gain' : '▼ Loss'} live</div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{fmtCurrency(txBuySummary.currentValue)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3, fontWeight: 500 }}>{txBuySummary.currentValue >= txBuySummary.invested ? '▲ Gain' : '▼ Loss'} live</div>
                 </div>
                 <div style={{
                   padding: '14px 18px', borderRadius: 16, position: 'relative', overflow: 'hidden',
-                  background: stripSummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.90) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.90) 100%)',
+                  background: txBuySummary.unrealisedPnL >= 0 ? 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(240,253,244,0.90) 100%)' : 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(254,242,242,0.90) 100%)',
                   backdropFilter: 'blur(18px) saturate(160%)', WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-                  border: stripSummary.unrealisedPnL >= 0 ? '1.5px solid rgba(34,197,94,0.28)' : '1.5px solid rgba(239,68,68,0.28)',
-                  boxShadow: stripSummary.unrealisedPnL >= 0 ? '0 8px 24px rgba(34,197,94,0.12), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 8px 24px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
+                  border: txBuySummary.unrealisedPnL >= 0 ? '1.5px solid rgba(34,197,94,0.28)' : '1.5px solid rgba(239,68,68,0.28)',
+                  boxShadow: txBuySummary.unrealisedPnL >= 0 ? '0 8px 24px rgba(34,197,94,0.12), inset 0 1px 1px rgba(255,255,255,0.95)' : '0 8px 24px rgba(239,68,68,0.12), inset 0 1px 1px rgba(255,255,255,0.95)',
                 }}>
-                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: stripSummary.unrealisedPnL >= 0 ? 'radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)' }} />
-                  <div style={{ fontSize: 9.5, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Sparkles size={12} style={{ color: stripSummary.unrealisedPnL >= 0 ? '#059669' : '#dc2626' }} /> Unrealized P&L</div>
-                  <div style={{ fontSize: 19, fontWeight: 800, color: stripSummary.unrealisedPnL >= 0 ? '#065f46' : '#991b1b', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{stripSummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(stripSummary.unrealisedPnL)}</div>
-                  <div style={{ fontSize: 10, color: stripSummary.unrealisedPnL >= 0 ? '#059669' : '#dc2626', marginTop: 3, fontWeight: 600 }}>{stripSummary.unrealisedPnLPct >= 0 ? '+' : ''}{stripSummary.unrealisedPnLPct.toFixed(2)}%</div>
+                  <div style={{ position: 'absolute', top: -18, right: -18, width: 56, height: 56, borderRadius: '50%', background: txBuySummary.unrealisedPnL >= 0 ? 'radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)' : 'radial-gradient(circle, rgba(239,68,68,0.12) 0%, transparent 70%)' }} />
+                  <div style={{ fontSize: 9.5, fontWeight: 800, color: txBuySummary.unrealisedPnL >= 0 ? '#065f46' : '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: 6 }}><Sparkles size={12} style={{ color: txBuySummary.unrealisedPnL >= 0 ? '#059669' : '#dc2626' }} /> Unrealized P&L</div>
+                  <div style={{ fontSize: 19, fontWeight: 800, color: txBuySummary.unrealisedPnL >= 0 ? '#065f46' : '#991b1b', marginTop: 6, letterSpacing: '-0.3px' }} className="tabular-nums">{txBuySummary.unrealisedPnL >= 0 ? '+' : ''}{fmtCurrency(txBuySummary.unrealisedPnL)}</div>
+                  <div style={{ fontSize: 10, color: txBuySummary.unrealisedPnL >= 0 ? '#059669' : '#dc2626', marginTop: 3, fontWeight: 600 }}>{txBuySummary.unrealisedPnLPct >= 0 ? '+' : ''}{txBuySummary.unrealisedPnLPct.toFixed(2)}%</div>
                 </div>
               </div>
 
